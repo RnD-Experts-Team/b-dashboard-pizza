@@ -1,6 +1,6 @@
 "use client";
 
-import { Image as ImageIcon, MessageCircleQuestion, Pencil, Phone, ShieldCheck, User, Wrench } from "lucide-react";
+import { FileText, Image as ImageIcon, MessageCircleQuestion, MessageSquareReply, Pencil, Phone, ShieldCheck, User, Wrench } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +26,7 @@ function Cell({ label, children }: { label: string; children: React.ReactNode })
 
 function Section({ title, icon: Icon, children }: { title: string; icon: typeof User; children: React.ReactNode }) {
   return (
-    <Card>
+    <Card className="gap-3 py-5">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 font-heading text-base font-semibold">
           <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -59,6 +59,8 @@ export function OverviewTab({
   const t = useTranslations("maintenanceSystem");
   const status = issue.status.value;
   const request = openInfoRequest(issue);
+  /** The last question the store answered, shown while the office reviews it. */
+  const answered = status === "in_review" ? [...issue.infoRequests].reverse().find((r) => !r.mistaken && r.answeredAt) ?? null : null;
   const overdue = isOverdue(issue.targetCompletionAt, status);
   const checklist = issue.workflow?.checklist ?? [];
   const snapshot = issue.troubleshootingSnapshot;
@@ -67,7 +69,7 @@ export function OverviewTab({
   return (
     <div className="space-y-4">
       {/* Ticket details */}
-      <Card>
+      <Card className="gap-1 pt-5 pb-1">
         <CardHeader className="flex flex-row items-center justify-between gap-2 pb-0">
           <CardTitle className="font-heading text-base font-semibold">{t("tickets.overview.detailsTitle")}</CardTitle>
           {canEditDetails ? (
@@ -119,7 +121,7 @@ export function OverviewTab({
       </Card>
 
       {/* The current step */}
-      <Card className="border-primary/30">
+      <Card className="gap-3 border-primary/30 py-5">
         <CardHeader className="pb-2">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("tickets.overview.currentStep")}</p>
           <CardTitle className="font-heading text-base font-semibold">{t(`tickets.overview.step.${status}.title`)}</CardTitle>
@@ -141,6 +143,38 @@ export function OverviewTab({
                 </div>
               </div>
               {!isMos && canAnswer ? <InlineAnswer issue={issue} run={run} isMos={false} /> : null}
+            </div>
+          ) : null}
+
+          {answered ? (
+            <div className="space-y-2 rounded-md border bg-muted/30 px-3 py-2">
+              <div className="flex gap-2">
+                <MessageCircleQuestion className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">
+                    {t("tickets.overview.askedQuestion")}
+                    {answered.askedBy?.name ? ` · ${answered.askedBy.name}` : ""}
+                  </p>
+                  <p className="whitespace-pre-wrap text-sm">{answered.question}</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <MessageSquareReply className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">
+                    {t(answered.answeredVia === "specialist" ? "tickets.overview.answeredByOffice" : "tickets.overview.answeredByStore")}
+                    {answered.answeredBy?.name ? ` · ${answered.answeredBy.name}` : ""}
+                    {answered.answeredAt ? (
+                      <>
+                        {" · "}
+                        <LocalTimestamp iso={answered.answeredAt} showZone={false} />
+                      </>
+                    ) : null}
+                  </p>
+                  <p className="whitespace-pre-wrap text-sm">{answered.answer}</p>
+                  <AttachmentGallery attachments={answered.attachments ?? []} />
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -174,8 +208,8 @@ export function OverviewTab({
         </CardContent>
       </Card>
 
-      {/* Description and contact */}
-      <Section title={t("common.description")} icon={User}>
+      {/* Description (and the contact, only when an older ticket has one) */}
+      <Section title={t("common.description")} icon={FileText}>
         <div className="space-y-3">
           {issue.description ? (
             <p className="whitespace-pre-wrap text-sm">{issue.description}</p>

@@ -27,7 +27,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 const SKELETON_ROWS = 6;
 
 /** The query keys this tab owns. */
-export const TECHNICIAN_QUERY_KEYS = ["q", "category", "store", "issue", "emergency"] as const;
+export const TECHNICIAN_QUERY_KEYS = ["q", "category", "store", "issue", "emergency", "deleted"] as const;
 
 export const EMERGENCY_BADGE =
   "inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:bg-rose-500/20 dark:text-rose-300";
@@ -52,6 +52,8 @@ export function TechniciansTab({ locale, onAdd, canAdd }: { locale: string; onAd
   const store = get("store") || ALL;
   const issue = get("issue") || ALL;
   const emergency = get("emergency") === "1";
+  /** Deleted technicians listed too, so one can be opened and restored. */
+  const showDeleted = get("deleted") === "1";
 
   const [search, setSearch] = useState(q);
   // The URL changed under us (Back, Clear all): the box follows it.
@@ -73,13 +75,14 @@ export function TechniciansTab({ locale, onAdd, canAdd }: { locale: string; onAd
       store: store === ALL ? undefined : store,
       issueId: issue === ALL ? undefined : Number(issue),
       emergency: emergency || undefined,
+      ...(showDeleted ? { withTrashed: true } : {}),
       perPage: LIST_PAGE_SIZE,
     }),
-    [q, category, store, issue, emergency],
+    [q, category, store, issue, emergency, showDeleted],
   );
   const { technicians, isLoading, isRefreshing, error, refresh } = useTechnicians(filters);
 
-  const anyFilter = Boolean(q || category !== ALL || store !== ALL || issue !== ALL || emergency);
+  const anyFilter = Boolean(q || category !== ALL || store !== ALL || issue !== ALL || emergency || showDeleted);
   const clearAll = () => set(Object.fromEntries(TECHNICIAN_QUERY_KEYS.map((k) => [k, null])));
   const open = (tech: Technician) => router.push(`/${locale}/dashboard/maintenance-technicians/${tech.id}`);
   // The list row carries what was paid to him this calendar month (mistakes left out).
@@ -123,6 +126,10 @@ export function TechniciansTab({ locale, onAdd, canAdd }: { locale: string; onAd
         <div className="flex items-center gap-2 px-1">
           <Switch id="technicians-emergency" checked={emergency} onCheckedChange={(v) => set({ emergency: v ? "1" : null })} />
           <label htmlFor="technicians-emergency" className="text-sm">{t("technicians.emergencyOnly")}</label>
+        </div>
+        <div className="flex items-center gap-2 px-1">
+          <Switch id="technicians-deleted" checked={showDeleted} onCheckedChange={(v) => set({ deleted: v ? "1" : null })} />
+          <label htmlFor="technicians-deleted" className="text-sm text-muted-foreground">{t("suppliers.showDeleted")}</label>
         </div>
         {anyFilter && (
           <Button variant="ghost" size="sm" onClick={clearAll} className="ms-auto">
@@ -193,6 +200,9 @@ export function TechniciansTab({ locale, onAdd, canAdd }: { locale: string; onAd
                         className="rounded-sm font-medium text-foreground hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         {tech.name}
+                        {tech.deletedAt ? (
+                          <span className="ms-2 rounded-full bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">{t("suppliers.deletedBadge")}</span>
+                        ) : null}
                       </Link>
                       {tech.contactPerson && <span className="block text-xs text-muted-foreground">{tech.contactPerson}</span>}
                     </td>
@@ -232,7 +242,10 @@ export function TechniciansTab({ locale, onAdd, canAdd }: { locale: string; onAd
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate font-medium">{tech.name}</p>
+                      <p className="truncate font-medium">
+                        {tech.name}
+                        {tech.deletedAt ? <span className="ms-2 text-[10px] font-medium text-muted-foreground">{t("suppliers.deletedBadge")}</span> : null}
+                      </p>
                       <p className="truncate text-xs text-muted-foreground">
                         {[tech.category?.name ?? t("technicians.noCategory"), tech.contactPerson].filter(Boolean).join(" · ")}
                       </p>

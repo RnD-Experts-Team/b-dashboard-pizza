@@ -44,6 +44,19 @@ async function fetchAbilities(): Promise<TechnicianAbility[] | null> {
   }
 }
 
+/**
+ * The technicians, or none for whoever may not read them (a store manager):
+ * a 403 is an answer, and must not fail the issue catalog loaded beside it.
+ */
+async function fetchTechnicians(): Promise<Awaited<ReturnType<typeof maintenanceCatalogService.listTechnicians>>["data"]> {
+  try {
+    return (await maintenanceCatalogService.listTechnicians({ perPage: TECHNICIANS_PAGE_SIZE })).data;
+  } catch (err) {
+    if (err instanceof MaintenanceTicketsError && err.code === "FORBIDDEN") return [];
+    throw err;
+  }
+}
+
 export const useMaintenanceTicketsCatalogStore = create<MaintenanceTicketsCatalogState>()((set, get) => ({
   issues: [],
   technicians: [],
@@ -56,11 +69,11 @@ export const useMaintenanceTicketsCatalogStore = create<MaintenanceTicketsCatalo
     try {
       const [issues, technicians, abilities] = await Promise.all([
         maintenanceTicketsService.getCatalogIssues(undefined, storeId),
-        maintenanceCatalogService.listTechnicians({ perPage: TECHNICIANS_PAGE_SIZE }),
+        fetchTechnicians(),
         fetchAbilities(),
       ]);
       // A failed coverage read keeps the last good one.
-      set({ issues, technicians: technicians.data, abilities: abilities ?? get().abilities, isLoading: false });
+      set({ issues, technicians, abilities: abilities ?? get().abilities, isLoading: false });
     } catch (err) {
       const message = err instanceof MaintenanceTicketsError ? err.message : "Failed to load catalog data.";
       set({ isLoading: false, error: message });

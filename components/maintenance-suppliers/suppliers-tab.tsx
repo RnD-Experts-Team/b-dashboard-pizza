@@ -5,6 +5,8 @@ import { AlertCircle, ExternalLink, Phone, Search, Store as StoreIcon, X } from 
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useSuppliers } from "@/lib/hooks/use-maintenance-catalog";
@@ -18,8 +20,8 @@ const LIST_PAGE_SIZE = 200;
 const SEARCH_DEBOUNCE_MS = 300;
 const SKELETON_ROWS = 5;
 
-/** The query keys this tab owns: `sq` (search) and `supplier` (the open sheet). */
-export const SUPPLIER_QUERY_KEYS = ["sq", "supplier"] as const;
+/** The query keys this tab owns: `sq` (search), `sdel` (show deleted) and `supplier` (the open sheet). */
+export const SUPPLIER_QUERY_KEYS = ["sq", "sdel", "supplier"] as const;
 
 /**
  * Suppliers tab (docs/MAINTENANCE-UI.md §7): search, then the list (name,
@@ -34,6 +36,8 @@ export function SuppliersTab({ locale, onAdd, canAdd, reloadKey }: { locale: str
   const { get, set } = useQueryParams();
 
   const q = get("sq");
+  /** Deleted suppliers listed too, so one can be opened and restored. */
+  const showDeleted = get("sdel") === "1";
   const openId = Number(get("supplier")) || null;
 
   const [search, setSearch] = useState(q);
@@ -49,7 +53,10 @@ export function SuppliersTab({ locale, onAdd, canAdd, reloadKey }: { locale: str
     return () => window.clearTimeout(id);
   }, [search, q, set]);
 
-  const filters: SupplierFilters = useMemo(() => ({ search: q || undefined, perPage: LIST_PAGE_SIZE }), [q]);
+  const filters: SupplierFilters = useMemo(
+    () => ({ search: q || undefined, perPage: LIST_PAGE_SIZE, ...(showDeleted ? { withTrashed: true } : {}) }),
+    [q, showDeleted],
+  );
   const { suppliers, isLoading, isRefreshing, error, refresh } = useSuppliers(filters);
 
   // A supplier added or changed elsewhere on the page (the header's Add) reloads the list.
@@ -74,6 +81,12 @@ export function SuppliersTab({ locale, onAdd, canAdd, reloadKey }: { locale: str
             aria-label={t("suppliers.searchLabel")}
             className="ps-8"
           />
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch id="suppliers-show-deleted" checked={showDeleted} onCheckedChange={(v) => set({ sdel: v ? "1" : null })} />
+          <Label htmlFor="suppliers-show-deleted" className="text-sm font-normal text-muted-foreground">
+            {t("suppliers.showDeleted")}
+          </Label>
         </div>
         {q && (
           <Button variant="ghost" size="sm" onClick={() => set({ sq: null })} className="ms-auto">
@@ -134,6 +147,9 @@ export function SuppliersTab({ locale, onAdd, canAdd, reloadKey }: { locale: str
                       >
                         {s.name}
                       </button>
+                      {s.deletedAt ? (
+                        <span className="ms-2 rounded-full bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">{t("suppliers.deletedBadge")}</span>
+                      ) : null}
                       {s.description && <span className="block max-w-md truncate text-xs text-muted-foreground">{s.description}</span>}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 tabular-nums">
@@ -175,7 +191,10 @@ export function SuppliersTab({ locale, onAdd, canAdd, reloadKey }: { locale: str
                   className="block w-full rounded-xl border bg-card p-4 text-start shadow-sm transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <p className="min-w-0 truncate font-medium">{s.name}</p>
+                    <p className="min-w-0 truncate font-medium">
+                      {s.name}
+                      {s.deletedAt ? <span className="ms-2 text-[10px] font-medium text-muted-foreground">{t("suppliers.deletedBadge")}</span> : null}
+                    </p>
                     <span className="shrink-0 font-medium tabular-nums">{paidOf(s)}</span>
                   </div>
                   <p className="mt-1 flex items-center gap-1 truncate text-xs text-muted-foreground">

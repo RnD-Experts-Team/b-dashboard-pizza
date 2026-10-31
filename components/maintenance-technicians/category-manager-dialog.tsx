@@ -79,7 +79,8 @@ export function CategoryManagerDialog({
     setAddError(null);
     try {
       const created = await maintenanceCatalogService.createCategory({ name });
-      setData((prev) => [...(prev ?? []), created]);
+      // A new category has nobody in it yet (create does not send the count).
+      setData((prev) => [...(prev ?? []), { ...created, techniciansCount: created.techniciansCount ?? 0 }]);
       setNewName("");
       toast.success(t("technicians.categoryAdded", { name: created.name }));
       onChanged?.();

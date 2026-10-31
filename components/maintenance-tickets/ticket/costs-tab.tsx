@@ -25,7 +25,7 @@ function BigNumber({ label, value, hint, strong }: { label: string; value: strin
 
 function Block({ title, icon: Icon, children }: { title: string; icon: LucideIcon; children: React.ReactNode }) {
   return (
-    <Card>
+    <Card className="gap-3 py-5">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 font-heading text-base font-semibold">
           <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />

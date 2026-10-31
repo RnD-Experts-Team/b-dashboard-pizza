@@ -352,18 +352,19 @@ function IssuesTab({ onReloadCatalog, storeId }: { onReloadCatalog: () => void; 
  * and their pay and work -- so the tab only points there.
  */
 function TechniciansPointer({ onNavigate }: { onNavigate: () => void }) {
+  const t = useTranslations("maintenanceTickets");
   const params = useParams();
   const locale = (params?.locale as string) ?? "en";
   return (
     <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-12 text-center">
       <HardHat className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
-      <p className="text-sm font-medium">Technicians have their own page</p>
+      <p className="text-sm font-medium">{t("catalog.techniciansPageTitle")}</p>
       <p className="max-w-sm text-sm text-muted-foreground">
-        Add and edit technicians, set the stores they cover, rate them, and see what they were paid and the work they did.
+        {t("catalog.techniciansPageBody")}
       </p>
       <Button asChild>
         <Link href={`/${locale}/dashboard/maintenance-technicians`} onClick={onNavigate}>
-          Open the Technicians page <ChevronRight className="ms-1 h-4 w-4" aria-hidden="true" />
+          {t("catalog.techniciansPageOpen")} <ChevronRight className="ms-1 h-4 w-4" aria-hidden="true" />
         </Link>
       </Button>
     </div>

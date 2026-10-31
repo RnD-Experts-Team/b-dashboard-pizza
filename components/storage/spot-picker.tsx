@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Plus } from "lucide-react";
+import { Layers, Loader2, MapPin, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { storageService } from "@/lib/api/services/storage.service";
 import { isCancelled } from "@/lib/api/maintenance-tickets-errors";
 import { usePlaceLevels } from "@/lib/hooks/use-storage";
+import { placeLabel } from "@/lib/storage/stock-forms";
 import type { StoragePlaceLevel, StoragePlaceValue } from "@/types/storage.types";
 
 /**
@@ -21,6 +22,9 @@ import type { StoragePlaceLevel, StoragePlaceValue } from "@/types/storage.types
  *
  * With `canDeclare`, a value that is not on the list yet can be added right
  * here, so putting a part on a brand-new shelf is one flow, not two.
+ *
+ * A location with no levels yet says so, and — with `onSetUp` — offers the
+ * way to the Locations tab where Zone / Shelf are added.
  */
 
 const NONE = "__none__";
@@ -31,19 +35,30 @@ export interface SpotPickerProps {
   onChange: (valueIds: number[]) => void;
   canDeclare?: boolean;
   disabled?: boolean;
-  /** Shown when the location has no levels laid out. */
+  /** Render nothing (rather than the explanation) when the location has no levels. */
   hideWhenEmpty?: boolean;
+  /** The location's name, for the "no zones or shelves yet" explanation. */
+  locationName?: string;
+  /** Opens the Locations tab on this location, to add its levels. */
+  onSetUp?: (locationId: number) => void;
 }
 
-export function SpotPicker({ locationId, value, onChange, canDeclare, disabled, hideWhenEmpty }: SpotPickerProps) {
+export function SpotPicker({ locationId, value, onChange, canDeclare, disabled, hideWhenEmpty, locationName, onSetUp }: SpotPickerProps) {
   const t = useTranslations("maintenanceSystem");
-  const { levels, isLoading, setData } = usePlaceLevels(locationId);
+  const { levels: all, isLoading, setData } = usePlaceLevels(locationId);
+  const levels = all.filter((l) => !l.deletedAt);
 
   if (!locationId) return null;
   if (isLoading && levels.length === 0) return <Skeleton className="h-9 w-full" />;
   if (levels.length === 0) {
-    return hideWhenEmpty ? null : <p className="text-xs text-muted-foreground">{t("storage.spot.noLevels")}</p>;
+    if (hideWhenEmpty) return null;
+    return <NoLevels locationId={locationId} locationName={locationName} onSetUp={onSetUp} />;
   }
+
+  const chosen = levels.flatMap((level) => {
+    const hit = (level.values ?? []).find((v) => value.includes(v.id));
+    return hit ? [{ level: level.name, value: hit.value }] : [];
+  });
 
   function choose(level: StoragePlaceLevel, valueId: number | null) {
     const levelValueIds = new Set((level.values ?? []).map((v) => v.id));
@@ -59,19 +74,54 @@ export function SpotPicker({ locationId, value, onChange, canDeclare, disabled, 
   }
 
   return (
-    <div className="grid gap-2 sm:grid-cols-2">
-      {levels.map((level) => (
-        <LevelSelect
-          key={level.id}
-          level={level}
-          locationId={locationId}
-          selected={(level.values ?? []).find((v) => value.includes(v.id))?.id ?? null}
-          onChoose={(id) => choose(level, id)}
-          onDeclared={(created) => declared(level, created)}
-          canDeclare={canDeclare}
-          disabled={disabled}
-        />
-      ))}
+    <div className="space-y-2">
+      <div className="grid gap-2 sm:grid-cols-2">
+        {levels.map((level) => (
+          <LevelSelect
+            key={level.id}
+            level={level}
+            locationId={locationId}
+            selected={(level.values ?? []).find((v) => value.includes(v.id))?.id ?? null}
+            onChoose={(id) => choose(level, id)}
+            onDeclared={(created) => declared(level, created)}
+            canDeclare={canDeclare}
+            disabled={disabled}
+          />
+        ))}
+      </div>
+      <p className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs" aria-live="polite">
+        <MapPin className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+        {chosen.length ? placeLabel(chosen) : <span className="text-muted-foreground">{t("storage.spot.notSet")}</span>}
+      </p>
+    </div>
+  );
+}
+
+/** The location has no levels: say what that means and where to add them. */
+function NoLevels({
+  locationId,
+  locationName,
+  onSetUp,
+}: {
+  locationId: number;
+  locationName?: string;
+  onSetUp?: (locationId: number) => void;
+}) {
+  const t = useTranslations("maintenanceSystem");
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-dashed px-3 py-2.5">
+      <Layers className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <div className="min-w-0 space-y-1.5">
+        <p className="text-xs text-muted-foreground">
+          {locationName ? t("storage.spotSetup.noLevelsAt", { location: locationName }) : t("storage.spotSetup.noLevels")}
+        </p>
+        {onSetUp && (
+          <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => onSetUp(locationId)}>
+            <Plus className="me-1 h-3.5 w-3.5" aria-hidden="true" />
+            {t("storage.spotSetup.addLevels")}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

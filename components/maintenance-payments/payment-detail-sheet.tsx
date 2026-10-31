@@ -1,5 +1,6 @@
 "use client";
 
+import { PLACE_SEPARATOR, placeLabel } from "@/lib/storage/stock-forms";
 import { useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
@@ -133,12 +134,14 @@ export function PaymentDetailSheet({
 function PaymentDetailBody({ payment }: { payment: Payment }) {
   const t = useTranslations("maintenanceSystem");
   const method = vocabEntry(PAYMENT_METHODS, payment.method);
+  // How we paid, reference and invoice # are no longer asked for: shown only
+  // when an older payment has them.
   const facts: { label: string; value: string }[] = [
     { label: t("payments.paidTo"), value: `${payment.paidTo.name} (${vocabText(t, vocabEntry(PAID_TO_TYPES, payment.paidTo.type))})` },
     { label: t("common.date"), value: formatPaidDate(payment.paidAt) },
-    { label: t("payments.howWePaid"), value: method ? vocabText(t, method) : t("payments.methodNotSaid") },
-    { label: t("payments.reference"), value: payment.reference || "—" },
-    { label: t("payments.invoiceNumber"), value: payment.invoiceNumber || "—" },
+    ...(payment.method && method ? [{ label: t("payments.howWePaid"), value: vocabText(t, method) }] : []),
+    ...(payment.reference ? [{ label: t("payments.reference"), value: payment.reference }] : []),
+    ...(payment.invoiceNumber ? [{ label: t("payments.invoiceNumber"), value: payment.invoiceNumber }] : []),
   ];
 
   return (
@@ -174,7 +177,7 @@ function PaymentDetailBody({ payment }: { payment: Payment }) {
 
       {payment.attachments.length > 0 && (
         <section className="space-y-1">
-          <h3 className="font-heading text-sm font-semibold">{t("common.files")}</h3>
+          <h3 className="font-heading text-sm font-semibold">{t("payments.extras.attachments")}</h3>
           <AttachmentGallery attachments={payment.attachments} />
         </section>
       )}
@@ -217,9 +220,9 @@ function LineDetail({ line }: { line: PaymentLine }) {
   const locale = useLocale();
   const Icon = LINE_TYPE_ICONS[line.type];
   // Parts into storage: the location, then the spot the part sits in there now ("Zone A › Shelf 3").
-  const spot = (line.place ?? []).map((p) => p.value).filter(Boolean);
+  const spot = placeLabel((line.place ?? []).filter((p) => p.value).map((p) => ({ level: p.level ?? null, value: p.value as string })));
   const where =
-    (line.storageLocation ? [line.storageLocation.name, ...spot].join(" › ") : null) ??
+    (line.storageLocation ? [line.storageLocation.name, spot].filter(Boolean).join(PLACE_SEPARATOR) : null) ??
     (line.store ? t("payments.storeNumber", { number: line.store.storeNumber }) : line.otherStore) ??
     "—";
 
@@ -313,6 +316,19 @@ function LineDetail({ line }: { line: PaymentLine }) {
           </p>
         )}
       </div>
+
+      {(line.attachments?.length ?? 0) > 0 && (
+        <div className="mt-2 space-y-1 border-t pt-2">
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{t("payments.extras.attachments")}</p>
+          <AttachmentGallery attachments={line.attachments} />
+        </div>
+      )}
+      {(line.notes?.length ?? 0) > 0 && (
+        <div className="mt-2 space-y-1 border-t pt-2">
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{t("payments.extras.notes")}</p>
+          <NotesList notes={line.notes} />
+        </div>
+      )}
     </div>
   );
 }

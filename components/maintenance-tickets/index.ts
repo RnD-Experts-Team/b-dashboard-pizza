@@ -7,7 +7,8 @@ export { Segmented, FieldError, DateTimePicker, DatePicker, TimePicker } from ".
 export { PasteFileZone } from "./paste-file-zone";
 export { TicketsSearch } from "./tickets-search";
 export { IssueStatusHistory } from "./issue-status-history";
-export { StatusChip, PriorityChip } from "./ticket-chips";
+export { StatusBadge, PriorityBadge, StatusChip, PriorityChip } from "./ticket-chips";
+export { STATUS_ACCENT, PRIORITY_ACCENT, statusAccent, priorityAccent, topPriority } from "./status-accent";
 export { TechnicianCheckList } from "./technician-check-list";
 export { TechnicianStandingBadges } from "./technician-standing";
 export { TicketPeekSheet } from "./ticket-peek-sheet";

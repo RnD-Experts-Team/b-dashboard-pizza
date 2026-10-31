@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DialogClose, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -237,7 +237,13 @@ function SessionForm({
 
       {errors.form && <p className="text-sm text-destructive">{errors.form}</p>}
 
-      <DialogFooter>
+      <DialogFooter className="gap-2 sm:gap-2">
+        {/* Closes through the dialog, so typed data still asks first. */}
+        <DialogClose asChild>
+          <Button type="button" variant="outline" disabled={busy}>
+            {t("common.cancel")}
+          </Button>
+        </DialogClose>
         <Button type="submit" disabled={busy}>
           {busy && <Loader2 className="animate-spin" aria-hidden="true" />}
           {busy ? t("common.saving") : t("common.save")}

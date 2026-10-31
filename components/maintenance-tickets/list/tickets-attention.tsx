@@ -71,7 +71,7 @@ export function TicketsAttention({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t("tickets.list.attention")}>
+    <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0" role="group" aria-label={t("tickets.list.attention")}>
       {ATTENTION_CHIPS.map((chip) => {
         const Icon = ICON[chip.id];
         const active = isActive(chip);
@@ -85,7 +85,7 @@ export function TicketsAttention({
             disabled={disabled}
             aria-pressed={active}
             className={cn(
-              "inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
+              "inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
               active ? "border-primary bg-primary/10 text-foreground" : "bg-card text-muted-foreground hover:bg-accent hover:text-foreground",
               warn && !active && "border-orange-500/40 text-orange-700 dark:text-orange-400",
             )}

@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useMemo } from "react";
+import { useTranslations } from "next-intl";
 import type { ApexOptions } from "apexcharts";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -75,6 +76,7 @@ export function AnalyticsBarChart({
   valueLabel: string;
   format?: (value: number) => string;
 }) {
+  const t = useTranslations("maintenanceSystem.tickets.analytics");
   const all = useMemo(() => [...rows].sort((a, b) => b.value - a.value), [rows]);
   const sorted = useMemo(() => all.slice(0, MAX_ROWS), [all]);
   const hidden = all.length - sorted.length;
@@ -123,7 +125,7 @@ export function AnalyticsBarChart({
   }, [sorted, format, valueLabel]);
 
   if (sorted.length === 0) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">Nothing to chart for this range.</p>;
+    return <p className="py-6 text-center text-sm text-muted-foreground">{t("nothingToChart")}</p>;
   }
 
   return (
@@ -137,13 +139,13 @@ export function AnalyticsBarChart({
       />
       {hidden > 0 && (
         <p className="text-xs text-muted-foreground">
-          The top {MAX_ROWS} shown; {hidden} more with smaller numbers.
+          {t("topShown", { max: MAX_ROWS, hidden })}
         </p>
       )}
       <table className="sr-only">
         <caption>{title}</caption>
         <thead>
-          <tr><th scope="col">Item</th><th scope="col">{valueLabel}</th></tr>
+          <tr><th scope="col">{t("item")}</th><th scope="col">{valueLabel}</th></tr>
         </thead>
         <tbody>
           {all.map((r) => (

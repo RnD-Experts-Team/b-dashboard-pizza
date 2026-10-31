@@ -79,7 +79,7 @@ export const TERMS = group("terms", {
   supplier: { label: "Supplier", help: "A shop or company we buy parts from." },
   payment: { label: "Payment", help: "Money paid to one technician or one supplier." },
   paymentLine: { label: "Payment line", help: "One part of a payment: hours, a fixed price, parts, gas…" },
-  trip: { label: "Trip", help: "A technician's day out: the stores he visits and his clocked time." },
+  trip: { label: "Trip", help: "A technician's day out: the stores they visit and their clocked time." },
   visit: { label: "Visit", help: "One stop at a store during a trip." },
   session: { label: "Clocked time", help: "From clock in to clock out." },
   inspection: { label: "Inspection", help: "Going out to look at the problem and give a quote." },
@@ -205,7 +205,7 @@ export const PAYMENT_LINE_TYPES = group<PaymentLineType>("paymentLineType", {
   hourly: {
     label: "By the hour",
     icon: "Clock",
-    help: "The time the technician was on the clock, breaks not counted, times his hourly rate.",
+    help: "The time the technician was on the clock, breaks not counted, times their hourly rate.",
   },
   fixed: { label: "Fixed price", icon: "Tag", help: "One agreed price for the job at this store, however long it took." },
   inspection: { label: "Inspection", icon: "ScanSearch", help: "The price of going out to look at the problem and give a quote." },

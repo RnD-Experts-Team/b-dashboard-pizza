@@ -61,7 +61,8 @@ export function PortalSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" showCloseButton={false} className="max-h-[92dvh] gap-0 overflow-y-auto rounded-t-2xl pb-[env(safe-area-inset-bottom)]">
-        <SheetHeader className="pb-2">
+        <span className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full bg-muted" aria-hidden="true" />
+        <SheetHeader className="mx-auto w-full max-w-lg px-4 pt-4 pb-2">
           <SheetTitle className="font-heading text-2xl font-semibold">{title}</SheetTitle>
           {description && <SheetDescription className="text-base">{description}</SheetDescription>}
         </SheetHeader>

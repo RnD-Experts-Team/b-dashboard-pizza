@@ -18,6 +18,7 @@ import { format } from "date-fns";
 import { nameKey } from "@/lib/maintenance/names";
 import { parseDecimal } from "@/lib/maintenance/money";
 import { fixedDirectionFor } from "@/lib/storage/movement-types";
+import { localInputToIso } from "@/lib/maintenance-trips/view";
 import type { Part } from "@/types/maintenance-system";
 import type {
   CreateStockMovementLinePayload,
@@ -96,8 +97,11 @@ export interface StockForm {
   quantity: string;
   serials: string[];
   ticketIssueId: number | null;
-  /** The spot inside the destination, one value per level (optional). */
-  placeValueIds: number[];
+  /**
+   * The spot inside the destination, one value per level. NULL = not touched:
+   * whatever spot the part already has there stays as it is.
+   */
+  placeValueIds: number[] | null;
   movedAt: string;
   note: string;
 }
@@ -110,7 +114,7 @@ export function emptyStockForm(prefill: { partId?: number | null; locationId?: n
     quantity: "1",
     serials: [],
     ticketIssueId: null,
-    placeValueIds: [],
+    placeValueIds: null,
     movedAt: nowLocalDateTime(),
     note: "",
   };
@@ -125,7 +129,7 @@ export function isStockFormDirty(form: StockForm, initial: StockForm): boolean {
     form.quantity !== initial.quantity ||
     form.serials.length > 0 ||
     form.ticketIssueId !== initial.ticketIssueId ||
-    form.placeValueIds.length > 0 ||
+    form.placeValueIds !== null ||
     form.note.trim() !== ""
   );
 }
@@ -225,7 +229,9 @@ export function buildStockMovementPayload(
 
   const note = form.note.trim();
   return {
-    moved_at: form.movedAt,
+    // The picker holds device time; the API wants an instant (a bare
+    // "YYYY-MM-DDTHH:mm" would be read as UTC and land hours off).
+    moved_at: localInputToIso(form.movedAt) ?? form.movedAt,
     type,
     ...(type === "used" && form.ticketIssueId != null ? { ticket_issue_id: form.ticketIssueId } : {}),
     lines,
@@ -233,11 +239,34 @@ export function buildStockMovementPayload(
   };
 }
 
-/** The location whose spot can be set afterwards (the destination), or null. */
-export function spotLocationOf(type: PostableStockMovementType, form: StockForm): number | null {
+/** Where the stock lands (the destination of a move), whether or not a spot was picked. */
+export function landingLocationOf(type: PostableStockMovementType, form: Pick<StockForm, "locationId" | "toLocationId">): number | null {
   const shape = shapeOf(type);
-  if (!shape.offersSpot || form.placeValueIds.length === 0) return null;
+  if (!shape.offersSpot) return null;
   return shape.flow === "both" ? form.toLocationId : form.locationId;
+}
+
+/** True when two spots name the same values (order does not matter). */
+export function sameSpot(a: readonly number[], b: readonly number[]): boolean {
+  if (a.length !== b.length) return false;
+  const set = new Set(a);
+  return b.every((id) => set.has(id));
+}
+
+/**
+ * The spot to save once the movement is recorded (PUT stock-balances/{id}/place),
+ * or null when there is nothing to change: no spot picked, or the one the
+ * part already has there.
+ */
+export function spotToSave(
+  type: PostableStockMovementType,
+  form: StockForm,
+  current: readonly number[],
+): { locationId: number; valueIds: number[] } | null {
+  const locationId = landingLocationOf(type, form);
+  if (locationId == null || form.placeValueIds === null) return null;
+  if (sameSpot(form.placeValueIds, current)) return null;
+  return { locationId, valueIds: form.placeValueIds };
 }
 
 /* ── Reading a movement back for the ledger ──────────────────────────────── */

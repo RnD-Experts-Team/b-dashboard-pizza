@@ -304,8 +304,9 @@ function IssueDoneForm({ target, run, onDone }: { target: IssueTarget; run: Port
       <BigField label={inspection ? t("tripPortal.anythingElse") : t("tripPortal.whatDidYouDo")} htmlFor="done-note">
         <Textarea id="done-note" className={BIG_TEXTAREA} value={note} onChange={(e) => setNote(e.target.value)} />
       </BigField>
-      <PhotoField label={t("tripPortal.beforePhotos")} files={before} onChange={setBefore} />
-      <PhotoField label={t("tripPortal.afterPhotos")} files={after} onChange={setAfter} />
+      {/* A look at the problem has no "after": one field of photos of what was found. */}
+      <PhotoField label={inspection ? t("tripPortal.inspectionPhotos") : t("tripPortal.beforePhotos")} files={before} onChange={setBefore} />
+      {inspection ? null : <PhotoField label={t("tripPortal.afterPhotos")} files={after} onChange={setAfter} />}
       <FormError message={error} />
       <BigButton
         size="giant"

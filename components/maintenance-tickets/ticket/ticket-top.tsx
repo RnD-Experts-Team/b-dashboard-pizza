@@ -2,11 +2,7 @@
 
 import Link from "next/link";
 import {
-  ArrowDown,
   ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  ChevronsUp,
   CircleSlash,
   Gauge,
   MoreHorizontal,
@@ -27,45 +23,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TicketHeaderInfo } from "@/lib/api/services/maintenance-workflow.service";
-import { IMPACTS, ISSUE_STATUSES, PRIORITIES, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
-import { STATUS_TONE, stepDots, type StepDotState } from "@/lib/maintenance-workflow";
-import type { IssueStatus, Priority, TicketIssueDetail } from "@/types/maintenance-system";
+import { IMPACTS, ISSUE_STATUSES, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
+import { stepDots, type StepDotState } from "@/lib/maintenance-workflow";
+import type { IssueStatus, TicketIssueDetail } from "@/types/maintenance-system";
 import { LocalTimestamp } from "../local-timestamp";
+import { PriorityBadge, StatusBadge } from "../ticket-chips";
 
-const PILL = "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium";
+const PILL = "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium leading-5";
 
-const PRIORITY_ICON: Record<Priority, typeof ArrowUp> = {
-  urgent: ChevronsUp,
-  high: ArrowUp,
-  medium: ArrowRight,
-  low: ArrowDown,
-};
-
-const PRIORITY_TONE: Record<Priority, string> = {
-  urgent: "bg-red-500/15 text-red-700 dark:bg-red-500/20 dark:text-red-300",
-  high: "bg-orange-500/15 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
-  medium: "bg-muted text-foreground",
-  low: "bg-muted text-muted-foreground",
-};
-
-export function StatusBadge({ status, label, className }: { status: string; label?: string; className?: string }) {
-  const t = useTranslations("maintenanceSystem");
-  const entry = vocabEntry(ISSUE_STATUSES, status, label);
-  const tone = STATUS_TONE[status as IssueStatus] ?? STATUS_TONE.cancelled;
-  return <span className={cn(PILL, tone, className)}>{vocabText(t, entry)}</span>;
-}
-
-export function PriorityBadge({ priority, label }: { priority: string; label?: string }) {
-  const t = useTranslations("maintenanceSystem");
-  const key = (priority in PRIORITY_ICON ? priority : "medium") as Priority;
-  const Icon = PRIORITY_ICON[key];
-  return (
-    <span className={cn(PILL, PRIORITY_TONE[key])}>
-      <Icon className="h-3 w-3" aria-hidden="true" />
-      {vocabText(t, vocabEntry(PRIORITIES, priority, label))}
-    </span>
-  );
-}
+/** The badges live in ticket-chips.tsx (one source for every ticket surface); re-exported for older imports. */
+export { PriorityBadge, StatusBadge };
 
 /** The issue's effective priority: the office's when set, else the store's. */
 export function effectivePriority(issue: TicketIssueDetail) {
@@ -230,7 +197,7 @@ export function IssueSwitcher({
             >
               <span className="tabular-nums text-xs text-muted-foreground">{index + 1}.</span>
               <span className="truncate">{i.title}</span>
-              <StatusBadge status={i.status.value} label={i.status.label} className="px-1.5 py-0 text-[10px]" />
+              <StatusBadge status={i.status.value} label={i.status.label} size="xs" />
             </button>
           );
         })}

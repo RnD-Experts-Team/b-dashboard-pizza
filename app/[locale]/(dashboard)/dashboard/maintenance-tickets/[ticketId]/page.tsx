@@ -1,8 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
-import { TicketPage } from "@/components/maintenance-tickets/ticket/ticket-page";
-import { TicketsSkeleton } from "@/components/maintenance-tickets/tickets-skeleton";
+import { TicketPage, TicketPageSkeleton } from "@/components/maintenance-tickets/ticket/ticket-page";
 
 /**
  * Ticket page (docs/MAINTENANCE-UI.md §2):
@@ -11,7 +10,7 @@ import { TicketsSkeleton } from "@/components/maintenance-tickets/tickets-skelet
  */
 export default function MaintenanceTicketPage() {
   return (
-    <Suspense fallback={<TicketsSkeleton />}>
+    <Suspense fallback={<TicketPageSkeleton />}>
       <TicketPage />
     </Suspense>
   );

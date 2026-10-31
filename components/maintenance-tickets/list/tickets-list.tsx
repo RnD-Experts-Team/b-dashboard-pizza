@@ -8,20 +8,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatTimestamp } from "@/lib/utils/date-display";
 import { isOverdue } from "@/lib/maintenance-workflow";
 import type { IssueStatus, Ticket, TicketIssueSummary, TicketsListResponse } from "@/types/maintenance-tickets.types";
-import { PriorityBadge, StatusBadge } from "../ticket/ticket-top";
+import { topPriority } from "../status-accent";
+import { PriorityBadge, StatusBadge } from "../ticket-chips";
 
-/** Most severe first; a priority's rank is how far from the end it sits. */
-const PRIORITY_ORDER = ["urgent", "high", "medium", "low"] as const;
-const PRIORITY_RANK: Record<string, number> = Object.fromEntries(PRIORITY_ORDER.map((p, i) => [p, PRIORITY_ORDER.length - i]));
 const DATE_PATTERN = "MMM d, yyyy";
-
-/** The highest priority across the ticket's issues. */
-function topPriority(issues: TicketIssueSummary[]): { value: string; label: string } | null {
-  return issues.reduce<{ value: string; label: string } | null>((best, i) => {
-    if (!i.priority) return best;
-    return !best || (PRIORITY_RANK[i.priority.value] ?? 0) > (PRIORITY_RANK[best.value] ?? 0) ? i.priority : best;
-  }, null);
-}
 
 /** The earliest target among the issues still open. */
 function nearestTarget(issues: TicketIssueSummary[]): string | null {
@@ -100,8 +90,8 @@ export function TicketsList({
       {/* Desktop table */}
       <div className="hidden overflow-x-auto rounded-lg border md:block">
         <Table>
-          <TableHeader>
-            <TableRow>
+          <TableHeader className="bg-muted/30">
+            <TableRow className="hover:bg-transparent">
               <TableHead className="w-20">{t("tickets.list.columns.number")}</TableHead>
               <TableHead>{t("tickets.list.columns.title")}</TableHead>
               <TableHead>{t("common.store")}</TableHead>
@@ -116,7 +106,7 @@ export function TicketsList({
             {rows.map((row) => (
               <TableRow
                 key={row.ticket.id}
-                className="cursor-pointer hover:bg-muted/50"
+                className="cursor-pointer hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 onClick={() => onOpen(row.ticket)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") onOpen(row.ticket);
@@ -124,7 +114,7 @@ export function TicketsList({
                 tabIndex={0}
                 aria-label={t("tickets.list.openTicket", { id: row.ticket.id })}
               >
-                <TableCell className="font-mono text-sm tabular-nums">#{row.ticket.id}</TableCell>
+                <TableCell className="font-mono text-sm text-muted-foreground tabular-nums">#{row.ticket.id}</TableCell>
                 <TableCell className="max-w-72">
                   <span className="block truncate font-medium" title={row.title}>
                     {row.title}
@@ -135,7 +125,9 @@ export function TicketsList({
                 <TableCell>
                   <StatusBadge status={row.ticket.status.value} label={row.ticket.status.label} />
                 </TableCell>
-                <TableCell>{row.priority ? <PriorityBadge priority={row.priority.value} label={row.priority.label} /> : "—"}</TableCell>
+                <TableCell>
+                  {row.priority ? <PriorityBadge priority={row.priority.value} label={row.priority.label} /> : <span className="text-muted-foreground">—</span>}
+                </TableCell>
                 <TableCell className="max-w-40 truncate text-sm">{row.assigned || <span className="text-muted-foreground">—</span>}</TableCell>
                 <TableCell className="whitespace-nowrap text-sm">
                   <TargetCell row={row} />
@@ -164,14 +156,14 @@ export function TicketsList({
                   <p className="truncate font-medium">{row.title}</p>
                   {row.more ? <p className="text-xs text-muted-foreground">{t("tickets.moreIssues", { count: row.more })}</p> : null}
                 </div>
-                <StatusBadge status={row.ticket.status.value} label={row.ticket.status.label} />
+                <StatusBadge status={row.ticket.status.value} label={row.ticket.status.label} className="shrink-0" />
               </div>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-1">
                   <Store className="h-3 w-3" aria-hidden="true" />
                   {row.store}
                 </span>
-                {row.priority ? <PriorityBadge priority={row.priority.value} label={row.priority.label} /> : null}
+                {row.priority ? <PriorityBadge priority={row.priority.value} label={row.priority.label} size="sm" /> : null}
                 {row.target ? (
                   <span>
                     {t("tickets.targetDate")}: <TargetCell row={row} />

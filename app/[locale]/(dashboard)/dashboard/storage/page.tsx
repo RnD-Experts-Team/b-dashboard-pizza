@@ -2,6 +2,7 @@
 
 import { Suspense } from "react";
 import { StorageView } from "@/components/storage/storage-view";
+import { OfficeOnly } from "@/components/maintenance-tickets/office-only";
 import { StorageSkeleton } from "@/components/storage/storage-shared";
 
 /**
@@ -12,7 +13,9 @@ import { StorageSkeleton } from "@/components/storage/storage-shared";
 export default function StoragePage() {
   return (
     <Suspense fallback={<StorageSkeleton />}>
-      <StorageView />
+      <OfficeOnly path="/stock-balances">
+        <StorageView />
+      </OfficeOnly>
     </Suspense>
   );
 }

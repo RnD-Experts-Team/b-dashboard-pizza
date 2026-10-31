@@ -16,7 +16,7 @@ import { AttachmentGallery } from "@/components/maintenance-tickets/attachment-g
 import { NotesList } from "@/components/maintenance-tickets/notes-list";
 import { PriorityChip } from "@/components/maintenance-tickets/ticket-chips";
 import { cn } from "@/lib/utils";
-import { formatTimestamp } from "@/lib/utils/date-display";
+import { formatDateOnly, formatTimestamp, isDateOnly } from "@/lib/utils/date-display";
 import { formatMoney } from "@/lib/maintenance/money";
 import {
   PRIORITIES,
@@ -380,7 +380,7 @@ export function PurchasesSection({ trip }: { trip: Trip }) {
             <p className="text-muted-foreground">
               {[
                 p.supplier?.name,
-                p.quantity ? t("trips.drawer.quantity", { qty: String(p.quantity) }) : null,
+                p.quantity ? t("trips.drawer.quantity", { qty: String(Number(p.quantity)) }) : null,
                 p.serialNumber ? t("trips.drawer.serial", { serial: p.serialNumber }) : null,
                 when(p.boughtAt),
               ]
@@ -435,28 +435,40 @@ export function FilesSection({ trip }: { trip: Trip }) {
 
 /* ── Audit list ──────────────────────────────────────────────────────────── */
 
-/**
- * Each dot or underscore in an audit action, replaced by a space:
- * "session.updated" → "session updated", "link_rotated" → "link rotated";
- * "closed" has none and is unchanged.
- * https://regex101.com/?flavor=javascript&regex=%5B._%5D&flags=g&testString=session.updated%0Alink_rotated%0Aclosed
- */
-const ACTION_SEPARATORS = /[._]/g;
+/** What an audit is about, in plain words (unknown ones fall back to "Change"). */
+const AUDIT_SUBJECTS = ["trip", "session", "stop", "event"] as const;
+const AUDIT_ACTIONS = ["created", "updated", "mistaken", "closed", "reopened", "link_issued"] as const;
+/** Fields people care about, with a label; anything else is left out of the list. */
+const AUDIT_FIELDS = ["clockIn", "clockOut", "at", "usingCar", "odometerIn", "odometerOut", "plannedDate", "instructions", "otherStore"] as const;
 
-/** "session.updated" → "Session updated". */
-function actionWords(action: string | null | undefined): string {
-  if (!action) return "";
-  const words = action.replace(ACTION_SEPARATORS, " ").trim();
-  return words.charAt(0).toUpperCase() + words.slice(1);
+/** An ISO date-time (what the API sends for every instant). */
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+
+function auditTitle(audit: TripAudit, t: (key: string) => string): string {
+  const subject = (AUDIT_SUBJECTS as readonly string[]).includes(audit.subjectType ?? "") ? audit.subjectType : null;
+  const action = (AUDIT_ACTIONS as readonly string[]).includes(audit.action ?? "") ? audit.action : null;
+  if (!action) return t("trips.drawer.change");
+  return t(`trips.drawer.auditTitle.${subject ?? "trip"}.${action}`);
 }
 
 function AuditRow({ audit }: { audit: TripAudit }) {
   const t = useTranslations("maintenanceSystem");
-  const changes = auditChanges(audit);
+  const value = (v: string): string => {
+    if (v === "yes") return t("trips.drawer.auditYes");
+    if (v === "no") return t("trips.drawer.auditNo");
+    if (ISO_INSTANT.test(v)) return when(v);
+    return isDateOnly(v) ? formatDateOnly(v) : v;
+  };
+  const changes = auditChanges(audit).filter(
+    (c) =>
+      (AUDIT_FIELDS as readonly string[]).includes(c.field) &&
+      // A new row "changing" a yes/no from nothing to no says nothing.
+      !(c.before === "—" && (c.after === "no" || c.after === "—")),
+  );
   return (
     <li className="space-y-1 rounded-md border bg-card px-3 py-2 text-xs">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-        <span className="font-medium">{actionWords(audit.action) || t("trips.drawer.change")}</span>
+        <span className="font-medium">{auditTitle(audit, t)}</span>
         <span className="text-muted-foreground">
           {[audit.user?.name, when(audit.createdAt)].filter(Boolean).join(" · ")}
         </span>
@@ -465,9 +477,15 @@ function AuditRow({ audit }: { audit: TripAudit }) {
       {!!changes.length && (
         <ul className="space-y-0.5">
           {changes.map((c) => (
-            <li key={c.field} className="break-all tabular-nums">
-              <span className="text-muted-foreground">{c.field}: </span>
-              <span className="line-through opacity-70">{c.before}</span> → <span>{c.after}</span>
+            <li key={c.field} className="break-words tabular-nums">
+              <span className="text-muted-foreground">{t(`trips.drawer.auditField.${c.field}`)}: </span>
+              {c.before !== "—" ? (
+                <>
+                  <span className="line-through opacity-70">{value(c.before)}</span>
+                  {" → "}
+                </>
+              ) : null}
+              <span>{value(c.after)}</span>
             </li>
           ))}
         </ul>

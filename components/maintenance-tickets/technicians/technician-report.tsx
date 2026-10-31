@@ -35,6 +35,9 @@ const paymentIdOf = (s: TechnicianPaySheet) => s.payment_id ?? s.daily_pay_payme
 const tripOf = (v: TechnicianWorkVisit) => v.trip_id ?? null;
 
 const moneyFormat = (v: number) => money(v);
+
+/** date-fns pattern for when a clocked session started. */
+const SESSION_START_FORMAT = "MMM d · h:mm a";
 const visitsFormat = (v: number) => `${v} ${v === 1 ? "visit" : "visits"}`;
 
 /**
@@ -56,6 +59,7 @@ export function TechnicianReport({
   rangeLabel: string;
 }) {
   const tv = useTranslations("maintenanceSystem");
+  const tr = useTranslations("maintenanceSystem.technicians.report");
   const sheets = usePaged(data?.pay_sheets ?? []);
   const work = usePaged(data?.work_log ?? [], undefined, 8);
   const byIssue = usePaged(data?.work_by_issue ?? []);
@@ -79,17 +83,17 @@ export function TechnicianReport({
       </div>
 
       <div className="grid gap-6 @4xl:grid-cols-2">
-        <AnalyticsCard center icon={Banknote} title="Paid by store" description={`${rangeLabel}, from the payments.`}>
+        <AnalyticsCard center icon={Banknote} title={tr("paidByStore")} description={tr("fromPayments", { range: rangeLabel })}>
           <AnalyticsBarChart
-            title="Paid by store"
+            title={tr("paidByStore")}
             rows={data.paid_by_store.map((r) => ({ label: paidWhere(r), value: Number(r.amount) }))}
             valueLabel="paid"
             format={moneyFormat}
           />
         </AnalyticsCard>
-        <AnalyticsCard center icon={Wrench} title="Sessions by issue" description="What they were called out for.">
+        <AnalyticsCard center icon={Wrench} title={tr("sessionsByIssue")} description={tr("sessionsByIssueDescription")}>
           <AnalyticsBarChart
-            title="Sessions by issue"
+            title={tr("sessionsByIssue")}
             rows={data.work_by_issue.map((r) => ({ label: r.title, value: r.visits }))}
             valueLabel="visits"
             format={visitsFormat}
@@ -98,7 +102,7 @@ export function TechnicianReport({
       </div>
 
       <div className="grid gap-6 @4xl:grid-cols-2">
-        <ReportTable id="paid-by-kind" title="Paid by type" description={filtered ? "Only the payment lines for the chosen stores or issues." : "Adds up to what they were paid."}>
+        <ReportTable id="paid-by-kind" title={tr("paidByType")} description={filtered ? tr("paidByTypeFiltered") : tr("paidByTypeDescription")}>
           <table className="w-full text-sm">
             <tbody className="divide-y">
               {KINDS.map((kind) => (
@@ -113,16 +117,16 @@ export function TechnicianReport({
                 </tr>
               ))}
               <tr className="bg-muted/30">
-                <td className={cn(TD, "font-semibold")}>Total</td>
+                <td className={cn(TD, "font-semibold")}>{tv("common.total")}</td>
                 <td className={cn(TD, "text-end font-semibold tabular-nums")}>{money(kindsTotal)}</td>
               </tr>
             </tbody>
           </table>
         </ReportTable>
 
-        <ReportTable id="paid-by-store" title="Paid by store" count={data.paid_by_store.filter((r) => !r.payment_level).length} unit="places" description="Each payment line belongs to one store, or to storage for parts bought for the shelf.">
+        <ReportTable id="paid-by-store" title={tr("paidByStore")} count={data.paid_by_store.filter((r) => !r.payment_level).length} unit="places" description={tr("paidByStoreDescription")}>
           {data.paid_by_store.length === 0 ? (
-            <Empty>No payments in this range.</Empty>
+            <Empty>{tr("noPayments")}</Empty>
           ) : (
             <table className="w-full text-sm">
               <thead className="border-b bg-muted/40">
@@ -148,9 +152,9 @@ export function TechnicianReport({
         </ReportTable>
       </div>
 
-      <ReportTable id="pay-sheets" title={`Payments · ${rangeLabel}`} count={data.pay_sheets.length} unit="payments" description="Open one to see it on the Payments page.">
+      <ReportTable id="pay-sheets" title={tr("paymentsTitle", { range: rangeLabel })} count={data.pay_sheets.length} unit="payments" description={tr("paymentsDescription")}>
         {data.pay_sheets.length === 0 ? (
-          <Empty>No payments to them in this range.</Empty>
+          <Empty>{tr("noPaymentsToThem")}</Empty>
         ) : (
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/40">
@@ -186,9 +190,9 @@ export function TechnicianReport({
       </ReportTable>
 
       <div className="grid gap-6 @4xl:grid-cols-2">
-        <ReportTable id="work-by-issue" title="Work by issue" count={data.work_by_issue.length} unit="issues" description="A session that covered several issues counts toward each.">
+        <ReportTable id="work-by-issue" title={tr("workByIssue")} count={data.work_by_issue.length} unit="issues" description={tr("workByIssueDescription")}>
           {data.work_by_issue.length === 0 ? (
-            <Empty>No visits in this range.</Empty>
+            <Empty>{tr("noVisits")}</Empty>
           ) : (
             <table className="w-full text-sm">
               <thead className="border-b bg-muted/40">
@@ -214,9 +218,9 @@ export function TechnicianReport({
           <Pager {...byIssue} onPage={byIssue.setPage} />
         </ReportTable>
 
-        <ReportTable id="work-by-store" title="Work by store" count={data.work_by_store.length} unit="stores" description="Where they worked.">
+        <ReportTable id="work-by-store" title={tr("workByStore")} count={data.work_by_store.length} unit="stores" description={tr("workByStoreDescription")}>
           {data.work_by_store.length === 0 ? (
-            <Empty>No visits in this range.</Empty>
+            <Empty>{tr("noVisits")}</Empty>
           ) : (
             <table className="w-full text-sm">
               <thead className="border-b bg-muted/40">
@@ -244,13 +248,13 @@ export function TechnicianReport({
 
       <ReportTable
         id="work"
-        title={`Work · ${rangeLabel}`}
+        title={tr("workTitle", { range: rangeLabel })}
         count={data.work_log.length}
         unit="sessions"
-        description="Newest first: every clock-in to clock-out on a trip. Hours are work, travel and parts runs; breaks are not paid."
+        description={tr("workDescription")}
       >
         {data.work_log.length === 0 ? (
-          <Empty>No work in this range.</Empty>
+          <Empty>{tr("noWork")}</Empty>
         ) : (
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/40">
@@ -268,7 +272,7 @@ export function TechnicianReport({
                 <tr key={`${v.source}:${v.trip_session_id ?? v.attendance_entry_id ?? ""}:${v.daily_pay_entry_id ?? ""}:${v.stores.join(",")}`} className="transition-colors hover:bg-muted/30">
                   <td className={cn(TD, "whitespace-nowrap")}>
                     {v.source !== "pay_sheet" && v.start ? (
-                      <LocalTimestamp iso={v.start} pattern="MMM d · h:mm a" showZone={false} />
+                      <LocalTimestamp iso={v.start} pattern={SESSION_START_FORMAT} showZone={false} />
                     ) : v.date ? (
                       formatDateOnly(v.date, "EEE, MMM d")
                     ) : (

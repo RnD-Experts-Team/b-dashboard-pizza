@@ -200,15 +200,16 @@ export function ActionDialog({
       <Dialog open={open} onOpenChange={requestClose}>
         <DialogContent
           data-action-scope={form.scope}
-          className={cn("max-h-[90vh] w-[95vw] overflow-y-auto", wide ? "sm:max-w-2xl" : "sm:max-w-lg")}
+          className={cn("flex max-h-[90dvh] w-[95vw] flex-col gap-0 overflow-hidden p-0", wide ? "sm:max-w-2xl" : "sm:max-w-lg")}
         >
-          <DialogHeader>
+          {/* Header and buttons stay put; only the fields scroll. */}
+          <DialogHeader className="shrink-0 border-b px-5 pt-5 pb-4 pe-12 text-start sm:px-6">
             <DialogTitle className="font-heading font-semibold">{title}</DialogTitle>
             {description ? <DialogDescription>{description}</DialogDescription> : null}
           </DialogHeader>
           <form
             id={formId}
-            className="space-y-4"
+            className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 sm:px-6"
             onSubmit={(e) => {
               e.preventDefault();
               if (!form.busy && canSubmit) onSubmit();
@@ -221,8 +222,8 @@ export function ActionDialog({
               </p>
             ) : null}
           </form>
-          <DialogFooter className="items-center gap-2">
-            {footerStart ? <div className="me-auto">{footerStart}</div> : null}
+          <DialogFooter className="shrink-0 gap-2 border-t bg-muted/30 px-5 py-3 sm:items-center sm:px-6">
+            {footerStart ? <div className="sm:me-auto">{footerStart}</div> : null}
             <Button type="button" variant="outline" onClick={() => requestClose(false)} disabled={form.busy}>
               {t("cancel")}
             </Button>

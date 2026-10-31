@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/layout/page-header";
 import { PizzaLoader } from "@/components/shared/pizza-loader";
+import { OfficeOnly } from "@/components/maintenance-tickets/office-only";
 import { useAuth } from "@/lib/auth/use-auth";
 import { TechniciansTab, TECHNICIAN_QUERY_KEYS } from "@/components/maintenance-technicians/technicians-tab";
 import { TechnicianFormDialog } from "@/components/maintenance-technicians/technician-form-dialog";
@@ -101,7 +102,9 @@ export default function MaintenanceTechniciansPage() {
   // useSearchParams needs a Suspense boundary.
   return (
     <Suspense fallback={<PizzaLoader fullScreen={false} />}>
-      <TechniciansAndSuppliers />
+      <OfficeOnly path="/technicians">
+        <TechniciansAndSuppliers />
+      </OfficeOnly>
     </Suspense>
   );
 }

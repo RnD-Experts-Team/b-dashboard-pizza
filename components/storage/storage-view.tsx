@@ -50,6 +50,8 @@ export function StorageView() {
   const canRecordPayments = can("POST", "/payments");
   const canMarkMistaken = can("POST", "/stock-movements/*/mistaken");
   const canManageLocations = can("POST", "/storage-locations");
+  const canSetSpot = can("PUT", "/stock-balances/*/place");
+  const canDeclareSpots = can("POST", "/storage-locations/*/place-levels/*/values");
   const canEditParts = can("PATCH", "/parts/*");
   const canAddParts = can("POST", "/parts");
   const canStartCount = can("POST", "/stock-counts");
@@ -73,12 +75,18 @@ export function StorageView() {
     [params, pathname, router],
   );
 
-  const changeTab = (next: string) => {
+  const changeTab = (next: string, extra: ParamPatch = {}) => {
     const target = parseStorageTab(next);
     const cleared = Object.fromEntries(
       STORAGE_TABS.filter((name) => name !== target).flatMap((name) => TAB_PARAM_KEYS[name].map((key) => [key, null])),
     );
-    setParams({ ...cleared, tab: target === "stock" ? null : target }, "push");
+    setParams({ ...cleared, tab: target === "stock" ? null : target, ...extra }, "push");
+  };
+
+  /** "Add zones and shelves": the Locations tab, on that location (closes the part sheet). */
+  const openLocationSpots = (locationId: number) => {
+    setPending(null);
+    changeTab("locations", { location: locationId, p: null });
   };
 
   const openPartId = idParam(params.get("p")) ?? null;
@@ -107,7 +115,7 @@ export function StorageView() {
         {recordMenu}
       </PageHeader>
 
-      <Tabs value={tab} onValueChange={changeTab}>
+      <Tabs value={tab} onValueChange={(next) => changeTab(next)}>
         <div className="-mx-1 overflow-x-auto px-1">
           <TabsList className="h-auto w-max flex-nowrap gap-1 p-1">
             {STORAGE_TABS.map((name) => (
@@ -128,7 +136,10 @@ export function StorageView() {
               locations={locationList.all}
               onOpenPart={(id) => setParams({ p: id }, "push")}
               onAddPart={canAddParts ? () => setAddingPart(true) : undefined}
-              canSetSpot={canManageLocations}
+              onRecordOpening={canRecordMovements ? () => pick("opening_stock") : undefined}
+              canSetSpot={canSetSpot}
+              canDeclareSpots={canDeclareSpots}
+              onSetUpSpots={canManageLocations ? openLocationSpots : undefined}
               revision={revision}
             />
           )}
@@ -187,6 +198,10 @@ export function StorageView() {
         canEdit={canEditParts}
         canRecordMovements={canRecordMovements}
         canRecordPayments={canRecordPayments}
+        canSetSpot={canSetSpot}
+        canDeclareSpots={canDeclareSpots}
+        onSetUpSpots={canManageLocations ? openLocationSpots : undefined}
+        onStockChanged={bump}
         revision={revision}
       />
 
@@ -206,7 +221,8 @@ export function StorageView() {
         parts={parts}
         locations={locationList.live}
         defaultLocationId={stockLocationFilter}
-        canDeclareSpots={canManageLocations}
+        canDeclareSpots={canDeclareSpots}
+        onSetUpSpots={canManageLocations ? openLocationSpots : undefined}
         onRecorded={() => {
           setPending(null);
           bump();

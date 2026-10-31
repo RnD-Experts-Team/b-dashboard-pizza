@@ -1,16 +1,18 @@
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  The payment dialog's form state (docs/MAINTENANCE-UI.md §5)           */
 /*                                                                            */
-/*  One scrolling form: paid to · date · how we paid · reference · invoice # · */
-/*  invoice file · lines · running total. Pure functions over a plain draft, */
-/*  so the dialog can keep it in useState/useReducer and every rule is here: */
+/*  One scrolling form: paid to · date · lines (each with its own notes and  */
+/*  attachments) · attachments and notes · running total. Pure functions     */
+/*  over a plain draft, so the dialog can keep it in useState and every rule */
+/*  is here:                                                                  */
 /*                                                                            */
-/*   - lines add / remove / update, change type (keeps place and tickets)    */
+/*   - lines add / remove / update, change type (keeps what still applies)   */
 /*   - hourly: picking clocked sessions fills the hours; typing hours flags  */
 /*     "typed over" (sent as `hours`, the server sets hours_overridden)      */
 /*   - rate defaults to the technician's hourly rate                         */
 /*   - prefill from unpaid work ("Pay this") and from a ticket               */
-/*   - read a saved payment back for Edit                                     */
+/*   - read a saved payment back for Edit (how we paid, reference and       */
+/*     invoice # are no longer asked for; an edit sends back what was saved) */
 /*   - the wire body: only the fields each type uses                         */
 /*   - client-side checks keyed exactly like the server's 422s               */
 /*                                                                            */
@@ -19,6 +21,13 @@
 
 import { decimalOr0, minutesToHours, parseDecimal, roundCents, toMoneyString } from "@/lib/maintenance/money";
 import { lineErrorKey, rootErrorKey, type FormErrors } from "@/lib/maintenance-payments/field-errors";
+import {
+  emptyExtras,
+  extrasFromSaved,
+  lineExtrasInput,
+  paymentExtrasInput,
+  type ExtrasDraft,
+} from "@/lib/maintenance-payments/extras";
 import { lineShows } from "@/lib/maintenance-payments/line-types";
 import type {
   EditPaymentInput,
@@ -69,6 +78,8 @@ export interface PaymentLineDraft {
   /** inspection */
   issueInspectionId: number | null;
   ticketIssueIds: number[];
+  /** The line's own notes and attachments. */
+  extras: ExtrasDraft;
 }
 
 export interface PaidToChoice {
@@ -82,11 +93,15 @@ export interface PaidToChoice {
 export interface PaymentDraft {
   paidTo: PaidToChoice | null;
   paidAt: string;
+  /**
+   * Not shown any more (the owner: they made it look like they were
+   * needed). Kept so an edit sends back what an older payment saved.
+   */
   method: PaymentMethod | null;
   reference: string;
   invoiceNumber: string;
-  note: string;
-  files: File[];
+  /** The payment's notes and attachments. */
+  extras: ExtrasDraft;
   lines: PaymentLineDraft[];
   /** Set when editing; sent back for the 409 check. */
   expectedUpdatedAt?: string;
@@ -133,6 +148,7 @@ export function newLine(type: PaymentLineType, init: Partial<Omit<PaymentLineDra
     miles: "",
     issueInspectionId: null,
     ticketIssueIds: [],
+    extras: emptyExtras(),
     ...init,
   };
 }
@@ -144,8 +160,7 @@ export function emptyPaymentDraft(today: string): PaymentDraft {
     method: null,
     reference: "",
     invoiceNumber: "",
-    note: "",
-    files: [],
+    extras: emptyExtras(),
     lines: [newLine("fixed")],
   };
 }
@@ -167,15 +182,37 @@ export function updateLine(draft: PaymentDraft, uid: string, patch: Partial<Paym
   return { ...draft, lines: draft.lines.map((l) => (l.uid === uid ? { ...l, ...patch } : l)) };
 }
 
-/** A new type keeps where it is, its tickets and its description; the rest resets. */
+/** Line types that can pay back what the technician bought. */
+export const PAYS_BACK: readonly PaymentLineType[] = ["parts", "other"];
+
+/** Types whose amount is typed in (gas: when paid as an amount). */
+const TYPED_AMOUNT: readonly PaymentLineType[] = ["fixed", "inspection", "other", "gas"];
+
+/**
+ * A new type keeps what still applies — the same line (its identity, so the
+ * dialog finds it), where it was spent, its tickets, description, notes and
+ * attachments, and a typed amount when the new type also takes one — and
+ * clears the fields only the old type had.
+ *
+ * Parts going into storage have no store: back to a store-type line, the
+ * store is chosen again. An hourly line starts at the technician's rate.
+ */
 export function changeLineType(line: PaymentLineDraft, type: PaymentLineType, defaultRate?: string | null): PaymentLineDraft {
-  return newLine(type, {
-    storeId: line.storeId,
-    otherStore: line.otherStore,
+  if (type === line.type) return line;
+  const fromStorage = line.type === "parts" && line.destination === "storage";
+  const keepAmount = TYPED_AMOUNT.includes(line.type) && TYPED_AMOUNT.includes(type) && !(line.type === "gas" && line.gasMode === "miles");
+  const fresh = newLine(type, {
+    storeId: fromStorage ? null : line.storeId,
+    otherStore: fromStorage ? "" : line.otherStore,
     ticketIssueIds: line.ticketIssueIds,
     description: line.description,
-    rate: defaultRate ?? "",
+    amount: keepAmount ? line.amount : "",
+    rate: type === "hourly" ? defaultRate ?? "" : "",
+    // Parts and Other lines both pay back the technician's purchases.
+    technicianPurchaseIds: PAYS_BACK.includes(type) && PAYS_BACK.includes(line.type) ? line.technicianPurchaseIds : [],
+    extras: line.extras,
   });
+  return { ...fresh, uid: line.uid };
 }
 
 /** Choosing who is paid: hourly lines without a typed rate take the technician's. */
@@ -246,9 +283,10 @@ function sharedStore(storeNumbers: readonly (string | null)[]): string | null {
 }
 
 /**
- * "Pay this" from the Unpaid work panel: the technician, one hourly line with
- * the chosen sessions (all by default), and one parts line per purchase being
- * paid back (`technician_purchase_ids`).
+ * "Pay this" from the Unpaid work panel: the technician, one hourly line per
+ * store with the chosen sessions (all by default), and one line per purchase being
+ * paid back (`technician_purchase_ids`): a parts line for a catalog part, an
+ * Other line for anything else he bought (zip ties, a cleaner).
  */
 export function draftFromUnpaidWork(
   work: UnpaidWork,
@@ -263,22 +301,37 @@ export function draftFromUnpaidWork(
   const purchases = work.purchases.filter((p) => !pick.purchaseIds || pick.purchaseIds.includes(p.id));
   const ctx: PreviewContext = { sessionPaidMinutes: Object.fromEntries(sessions.map((s) => [s.id, s.durations.paid])) };
 
-  const sessionIssues = sessions.flatMap((s) => s.ticketIssues);
-  const hourly = sessions.length
-    ? [
-        setLineSessions(
-          newLine("hourly", {
-            rate,
-            storeId: storeIdOf(sharedStore(sessionIssues.map((i) => i.storeNumber))),
-            ticketIssueIds: Array.from(new Set(sessionIssues.map((i) => i.id))),
-          }),
-          sessions.map((s) => s.id),
-          ctx,
-        ),
-      ]
-    : [];
+  // One hourly line per store: a line is spent at one store, so sessions at
+  // different stores are split; a session spread over several stores (or none)
+  // goes on a line whose store is left to choose.
+  const byStore = new Map<string, typeof sessions>();
+  for (const s of sessions) {
+    const key = sharedStore(s.ticketIssues.map((i) => i.storeNumber)) ?? "";
+    byStore.set(key, [...(byStore.get(key) ?? []), s]);
+  }
+  const hourly = Array.from(byStore.entries()).map(([storeNumber, group]) => {
+    const issues = group.flatMap((s) => s.ticketIssues).filter((i) => !storeNumber || i.storeNumber === storeNumber);
+    return setLineSessions(
+      newLine("hourly", {
+        rate,
+        storeId: storeIdOf(storeNumber || null),
+        ticketIssueIds: Array.from(new Set(issues.map((i) => i.id))),
+      }),
+      group.map((s) => s.id),
+      ctx,
+    );
+  });
 
   const partsLines = purchases.map((p) => {
+    if (!p.part) {
+      return newLine("other", {
+        description: p.description,
+        amount: toMoneyString(decimalOr0(p.totalCost)),
+        storeId: storeIdOf(p.ticketIssue?.storeNumber),
+        ticketIssueIds: p.ticketIssue ? [p.ticketIssue.id] : [],
+        technicianPurchaseIds: [p.id],
+      });
+    }
     const quantity = parseDecimal(p.quantity) ?? 1;
     return newLine("parts", {
       partId: p.part?.id ?? null,
@@ -332,8 +385,7 @@ export function draftFromPayment(payment: Payment): PaymentDraft {
     method: payment.method,
     reference: payment.reference ?? "",
     invoiceNumber: payment.invoiceNumber ?? "",
-    note: payment.note ?? "",
-    files: [],
+    extras: extrasFromSaved(payment.notes, payment.attachments),
     expectedUpdatedAt: payment.updatedAt,
     lines: payment.lines.map((l) =>
       newLine(l.type, {
@@ -359,6 +411,7 @@ export function draftFromPayment(payment: Payment): PaymentDraft {
         miles: str(l.miles),
         issueInspectionId: l.issueInspectionId,
         ticketIssueIds: l.ticketIssues.map((i) => i.id),
+        extras: extrasFromSaved(l.notes, l.attachments),
       }),
     ),
   };
@@ -377,12 +430,13 @@ function placeOf(line: PaymentLineDraft): Pick<PaymentLineInput, "storeId" | "ot
   return { otherStore: orNull(line.otherStore) };
 }
 
-function lineToInput(line: PaymentLineDraft): PaymentLineInput {
+function lineToInput(line: PaymentLineDraft, editing: boolean): PaymentLineInput {
   const base: PaymentLineInput = {
     type: line.type,
     ...placeOf(line),
     description: lineShows(line.type, "description") ? orNull(line.description) : undefined,
     ticketIssueIds: line.ticketIssueIds.length ? line.ticketIssueIds : undefined,
+    ...lineExtrasInput(line.extras, editing),
   };
   const byType: Record<PaymentLineType, () => Partial<PaymentLineInput>> = {
     hourly: () => ({
@@ -404,27 +458,37 @@ function lineToInput(line: PaymentLineDraft): PaymentLineInput {
       description: orNull(line.description) ?? undefined,
     }),
     gas: () => (line.gasMode === "miles" ? { miles: orNull(line.miles), rate: orNull(line.rate) } : { amount: orNull(line.amount) }),
-    other: () => ({ amount: orNull(line.amount) }),
+    // An Other line also pays back purchases that are not catalog parts (zip ties, a cleaner).
+    other: () => ({
+      amount: orNull(line.amount),
+      technicianPurchaseIds: line.technicianPurchaseIds.length ? line.technicianPurchaseIds : undefined,
+    }),
   };
   return { ...base, ...byType[line.type]() };
 }
 
-export function draftToInput(draft: PaymentDraft): PaymentInput {
+function toInput(draft: PaymentDraft, editing: boolean): PaymentInput {
+  const { removeNoteIds, removeAttachmentIds, ...extras } = paymentExtrasInput(draft.extras, editing);
   return {
     paidAt: draft.paidAt,
     technicianId: draft.paidTo?.type === "technician" ? draft.paidTo.id : undefined,
     supplierId: draft.paidTo?.type === "supplier" ? draft.paidTo.id : undefined,
+    // Not asked for any more; an edit sends back what an older payment saved (the edit replaces them).
     method: draft.method ?? undefined,
     reference: orNull(draft.reference) ?? undefined,
     invoiceNumber: orNull(draft.invoiceNumber) ?? undefined,
-    note: orNull(draft.note) ?? undefined,
-    files: draft.files.length ? draft.files : undefined,
-    lines: draft.lines.map(lineToInput),
+    ...extras,
+    ...(editing ? { removeNoteIds, removeAttachmentIds } : {}),
+    lines: draft.lines.map((l) => lineToInput(l, editing)),
   };
 }
 
+export function draftToInput(draft: PaymentDraft): PaymentInput {
+  return toInput(draft, false);
+}
+
 export function draftToEditInput(draft: PaymentDraft): EditPaymentInput {
-  return { ...draftToInput(draft), expectedUpdatedAt: draft.expectedUpdatedAt ?? "" };
+  return { ...toInput(draft, true), expectedUpdatedAt: draft.expectedUpdatedAt ?? "" };
 }
 
 /* ── Client-side checks (same keys as the server's 422) ─────────────────── */
@@ -482,12 +546,18 @@ export function validateDraft(draft: PaymentDraft, serialsNeeded: (partId: numbe
   return { fields, form: [] };
 }
 
-/** Root keys in form order, for focusing the first invalid field. */
-export const PAYMENT_ROOT_FIELDS = ["technician_id", "supplier_id", "paid_at", "method", "reference", "invoice_number", "files", "lines"] as const;
-
-/** Unsaved-changes guard: anything typed since the dialog opened. */
-export function isDraftDirty(draft: PaymentDraft, initial: PaymentDraft): boolean {
-  const strip = (d: PaymentDraft) =>
-    JSON.stringify({ ...d, files: d.files.length, lines: d.lines.map((l) => ({ ...l, uid: "" })) });
-  return strip(draft) !== strip(initial);
-}
+/**
+ * Root keys that have a control, in form order (for focusing the first
+ * invalid one). method / reference / invoice_number have no field any more:
+ * an error on them falls into the banner at the top.
+ */
+export const PAYMENT_ROOT_FIELDS = [
+  "technician_id",
+  "supplier_id",
+  "paid_at",
+  "lines",
+  "files",
+  "notes",
+  "remove_note_ids",
+  "remove_attachment_ids",
+] as const;

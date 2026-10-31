@@ -44,19 +44,28 @@ const MENU_STEPS = new Set(["jump", "cancel"]);
 const P = "placeholder";
 const ISSUE_PATH = `/stores/${P}/tickets/${P}/issues/${P}`;
 
-function PageSkeleton() {
+/** The ticket page's shape while it loads: header, badges, progress, tabs, two cards. */
+export function TicketPageSkeleton() {
   return (
     <div className="space-y-6" aria-busy="true">
-      <Skeleton className="h-5 w-32" />
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-8 w-28" />
+        <Skeleton className="h-8 w-8" />
+      </div>
       <div className="space-y-2">
         <Skeleton className="h-4 w-24" />
-        <Skeleton className="h-8 w-2/3" />
-        <Skeleton className="h-5 w-1/2" />
+        <Skeleton className="h-8 w-full max-w-md" />
+        <div className="flex flex-wrap gap-1.5">
+          <Skeleton className="h-6 w-28 rounded-full" />
+          <Skeleton className="h-6 w-20 rounded-full" />
+          <Skeleton className="h-6 w-24 rounded-full" />
+        </div>
+        <Skeleton className="h-4 w-64 max-w-full" />
       </div>
-      <Skeleton className="h-16 w-full" />
-      <Skeleton className="h-10 w-80" />
-      <Skeleton className="h-40 w-full" />
-      <Skeleton className="h-40 w-full" />
+      <Skeleton className="h-16 w-full rounded-lg" />
+      <Skeleton className="h-10 w-full max-w-80" />
+      <Skeleton className="h-36 w-full rounded-xl" />
+      <Skeleton className="h-44 w-full rounded-xl" />
     </div>
   );
 }
@@ -153,7 +162,7 @@ export function TicketPage() {
     }
   }
 
-  if (page.isLoading && !page.data) return <PageSkeleton />;
+  if (page.isLoading && !page.data) return <TicketPageSkeleton />;
 
   if (page.error && !page.data) {
     const notFound = page.error.code === "NOT_FOUND" || page.error.code === "FORBIDDEN";
@@ -275,15 +284,6 @@ export function TicketPage() {
         </TabsContent>
       </Tabs>
 
-      <TicketFooter
-        next={footerNext}
-        status={status}
-        canAddUpdate={canRun && canNote}
-        disabled={page.pending}
-        onAction={(a) => setOpenAction({ id: a.action })}
-        onAddUpdate={() => setAddUpdateOpen(true)}
-      />
-
       <ActionHost {...dialogBase} action={openAction} onOpenChange={(open) => !open && setOpenAction(null)} />
 
       {addUpdateOpen ? <AddUpdateDialog open onOpenChange={setAddUpdateOpen} issueKey={key} onSaved={refreshAll} /> : null}
@@ -296,7 +296,11 @@ export function TicketPage() {
           storeId: ticket.storeId ?? undefined,
           otherStore: ticket.storeId == null ? (ticket.otherStore ?? undefined) : undefined,
           ticketIssueIds: [issue.id],
-          technicianId: issue.technicians[0]?.id,
+          // Whoever did the work (latest work booking), else whoever looked at it.
+          technicianId:
+            [...issue.schedules].reverse().find((s) => !s.mistaken && s.kind === "work" && s.technician)?.technician?.id ??
+            [...issue.schedules].reverse().find((s) => !s.mistaken && s.technician)?.technician?.id ??
+            issue.technicians[0]?.id,
         }}
         onSaved={refreshAll}
       />
@@ -330,6 +334,16 @@ export function TicketPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Last on purpose: the action bar pulls itself into the page's bottom padding. */}
+      <TicketFooter
+        next={footerNext}
+        status={status}
+        canAddUpdate={canRun && canNote}
+        disabled={page.pending}
+        onAction={(a) => setOpenAction({ id: a.action })}
+        onAddUpdate={() => setAddUpdateOpen(true)}
+      />
     </div>
   );
 }

@@ -1292,9 +1292,9 @@
       "dismiss": "Dismiss"
     },
     "createDialog": {
-      "title": "Create Maintenance Ticket",
-      "description": "Add one or more issues to file a maintenance ticket.",
-      "addIssue": "Add Issue",
+      "title": "New ticket",
+      "description": "Add one or more problems. The maintenance team picks it up from here.",
+      "addIssue": "Add another problem",
       "issueRow": "Issue #{number}",
       "useCatalog": "Use catalog issue",
       "useCustom": "Custom issue",
@@ -1306,13 +1306,13 @@
       "descriptionLabel": "Description",
       "descriptionPlaceholder": "Provide details about the issue...",
       "noteLabel": "Note",
-      "notePlaceholder": "Add an initial note to this issue (optional)...",
+      "notePlaceholder": "Anything else the team should know",
       "filesLabel": "Attachments",
-      "attachFiles": "Attach Files",
+      "attachFiles": "Attach files",
       "removeFile": "Remove file",
       "optional": "(optional)",
       "cancel": "Cancel",
-      "submit": "File Ticket",
+      "submit": "Send ticket",
       "submitting": "Filing...",
       "validationSelectIssue": "Please select a catalog issue for each row.",
       "validationTitleRequired": "Please enter an issue title for each row.",
@@ -1392,7 +1392,10 @@
       "titleLabel": "Title",
       "descriptionLabel": "Description",
       "callTechnician": "Call",
-      "saveFailed": "Could not save. Please try again."
+      "saveFailed": "Could not save. Please try again.",
+      "techniciansPageTitle": "Technicians have their own page",
+      "techniciansPageBody": "Add and edit technicians, set the stores they cover, rate them, and see what they were paid and the work they did.",
+      "techniciansPageOpen": "Open the Technicians page"
     }
   },
   "keys": {
@@ -5078,7 +5081,7 @@
         },
         "trip": {
           "label": "Trip",
-          "help": "A technician's day out: the stores he visits and his clocked time."
+          "help": "A technician's day out: the stores they visit and their clocked time."
         },
         "visit": {
           "label": "Visit",
@@ -5324,7 +5327,7 @@
       "paymentLineType": {
         "hourly": {
           "label": "By the hour",
-          "help": "The time the technician was on the clock, breaks not counted, times his hourly rate."
+          "help": "The time the technician was on the clock, breaks not counted, times their hourly rate."
         },
         "fixed": {
           "label": "Fixed price",
@@ -5416,7 +5419,7 @@
         },
         "undone": {
           "label": "Undone",
-          "help": "Cancels a movement marked as a mistake."
+          "help": "Cancels a stock history entry marked as a mistake."
         }
       },
       "partSerialStatus": {
@@ -5482,6 +5485,8 @@
       "body": "The new version of this screen is on its way."
     },
     "common": {
+      "officeOnlyTitle": "This page is for the maintenance office",
+      "officeOnlyBody": "You can raise and follow your store's tickets from Maintenance Tickets.",
       "save": "Save",
       "saving": "Saving…",
       "cancel": "Cancel",
@@ -5596,9 +5601,42 @@
         "impact": "How much does it hurt the store?",
         "impactPlaceholder": "Choose one…",
         "impactHelp": "Helps the maintenance team decide what to fix first.",
-        "contactName": "Contact name",
-        "contactPhone": "Contact phone",
-        "contactHelp": "Who the maintenance team or the technician should call about this."
+        "searchStores": "Search stores…",
+        "otherPlacePlaceholder": "e.g. Main Warehouse — Building C",
+        "otherIssuePlaceholder": "Describe the issue…",
+        "troubleshootFirst": "{issue} has troubleshooting steps. Try them before this ticket can be sent.",
+        "troubleshootPending": "Go through the troubleshooting for {issues} to send this ticket.",
+        "type": "Type",
+        "typeNormal": "Repair",
+        "typePreventive": "Preventive maintenance",
+        "selectStore": "Select a store…",
+        "otherPlace": "Other place",
+        "noResults": "No results",
+        "loadingIssues": "Loading problems…",
+        "searchOrCreate": "Search problems or type a new one…",
+        "searchOnly": "Search problems…",
+        "thisIssue": "this problem",
+        "troubleshootTitle": "Troubleshooting · {issue}",
+        "troubleshootIntro": "Try these first — many problems are fixed in a few minutes without a technician.",
+        "backToTicket": "Back to the ticket",
+        "troubleshootDoneNone": "Troubleshooting done: the guides didn't describe the problem.",
+        "troubleshootDoneTried": "Troubleshooting done: tried \"{guide}\", still broken.",
+        "troubleshootDoneSteps": "Troubleshooting done: tried the steps, still broken.",
+        "viewStepsAgain": "View the steps again",
+        "goTroubleshoot": "Go through troubleshooting",
+        "fixedNoTicket": "Logged as fixed by troubleshooting — no ticket needed for {issue}.",
+        "fixedTakenOff": "{issue} is fixed and logged — it was taken off this ticket.",
+        "created": "Ticket sent.",
+        "pickStoreFirst": "Pick a store first.",
+        "placeRequired": "Say where the problem is.",
+        "removeIssue": "Remove this problem",
+        "priorityHelp": {
+          "urgent": "The store cannot operate",
+          "high": "It affects operations",
+          "medium": "Needs a repair, but the store can operate",
+          "low": "Cosmetic or small"
+        },
+        "paste": "Paste"
       },
       "page": {
         "back": "All tickets",
@@ -5696,7 +5734,10 @@
             "office": "This issue was cancelled.",
             "store": "This issue was cancelled."
           }
-        }
+        },
+        "askedQuestion": "Question for the store",
+        "answeredByStore": "The store answered",
+        "answeredByOffice": "Answered by the office for the store"
       },
       "work": {
         "inspections": "Inspections",
@@ -5714,6 +5755,7 @@
         },
         "expectedCompletion": "Expected completion",
         "expectedBy": "Expected done by {date}",
+        "bookingEnded": "No longer needed",
         "movedTimes": "{count, plural, one {Moved once} other {Moved # times}}",
         "openTrip": "Open trip",
         "move": "Move",
@@ -5752,10 +5794,13 @@
       },
       "activity": {
         "empty": "Nothing has happened on this issue yet.",
-        "mosOnly": "MOS only"
+        "mosOnly": "Maintenance team only"
       },
       "footer": {
-        "updateReview": "Update the review"
+        "updateReview": "Update the review",
+        "region": "Ticket actions",
+        "turn": "Whose turn: {who}",
+        "otherSteps": "Other steps"
       },
       "picker": {
         "category": "Category",
@@ -5908,7 +5953,7 @@
           "whoSees": "Who can see it",
           "everyone": "Everyone on the ticket",
           "everyoneHelp": "The store can read it too.",
-          "mosOnly": "MOS only",
+          "mosOnly": "Maintenance team only",
           "mosOnlyHelp": "Only the maintenance team sees it.",
           "submit": "Add update",
           "saved": "Update added"
@@ -5930,7 +5975,187 @@
           "submit": "Use parts",
           "saved": "Parts recorded as used"
         }
+      },
+      "card": {
+        "title": "Recent tickets",
+        "new": "New",
+        "openAll": "Open all tickets",
+        "noStore": "No store selected.",
+        "empty": "No recent tickets.",
+        "count": "{count, plural, one {# ticket} other {# tickets}}",
+        "countOf": "{shown} of {total} tickets"
+      },
+      "search": {
+        "placeholder": "Store, ticket # or problem",
+        "label": "Search tickets",
+        "hint": "Search by store, ticket number or what the problem is",
+        "clear": "Clear search"
+      },
+      "analyticsTables": {
+        "noneOpened": "No tickets were opened in this range.",
+        "recurringBadge": "{count}× in {days} days",
+        "untouchedDescription": "Open tickets only, right now. If never updated, the time counts from when it was opened.",
+        "untouchedNone": "Every open ticket has been updated recently.",
+        "changedDescription": "What was done on each ticket, most recent first.",
+        "changedNone": "No ticket was updated in this range.",
+        "otherWork": "Visit, booking or part logged",
+        "loading": "Loading…",
+        "recurringNone": "Nothing keeps coming back.",
+        "recurringHistory": "{count, plural, one {# ticket} other {# tickets}} in the last {days} days, newest first.",
+        "fixesDescription": "The store tried the troubleshooting steps and they fixed it, so no ticket was opened.",
+        "fixesNone": "No problems were fixed by troubleshooting in this range."
+      },
+      "analytics": {
+        "nothingToChart": "Nothing to chart for this range.",
+        "topShown": "The top {max} shown; {hidden} more with smaller numbers.",
+        "item": "Item",
+        "updating": "Updating…",
+        "issuesReported": "Issues reported",
+        "issuesReportedDescription": "{range}, by issue.",
+        "issuesReportedChart": "Issues reported in the range, by issue",
+        "unitIssues": "issues",
+        "unitHours": "hours",
+        "openByStatus": "Open work by status",
+        "openByStatusDescription": "Right now, across the selected stores.",
+        "openByStatusChart": "Open issues right now, by status",
+        "timeToClose": "Time to close",
+        "timeToCloseDescription": "Average from report to closed, for issues closed {range}.",
+        "timeToCloseChart": "Average time from reported to closed, by issue",
+        "byStore": "By store",
+        "byStoreDescription": "Busiest first: opened and closed in this range, open right now.",
+        "ticketsSubmitted": "Tickets Submitted · {range}",
+        "clickTicketHint": "Click a ticket number to open the ticket and follow up.",
+        "view": "View",
+        "glanceTitle": "At a glance",
+        "glanceDescription": "What the tables below hold. Click a line to jump to it.",
+        "spanDays": "{days}+ days",
+        "spanHours": "24+ hours",
+        "waitHours": "{count, plural, one {# hour} other {# hours}}",
+        "waitDays": "{count, plural, one {# day} other {# days}}",
+        "glanceSubmitted": "<b>{count, plural, one {# ticket} other {# tickets}}</b> submitted {range}{urgent, plural, =0 {} other {, <red># urgent</red>}}.",
+        "glanceUntouchedNone": "Every open ticket has been updated in the last {span}.",
+        "glanceUntouched": "<b>{count, plural, one {# open ticket} other {# open tickets}}</b> with no update for {span}{oldest, select, yes {; the longest has waited <red>{wait}</red>} other {}}.",
+        "glanceUpdated": "<b>{count, plural, one {# ticket} other {# tickets}}</b> updated {range}.",
+        "glanceRecurringNone": "No issue keeps coming back.",
+        "glanceRecurring": "<b>{count, plural, one {# issue keeps} other {# issues keep}}</b> coming back{top, select, yes {; most often {title} at {store} ({times}× in {days} days)} other {}}.",
+        "glanceFixesNone": "No problem was fixed by troubleshooting {range}.",
+        "glanceFixes": "<b>{count, plural, one {# problem} other {# problems}}</b> fixed by troubleshooting {range}, with no ticket opened."
+      },
+      "notes": {
+        "notesAndFiles": "Notes & files",
+        "paste": "Paste",
+        "pasteHint": "Ctrl+V to paste an attachment",
+        "files": "Files",
+        "addNote": "Add Note",
+        "addFile": "Add File",
+        "noteRequired": "Note text is required.",
+        "addNoteFailed": "Failed to add note.",
+        "notePlaceholder": "Write a note…",
+        "tagLabel": "Tag (optional)",
+        "tagPlaceholder": "e.g. vendor",
+        "privateLabel": "Private (MOS only)",
+        "privateHelp": "Only people with the private-notes permission will see this note and its files.",
+        "cancel": "Cancel",
+        "save": "Save",
+        "selectFile": "Select at least one file.",
+        "uploadFailed": "Failed to upload files.",
+        "filesQueued": "{count, plural, one {# file} other {# files}} queued",
+        "remove": "Remove",
+        "addMoreFiles": "Add more files…",
+        "upload": "Upload",
+        "uploadCount": "Upload ({count})",
+        "privateBadge": "Private · MOS only",
+        "lockedBy": "Locked by {name}",
+        "privacyFailed": "Could not change who can see this note.",
+        "unlockHint": "Make this note visible to everyone on the ticket",
+        "lockHint": "Hide this note (and its files) from everyone but the MOS",
+        "unlock": "Unlock",
+        "lock": "Lock"
+      },
+      "issueHistory": {
+        "heading": "Earlier {issue} tickets at this store",
+        "loadFailed": "Could not load earlier tickets.",
+        "tryAgain": "Try again",
+        "none": "No earlier {issue} tickets at this store. This is the first one on record.",
+        "loading": "Loading earlier tickets…",
+        "showMore": "Show {count} more",
+        "ticket": "Ticket #{id}",
+        "noTechnician": "No technician recorded",
+        "completed": "Completed <date></date>",
+        "entries": "{count} entries on that ticket",
+        "statusHistory": "What has happened to this issue ({count})"
+      },
+      "localTime": {
+        "yourTime": "(your time, {zone})",
+        "zoneTitle": "Your time zone: {zone}"
+      },
+      "combobox": {
+        "createFailed": "Couldn't create it.",
+        "loading": "Loading…",
+        "placeholder": "Search or create…",
+        "clear": "Clear",
+        "noResultsCreate": "No match — keep typing to add a new one",
+        "noResults": "No match",
+        "empty": "Nothing here yet",
+        "creating": "Adding…",
+        "create": "Add \"{name}\""
       }
+    },
+    "troubleshooting": {
+      "openGuide": "Open the guide (video / manual)",
+      "filesList": "Files: {names}",
+      "removeFile": "Remove {name}",
+      "saveFailed": "Could not save the guide.",
+      "removeConfirm": "Remove the \"{title}\" guide for {issue}? Tickets already opened keep the steps they tried.",
+      "removeFailed": "Could not remove the guide.",
+      "uploadFailed": "Could not upload the files.",
+      "removeFileFailed": "Could not remove the file.",
+      "editTitle": "Edit a {issue} guide",
+      "newTitle": "New {issue} guide",
+      "version": "Version {version}",
+      "versionBy": "Version {version} · last saved by {name}",
+      "problemLabel": "The problem this guide is for",
+      "problemPlaceholder": "e.g. Won't heat up",
+      "stepsLabel": "Steps to try, in order",
+      "firstStepPlaceholder": "e.g. Check the oven's breaker in the back panel",
+      "nextStepPlaceholder": "Next step…",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "removeStep": "Remove step",
+      "stepFilesLater": "Save the guide, then add photos or videos for this step.",
+      "addStep": "Add a step",
+      "linkLabel": "Link (optional) — a video, a manual, a vendor page",
+      "guideFilesLabel": "Files for the whole guide (optional)",
+      "guideFilesLater": "Save the guide first, then add files.",
+      "saveNewVersion": "Save as a new version",
+      "saveGuide": "Save the guide",
+      "discardChanges": "Discard changes",
+      "removeGuide": "Remove this guide",
+      "problemNumber": "Problem {number}",
+      "fixedCount": "Fixed it {count, plural, one {once} other {# times}}",
+      "notFixedCount": "Didn't fix it {count, plural, one {once} other {# times}}",
+      "notFixedCountAfter": "didn't fix it {count, plural, one {once} other {# times}}",
+      "myProblem": "My problem",
+      "thisIsMyProblem": "This is my problem",
+      "loadFailed": "Could not load the troubleshooting.",
+      "fixedToast": "Logged as fixed by troubleshooting. Glad it works again.",
+      "fixFailed": "Could not log the fix. Try again.",
+      "tryAgain": "Try again",
+      "loading": "Loading the troubleshooting",
+      "guidesCount": "{count, plural, one {# guide} other {# guides}}",
+      "ticketIntro": "Before opening a ticket, try the steps for your problem. Picking the problem that matches is optional.",
+      "browseIntro": "What to try before opening a ticket for this issue.",
+      "addGuide": "Add a guide",
+      "noGuidesEditor": "No guides for this issue yet. Add one for each problem stores run into.",
+      "noGuides": "There are no troubleshooting steps for this issue.",
+      "howDidStepsGo": "How did the “{title}” steps go?",
+      "howDidItGo": "How did it go?",
+      "thisFixedIt": "This fixed it",
+      "triedStillBroken": "I tried these steps — still broken",
+      "noneMatch": "None of these describe my problem",
+      "ticketNote": "“This fixed it” is logged and no ticket is opened for this issue. The other two take you back to the ticket.",
+      "browseLogPrompt": "Did a guide fix it at {store}? Log it, so we know the steps work{hasGuide, select, yes { (“{guide}”)} other {}}.",
+      "browseSelectStore": "Select a store at the top of the page to log a problem these steps fixed."
     },
     "workflow": {
       "steps": {
@@ -6091,7 +6316,35 @@
       "notesHelp": "Notes and files about this technician.",
       "workReport": "Work report",
       "notFound": "This technician could not be found.",
-      "backToList": "Back to technicians"
+      "backToList": "Back to technicians",
+      "report": {
+        "fromPayments": "{range}, from the payments.",
+        "paidByStore": "Paid by store",
+        "paidByStoreDescription": "Each payment line belongs to one store, or to storage for parts bought for the shelf.",
+        "sessionsByIssue": "Sessions by issue",
+        "sessionsByIssueDescription": "What they were called out for.",
+        "paidByType": "Paid by type",
+        "paidByTypeFiltered": "Only the payment lines for the chosen stores or issues.",
+        "paidByTypeDescription": "Adds up to what they were paid.",
+        "noPayments": "No payments in this range.",
+        "paymentsTitle": "Payments · {range}",
+        "paymentsDescription": "Open one to see it on the Payments page.",
+        "noPaymentsToThem": "No payments to them in this range.",
+        "workByIssue": "Work by issue",
+        "workByIssueDescription": "A session that covered several issues counts toward each.",
+        "workByStore": "Work by store",
+        "workByStoreDescription": "Where they worked.",
+        "noVisits": "No visits in this range.",
+        "workTitle": "Work · {range}",
+        "workDescription": "Newest first: every clock-in to clock-out on a trip. Hours are work, travel and parts runs; breaks are not paid.",
+        "noWork": "No work in this range.",
+        "paidByTechnician": "Paid by technician",
+        "hoursByTechnician": "Hours by technician",
+        "hoursByTechnicianDescription": "Work, travel and parts runs: clocked sessions on trips.",
+        "paidHoursByTechnician": "Paid hours by technician",
+        "listDescription": "Most paid first. Open one to see their pay, work, ratings and coverage.",
+        "searchPlaceholder": "Name, category, location…"
+      }
     },
     "trips": {
       "newTrip": "New trip",
@@ -6119,8 +6372,8 @@
       "copyFailed": "Could not copy. Press and hold the link to copy it.",
       "linkLabel": "Trip link",
       "linkDialogTitle": "Trip link",
-      "linkDialogBody": "Send this link to the technician. He opens it on his phone to clock in and mark his jobs.",
-      "linkDialogBodyFor": "Send this link to {name}. He opens it on his phone to clock in and mark his jobs.",
+      "linkDialogBody": "Send this link to the technician. They open it on their phone to clock in and mark their jobs.",
+      "linkDialogBodyFor": "Send this link to {name}. They open it on their phone to clock in and mark their jobs.",
       "linkShownOnce": "The link is shown only now. If it is lost, make a new link from the trip.",
       "durations": {
         "paid": "Paid",
@@ -6147,36 +6400,37 @@
         "next": "Next page"
       },
       "newTripDialog": {
-        "help": "Pick the day, the stores and their open issues, and who goes. You get a link to send him.",
+        "help": "Pick the day, the stores and their open issues, and who goes. You get a link to send them.",
         "stops": "Stops",
-        "stopsHelp": "Add the stores he visits, in order. Tick the issues for each one.",
+        "stopsHelp": "Add the stores they visit, in order. Tick the issues for each one.",
         "searchStores": "Search stores or issues",
         "openIssues": "{count, plural, one {# open issue} other {# open issues}}",
         "added": "Added",
         "removeStop": "Remove this stop",
         "somewhereElse": "Somewhere else (type the place)",
         "searchTechnician": "Search technicians",
-        "rankedFor": "Best first for Store {store}: covers the store, covers the issue, rating.",
+        "rankedFor": "Who covers Store {store}, best first. Turn on Show everyone for anyone else.",
         "rankedHint": "Add a store first to see who covers it at the top.",
         "pickTechnician": "Pick a technician.",
         "pickDate": "Pick the day.",
-        "instructions": "Instructions for him",
-        "instructionsHelp": "He sees this at the top of his trip page.",
+        "instructions": "Instructions for the technician",
+        "instructionsHelp": "They see this at the top of their trip page.",
         "create": "Make trip",
         "created": "Trip made",
         "noOpenTickets": "No open tickets",
         "noStoreMatch": "No store matches.",
         "issuesLoadError": "Could not load the open tickets. Stores can still be added.",
-        "visitOnly": "No open tickets here. He will visit the store only."
+        "visitOnly": "No open tickets here. He will visit the store only.",
+        "everyoneHint": "Every technician, whether they cover the store or not."
       },
       "drawer": {
         "link": "Technician's link",
         "linkHidden": "The link is shown only when it is made. Make a new link to copy or share it.",
         "linkMade": "New link made — the old one no longer works",
         "newLinkTitle": "Make a new link?",
-        "newLinkBody": "The link he has now stops working. Send him the new one.",
+        "newLinkBody": "The link they have now stops working. Send them the new one.",
         "expiresAt": "Works until {when} if not used",
-        "lastUsed": "Last opened {when}",
+        "lastUsed": "Last used {when}",
         "milesLabel": "Miles",
         "jobs": "Jobs",
         "jobsValue": "{done}/{total} done",
@@ -6187,7 +6441,7 @@
         "odometerAt": "Odometer {value}",
         "whyNot": "Why: {reason}",
         "sessions": "Clocked time",
-        "noSessions": "He has not clocked in on this trip.",
+        "noSessions": "They have not clocked in on this trip.",
         "stillOn": "still on the clock",
         "paid": "Paid",
         "notPaid": "Not paid yet",
@@ -6200,7 +6454,7 @@
         "eventSaved": "Saved",
         "sessionMistakenTitle": "Mark this clocked time as a mistake?",
         "eventMistakenTitle": "Mark this entry as a mistake?",
-        "purchases": "He bought",
+        "purchases": "Bought by the technician",
         "quantity": "Qty {qty}",
         "serial": "Serial {serial}",
         "paidBack": "Paid back",
@@ -6214,23 +6468,70 @@
         "tripMistaken": "Mark trip as a mistake",
         "markedMistake": "Marked as a mistake",
         "closeTitle": "Close this trip?",
-        "closeBody": "His link stops working. You can reopen the trip later.",
+        "closeBody": "Their link stops working. You can reopen the trip later.",
         "closed": "Trip closed",
         "reopenTitle": "Reopen this trip?",
-        "reopenBody": "Make a new link afterwards so he can use it again.",
+        "reopenBody": "Their link works again for the next 48 hours.",
         "reopened": "Trip reopened",
-        "notFound": "This trip does not exist, or it was removed."
+        "notFound": "This trip does not exist, or it was removed.",
+        "auditYes": "yes",
+        "auditNo": "no",
+        "auditTitle": {
+          "trip": {
+            "created": "Trip made",
+            "updated": "Trip changed",
+            "mistaken": "Trip marked as mistake",
+            "closed": "Trip closed",
+            "reopened": "Trip reopened",
+            "link_issued": "New link made"
+          },
+          "session": {
+            "created": "Clocked time added",
+            "updated": "Clocked time corrected",
+            "mistaken": "Clocked time marked as mistake",
+            "closed": "Clocked time closed",
+            "reopened": "Clocked time reopened",
+            "link_issued": "New link made"
+          },
+          "stop": {
+            "created": "Stop added",
+            "updated": "Stop changed",
+            "mistaken": "Stop removed",
+            "closed": "Stop closed",
+            "reopened": "Stop reopened",
+            "link_issued": "New link made"
+          },
+          "event": {
+            "created": "Entry added",
+            "updated": "Entry time corrected",
+            "mistaken": "Entry marked as mistake",
+            "closed": "Entry closed",
+            "reopened": "Entry reopened",
+            "link_issued": "New link made"
+          }
+        },
+        "auditField": {
+          "clockIn": "Clock in",
+          "clockOut": "Clock out",
+          "at": "Time",
+          "usingCar": "Used their car",
+          "odometerIn": "Odometer at start",
+          "odometerOut": "Odometer at end",
+          "plannedDate": "Day",
+          "instructions": "Instructions",
+          "otherStore": "Place"
+        }
       },
       "session": {
         "correctTitle": "Correct clocked time",
         "correctHelp": "Fix the times or the odometer. Breaks and driving stay as they are.",
-        "addHelp": "Add time he worked but did not clock. It counts like clocked time.",
+        "addHelp": "Add time they worked but did not clock. It counts like clocked time.",
         "clockIn": "Clock in",
         "clockOut": "Clock out",
         "pickTime": "Pick date and time",
         "stillOn": "Still on the clock",
-        "clockInNeeded": "Pick when he clocked in.",
-        "usingCar": "He used his car",
+        "clockInNeeded": "Pick when they clocked in.",
+        "usingCar": "Used their car",
         "odometerIn": "Odometer at clock in",
         "odometerOut": "Odometer at clock out"
       },
@@ -6246,7 +6547,7 @@
       },
       "addStop": {
         "title": "Add stop",
-        "help": "Pick a store (open tickets or not) or type a place, then tick what he does there. A store already on the trip gets these jobs added.",
+        "help": "Pick a store (open tickets or not) or type a place, then tick what they do there. A store already on the trip gets these jobs added.",
         "pickStore": "Pick a store or type a place.",
         "change": "Pick another store",
         "save": "Add stop",
@@ -6321,6 +6622,7 @@
       "estimateHelp": "What the repair would cost, in dollars.",
       "beforePhotos": "Before photos",
       "afterPhotos": "After photos",
+      "inspectionPhotos": "Photos of what you found",
       "sayWhatFound": "Say what you found.",
       "markedDone": "Marked done",
       "whyNot": "Why not?",
@@ -6346,7 +6648,8 @@
       "expiredTitle": "Link expired",
       "notFoundTitle": "Link not found",
       "troubleTitle": "Can't load your trip",
-      "somethingWrong": "Something went wrong. Try again."
+      "somethingWrong": "Something went wrong. Try again.",
+      "issueFinished": "The office has closed this one. Nothing to do here."
     },
     "payments": {
       "recordPayment": "Record a payment",
@@ -6396,10 +6699,6 @@
       "addSupplierNamed": "Add supplier \"{name}\"",
       "newSupplierName": "Supplier name",
       "useExisting": "Use {name}",
-      "methodNotSaid": "Not recorded",
-      "referenceHelp": "Check number, transfer ID or receipt number.",
-      "invoiceFileHelp": "A photo or PDF of the invoice or receipt.",
-      "filesAlreadyAttached": "{count, plural, one {# file already attached. Files picked here are added.} other {# files already attached. Files picked here are added.}}",
       "linesHelp": "What the money was for.",
       "lineAmount": "Line amount",
       "removeLine": "Remove line {number}",
@@ -6421,12 +6720,12 @@
       "otherDescriptionPlaceholder": "What was this for?",
       "hourlyNeedsTechnician": "Only a technician is paid by the hour. Choose a technician above, or change the type.",
       "clockedTimeHelp": "Tick the clocked time this pays for; the hours fill in (breaks not counted).",
-      "pickTechnicianFirst": "Choose the technician above to see his clocked time.",
+      "pickTechnicianFirst": "Choose the technician above to see their clocked time.",
       "noUnpaidSessions": "No clocked time waiting to be paid. Type the hours instead.",
       "onAnotherLine": "On another line",
       "typedOverHelp": "These hours were typed in, not taken from the clocked time.",
       "useClockedTime": "Use clocked time",
-      "rateHelp": "His hourly rate is {rate}.",
+      "rateHelp": "Their hourly rate is {rate}.",
       "ratePerMile": "Rate per mile",
       "gasHow": "How it is paid",
       "gasAmount": "An amount",
@@ -6444,7 +6743,7 @@
       "loading": "Loading…",
       "serialsHelp": "{count, plural, one {Enter the serial number of the piece.} other {Enter one serial number for each of the # pieces.}}",
       "serialPlaceholder": "Serial {number}",
-      "paysBackHelp": "Tick what the technician bought with his own money; this line pays him back.",
+      "paysBackHelp": "Tick what the technician bought with their own money; this line pays them back.",
       "savedNew": "Payment of {total} to {name} saved.",
       "savedEdit": "Payment saved.",
       "conflict": "Someone else changed this payment after you opened it. Close it, open it again and make your change.",
@@ -6458,8 +6757,6 @@
       "allStores": "All stores",
       "allTypes": "All types",
       "types": "Types",
-      "invoice": "Invoice",
-      "hasInvoiceFile": "Invoice file attached",
       "openPayment": "Open payment #{id}",
       "empty": "No payments yet. Record the first one.",
       "emptyFiltered": "No payments match these filters.",
@@ -6475,7 +6772,7 @@
       "purchasesCount": "{count, plural, one {# purchase · {total}} other {# purchases · {total}}}",
       "mistakenBanner": "This payment was marked as a mistake. Its lines are kept for the record; their stock and claims were undone.",
       "milesTimesRate": "{miles} mi × {rate}",
-      "stockMovement": "Stock movement #{id}",
+      "stockMovement": "Stock history entry #{id}",
       "noRevisions": "Not edited since it was recorded.",
       "someone": "Someone",
       "editedIt": "edited it",
@@ -6497,13 +6794,43 @@
         "clear": "Clear the inspection",
         "doneOn": "Done {date}",
         "bookedFor": "Booked for {date}"
+      },
+      "dialog": {
+        "linesCount": "{count, plural, one {# line} other {# lines}}",
+        "savePayment": "Save payment",
+        "saveChanges": "Save changes"
+      },
+      "extras": {
+        "sectionTitle": "Attachments and notes",
+        "sectionHelp": "Optional. Add as many as you like.",
+        "attachments": "Attachments",
+        "attachmentsColumn": "Files",
+        "hasAttachments": "Has attachments",
+        "addFiles": "Add files",
+        "filesEmpty": "Add invoices, receipts or photos (or paste them here)",
+        "lineFilesEmpty": "Add files for this line",
+        "filesHelp": "Any file up to 10 MB. Remove one with ×.",
+        "notes": "Notes",
+        "addNote": "Add a note",
+        "notesEmpty": "Add a note about this payment",
+        "lineNotesEmpty": "Add a note about this line",
+        "notePlaceholder": "Write a note…",
+        "noteNumber": "Note {number}",
+        "removeNote": "Remove this note",
+        "removeFile": "Remove {name}",
+        "removedOnSave": "Removed when you save",
+        "undoRemove": "Undo",
+        "new": "New",
+        "lineToggle": "Notes & attachments",
+        "filesCount": "{count, plural, one {# file} other {# files}}",
+        "notesCount": "{count, plural, one {# note} other {# notes}}"
       }
     },
     "stock": {
       "recordStock": "Record stock",
       "tabs": {
         "stock": "Stock",
-        "movements": "Movements",
+        "movements": "Stock history",
         "counts": "Stock counts",
         "locations": "Locations"
       },
@@ -6644,7 +6971,8 @@
       "legendNone": "Nobody — gap",
       "legendOne": "One technician — gap",
       "legendTwo": "Two",
-      "legendMore": "Four or more"
+      "legendMore": "Four or more",
+      "legendThree": "Three"
     },
     "storage": {
       "page": {
@@ -6780,14 +7108,14 @@
         "what": "What happened",
         "linked": "For",
         "actions": "Actions",
-        "actionsFor": "Actions for movement #{id}",
+        "actionsFor": "Actions for entry #{id}",
         "payment": "Payment #{id} · {name}",
         "count": "Stock count #{id}",
         "cancels": "Cancels #{id}",
-        "mistakeBody": "The stock goes back to how it was before this, and the movement stays in the list, struck through.",
+        "mistakeBody": "The stock goes back to how it was before this, and the entry stays in the history, struck through.",
         "markedMistake": "Marked as a mistake. The stock was put back.",
         "empty": "Nothing has been recorded yet.",
-        "emptyFiltered": "No movements match these filters."
+        "emptyFiltered": "Nothing in the stock history matches these filters."
       },
       "counts": {
         "count": "Count",
@@ -6874,7 +7202,42 @@
         "removeLevelBody": "Its names go too, and parts lose that part of their spot. Counts do not change.",
         "removeValueTitle": "Remove {value}?",
         "removeValueBody": "Parts on it lose that part of their spot. Counts do not change.",
-        "removed": "Removed."
+        "removed": "Removed.",
+        "remove": "Remove"
+      },
+      "spotSetup": {
+        "noLevels": "This location has no zones or shelves yet, so there is no spot to pick. Add them once in Locations (e.g. Zone A, B, C · Shelf 1–5).",
+        "noLevelsAt": "{location} has no zones or shelves yet, so there is no spot to pick. Add them once in Locations (e.g. Zone A, B, C · Shelf 1–5).",
+        "addLevels": "Add zones and shelves",
+        "noBalance": "This part has no stock row at that location yet.",
+        "setTitle": "Set spot",
+        "moveTitle": "Move to spot",
+        "now": "Now at {spot}.",
+        "set": "Set spot",
+        "move": "Move",
+        "setFor": "Set the spot in {location}",
+        "moveFor": "Move to another spot in {location}",
+        "recordedNoSpot": "Saved, but the spot could not be set. Use “Set spot” on the Stock list.",
+        "takenFrom": "Take it from",
+        "whereLabel": "Where it goes",
+        "alreadyAt": "Already kept at {spot} here. Pick another spot to move it.",
+        "sameLocation": "Pick a different location. To change only its spot here, use “Move” on the Stock list.",
+        "addFirstLevel": "Lay out this location: add its first level",
+        "addAnotherLevel": "Add another level",
+        "itsNames": "Its names",
+        "namesPlaceholder": "e.g. A, B, C or 1-10",
+        "moreNamesPlaceholder": "More {level} names, e.g. D, E or 1-10",
+        "namesHelp": "Separate names with commas, or type a range like 1-10 or A-F. Biggest level first: Zone, then Shelf, then Bin.",
+        "suggestions": "Quick pick:",
+        "level": {
+          "Zone": "Zone",
+          "Aisle": "Aisle",
+          "Shelf": "Shelf",
+          "Row": "Row",
+          "Bin": "Bin"
+        },
+        "levelExists": "This location already has a level called {level}.",
+        "levelAdded": "Added {level}{count, plural, =0 {.} one { with # name.} other { with # names.}}"
       }
     },
     "suppliers": {
@@ -6896,7 +7259,9 @@
       "deleted": "{name} deleted",
       "deleteTitle": "Delete {name}?",
       "deleteBody": "Its payments stay in the history, and it can be restored.",
-      "totalPaidNote": "Total paid is every payment to the supplier so far; mistakes are left out."
+      "totalPaidNote": "Total paid is every payment to the supplier so far; mistakes are left out.",
+      "showDeleted": "Show deleted",
+      "deletedBadge": "Deleted"
     }
   }
 }

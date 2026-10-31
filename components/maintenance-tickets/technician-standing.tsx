@@ -24,7 +24,7 @@ export function TechnicianStandingBadges({
   if (!any) return null;
 
   return (
-    <span className={cn("flex shrink-0 flex-wrap items-center gap-1", className)}>
+    <span className={cn("flex min-w-0 flex-wrap items-center gap-1", className)}>
       {standing.coversStore && (
         <span className={cn(PILL, "bg-sky-500/15 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300")}>{t("coversStore")}</span>
       )}

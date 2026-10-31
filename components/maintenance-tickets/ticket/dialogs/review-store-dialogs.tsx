@@ -176,11 +176,12 @@ function useAnswer(issue: TicketIssueDetail, run: RunStep, isMos: boolean) {
 
 type AnswerState = ReturnType<typeof useAnswer>;
 
-function AnswerFields({ state, isMos, idPrefix }: { state: AnswerState; isMos: boolean; idPrefix: string }) {
+/** `showQuestion` is off where the question is already on the page (the Overview card above the inline form). */
+function AnswerFields({ state, isMos, idPrefix, showQuestion = true }: { state: AnswerState; isMos: boolean; idPrefix: string; showQuestion?: boolean }) {
   const { t, form, request, answer, setAnswer, files, setFiles, via, setVia } = state;
   return (
     <>
-      {request ? (
+      {request && showQuestion ? (
         <div className="rounded-md border bg-muted/30 px-3 py-2">
           <p className="text-xs font-medium text-muted-foreground">
             {request.askedBy?.name ? t("tickets.dialogs.answer.askedBy", { name: request.askedBy.name }) : t("tickets.dialogs.answer.question")}
@@ -248,7 +249,7 @@ export function InlineAnswer({ issue, run, isMos }: { issue: TicketIssueDetail; 
           if (!form.busy) void state.send();
         }}
       >
-        <AnswerFields state={state} isMos={isMos} idPrefix="inline" />
+        <AnswerFields state={state} isMos={isMos} idPrefix="inline" showQuestion={false} />
         {form.formError ? (
           <p className="text-sm text-destructive" role="alert">
             {form.formError}

@@ -11,7 +11,6 @@ import { INSPECTION_STATUSES, VISIT_TASK_STATUSES, vocabEntry, vocabText } from 
 import type { IssueSchedule, IssueVisit, TicketIssueDetail } from "@/types/maintenance-system";
 import { AttachmentGallery } from "../attachment-gallery";
 import { LocalTimestamp } from "../local-timestamp";
-import { liveSchedules } from "./dialogs/booking-dialogs";
 import { formatDay, formatDayTime } from "./format";
 
 const TASK_TONE: Record<string, string> = {
@@ -41,7 +40,7 @@ function Block({
   children: React.ReactNode;
 }) {
   return (
-    <Card>
+    <Card className="gap-3 py-5">
       <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
         <CardTitle className="flex items-center gap-2 font-heading text-base font-semibold">
           <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -85,7 +84,8 @@ export function WorkTab({
   const t = useTranslations("maintenanceSystem");
   const locale = useLocale();
   const inspections = issue.inspections.filter((i) => !i.mistaken).sort((a, b) => b.id - a.id);
-  const bookings: IssueSchedule[] = liveSchedules(issue.schedules);
+  // Ended bookings (the issue finished before the day) stay listed, marked.
+  const bookings: IssueSchedule[] = issue.schedules.filter((s) => !s.mistaken).sort((a, b) => b.id - a.id);
   const terminal = issue.status.value === "closed" || issue.status.value === "cancelled";
 
   return (
@@ -159,13 +159,18 @@ export function WorkTab({
             {b.delays.filter((d) => !d.mistaken).length ? (
               <span className="text-xs text-muted-foreground">{t("tickets.work.movedTimes", { count: b.delays.filter((d) => !d.mistaken).length })}</span>
             ) : null}
+            {b.endedAt ? (
+              <span className={cn(PILL, "bg-muted text-muted-foreground")} title={b.endedReason ?? undefined}>
+                {t("tickets.work.bookingEnded")}
+              </span>
+            ) : null}
             <span className="ms-auto flex items-center gap-1">
               {b.tripId && isMos ? (
                 <Button asChild variant="ghost" size="sm" className="h-8">
                   <Link href={`/${locale}/dashboard/maintenance-trips?trip=${b.tripId}`}>{t("tickets.work.openTrip")}</Link>
                 </Button>
               ) : null}
-              {isMos && !terminal ? (
+              {isMos && !terminal && !b.endedAt ? (
                 <Button variant="outline" size="sm" className="h-8" onClick={() => onMove(b.id)}>
                   {t("tickets.work.move")}
                 </Button>

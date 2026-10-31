@@ -98,12 +98,19 @@ export function changePaidTo(draft: PaymentDraft, next: PaidToChoice | null): Pa
   };
 }
 
+/** Files compare by name and size (a File serialises as `{}`). */
+function fileAware(_key: string, value: unknown): unknown {
+  return typeof File !== "undefined" && value instanceof File ? `${value.name}:${value.size}` : value;
+}
+
 /** Unsaved-changes check that ignores what loading the catalog filled in. */
 export function draftSignature(draft: PaymentDraft): string {
-  return JSON.stringify({
-    ...draft,
-    paidTo: draft.paidTo ? { type: draft.paidTo.type, id: draft.paidTo.id } : null,
-    files: draft.files.map((f) => `${f.name}:${f.size}`),
-    lines: draft.lines.map((l) => ({ ...l, uid: "" })),
-  });
+  return JSON.stringify(
+    {
+      ...draft,
+      paidTo: draft.paidTo ? { type: draft.paidTo.type, id: draft.paidTo.id } : null,
+      lines: draft.lines.map((l) => ({ ...l, uid: "" })),
+    },
+    fileAware,
+  );
 }

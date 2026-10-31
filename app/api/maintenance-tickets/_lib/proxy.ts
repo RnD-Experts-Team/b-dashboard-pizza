@@ -46,6 +46,18 @@ export function authorizationOrError(
   return { authorization };
 }
 
+/**
+ * The store the request is for, as the dashboard sent it (`X-Store-Id`), passed
+ * on so a store-scoped auth rule can judge a store user's request on a path
+ * that carries no store (the issue catalog, the troubleshooting library…).
+ * Without it such a request falls back to GLOBAL permissions and a store
+ * manager is refused.
+ */
+function storeHeader(request: NextRequest): Record<string, string> {
+  const storeId = request.headers.get("x-store-id");
+  return storeId ? { "X-Store-Id": storeId } : {};
+}
+
 export async function proxyGet(request: NextRequest, upstreamUrl: string) {
   const auth = authorizationOrError(request);
   if ("error" in auth) return auth.error;
@@ -55,6 +67,7 @@ export async function proxyGet(request: NextRequest, upstreamUrl: string) {
       method: "GET",
       headers: {
         Authorization: auth.authorization,
+        ...storeHeader(request),
         Accept: "application/json",
       },
     });
@@ -88,6 +101,7 @@ export async function proxyDelete(request: NextRequest, upstreamUrl: string) {
       method: "DELETE",
       headers: {
         Authorization: auth.authorization,
+        ...storeHeader(request),
         Accept: "application/json",
       },
     });
@@ -138,6 +152,7 @@ export async function proxyJsonPost(request: NextRequest, upstreamUrl: string) {
       method: "POST",
       headers: {
         Authorization: auth.authorization,
+        ...storeHeader(request),
         Accept: "application/json",
         "Content-Type": "application/json",
       },
@@ -183,6 +198,7 @@ export async function proxyJsonPatch(
       method: "PATCH",
       headers: {
         Authorization: auth.authorization,
+        ...storeHeader(request),
         Accept: "application/json",
         "Content-Type": "application/json",
       },
@@ -232,6 +248,7 @@ export async function proxyJsonPut(request: NextRequest, upstreamUrl: string) {
       method: "PUT",
       headers: {
         Authorization: auth.authorization,
+        ...storeHeader(request),
         Accept: "application/json",
         "Content-Type": "application/json",
       },
@@ -271,6 +288,7 @@ export async function proxyRawPost(request: NextRequest, upstreamUrl: string) {
       method: "POST",
       headers: {
         Authorization: auth.authorization,
+        ...storeHeader(request),
         Accept: "application/json",
         "Content-Type": contentType,
       },
@@ -323,6 +341,7 @@ export async function proxyPassthrough(
     const auth = authorizationOrError(request);
     if ("error" in auth) return auth.error;
     headers.Authorization = auth.authorization;
+    Object.assign(headers, storeHeader(request));
   }
 
   const method = request.method.toUpperCase();

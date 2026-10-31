@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Search, X, Loader2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ export function TicketsSearch({
   disabled = false,
   className,
 }: TicketsSearchProps) {
+  const t = useTranslations("maintenanceSystem.tickets.search");
   const [draft, setDraft] = useState(value);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** The last value seen: the parent's, or our own commit. A parent change
@@ -95,11 +97,13 @@ export function TicketsSearch({
             handleClear();
           }
         }}
-        // Says what you can actually type. "Search..." would leave the user
-        // guessing which of these the box understands.
-        placeholder="Search a store, a ticket number, or the problem"
-        aria-label="Search tickets"
-        className="h-11 ps-9 pe-20 text-sm"
+        // Says what you can actually type, short enough to read whole in the
+        // narrowest box the filter row gives it (the end padding only grows
+        // when the spinner / clear button are actually there).
+        placeholder={t("placeholder")}
+        aria-label={t("label")}
+        title={t("hint")}
+        className={cn("h-10 ps-9 text-sm sm:h-9 [&::-webkit-search-cancel-button]:appearance-none", isSearching && draft ? "pe-16" : isSearching || draft ? "pe-9" : "pe-3")}
       />
 
       <div className="absolute end-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
@@ -113,9 +117,9 @@ export function TicketsSearch({
             size="icon-xs"
             onClick={handleClear}
             disabled={disabled}
-            aria-label="Clear search"
+            aria-label={t("clear")}
           >
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4" aria-hidden="true" />
           </Button>
         )}
       </div>

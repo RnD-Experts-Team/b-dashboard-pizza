@@ -30,9 +30,11 @@ import {
   buildStockMovementPayload,
   emptyStockForm,
   isStockFormDirty,
+  landingLocationOf,
   partHint,
+  placeLabel,
   shapeOf,
-  spotLocationOf,
+  spotToSave,
   validateStockForm,
   type StockForm,
   type StockFormField,
@@ -41,8 +43,9 @@ import {
 import { useDiscardGuard, useResetOnOpen } from "./discard-guard";
 import { IssueSearch } from "./issue-search";
 import { SerialPicker } from "./serial-picker";
+import { findBalanceId } from "./place-picker-dialog";
 import { SpotPicker } from "./spot-picker";
-import { StockIcon } from "./storage-shared";
+import { PlaceBreadcrumb, StockIcon } from "./storage-shared";
 import type { Part, TicketIssueHit } from "@/types/maintenance-system";
 import type { PostableStockMovementType, StockMovement, StorageLocation } from "@/types/storage.types";
 
@@ -51,6 +54,12 @@ import type { PostableStockMovementType, StockMovement, StorageLocation } from "
  * Used on a ticket · Returned · Moved · Opening stock · Damaged or lost. Each
  * shows only its own fields; date and a note sit behind "More details".
  * Serial-tracked parts pick or type their serials instead of a quantity.
+ *
+ * Where stock lands (Opening stock, Returned, a move's destination) the spot
+ * inside the location can be picked; it is saved right after the movement
+ * (PUT stock-balances/{id}/place on the row the movement wrote). Where stock
+ * leaves (Used, Damaged or lost, a move's source) the dialog shows the spot
+ * it is taken from, so it can be found.
  */
 
 export interface StockActionPrefill {
@@ -66,6 +75,8 @@ export interface StockActionDialogProps {
   locations: readonly StorageLocation[];
   prefill?: StockActionPrefill;
   canDeclareSpots?: boolean;
+  /** Opens the Locations tab on a location, to lay out its spots. */
+  onSetUpSpots?: (locationId: number) => void;
   onRecorded: (movement: StockMovement) => void;
 }
 
@@ -103,6 +114,7 @@ export function StockActionDialog({
   locations,
   prefill,
   canDeclareSpots,
+  onSetUpSpots,
   onRecorded,
 }: StockActionDialogProps) {
   const t = useTranslations("maintenanceSystem");
@@ -138,6 +150,7 @@ export function StockActionDialog({
   const unitLabel = vocabText(t, vocabEntry(PART_UNITS, part?.unit ?? "each"));
   const { locations: stockAt, isLoading: stockLoading } = usePartStockAt(form.partId);
   const onHandAt = (locationId: number | null) => stockAt.find((l) => l.storageLocationId === locationId)?.onHand ?? 0;
+  const placeAt = (locationId: number | null) => stockAt.find((l) => l.storageLocationId === locationId)?.place ?? [];
   const available = shape.flow === "in" || form.locationId == null ? null : onHandAt(form.locationId);
 
   const sourceLocations = useMemo(
@@ -170,6 +183,7 @@ export function StockActionDialog({
 
   function messageFor(field: StockFormField): string | undefined {
     const problem = problems[field];
+    if (problem === "sameLocation") return t("storage.spotSetup.sameLocation");
     if (problem) return t(`storage.record.problems.${problem}`, { available: formatQuantity(available), unit: unitLabel });
     return serverErrors[field];
   }
@@ -180,6 +194,17 @@ export function StockActionDialog({
     if (first === "moved_at") setMoreOpen(true);
     const el = bodyRef.current?.querySelector<HTMLElement>(`#${FIELD_IDS[first]}, [data-field="${first}"] button, [data-field="${first}"] input`);
     el?.focus();
+  }
+
+  /** The spot lives on the (part, location) row the movement just wrote. */
+  async function saveSpotAfter(partId: number, locationId: number, valueIds: number[]) {
+    try {
+      const balanceId = await findBalanceId(partId, locationId);
+      if (balanceId == null) throw new Error(t("storage.spotSetup.noBalance"));
+      await storageService.setStockBalancePlace(balanceId, valueIds);
+    } catch (err) {
+      if (!isCancelled(err)) toast.warning(t("storage.spotSetup.recordedNoSpot"), { description: err instanceof Error ? err.message : undefined });
+    }
   }
 
   async function submit() {
@@ -193,13 +218,10 @@ export function StockActionDialog({
     setSaving(true);
     try {
       const movement = await recordMovement.run(buildStockMovementPayload(type, form, trackSerials));
-      const spotLocation = spotLocationOf(type, form);
-      if (spotLocation != null && form.partId != null) {
-        // The spot lives on the (part, location) balance row the movement just wrote.
-        const balances = await storageService.getStockBalances({ part_ids: [form.partId], storage_location_ids: [spotLocation], per_page: 1 });
-        const balance = balances.data[0];
-        if (balance) await storageService.setStockBalancePlace(balance.id, form.placeValueIds);
-      }
+      // The movement is in: from here on a failure must not leave the dialog
+      // open, or a second Save would record it twice.
+      const spot = spotToSave(type, form, placeAt(landingLocationOf(type, form)).map((l) => l.valueId));
+      if (spot && form.partId != null) await saveSpotAfter(form.partId, spot.locationId, spot.valueIds);
       toast.success(t("storage.record.saved", { action: t(`stock.actions.${type}.label`) }));
       onRecorded(movement);
       onOpenChange(false);
@@ -223,7 +245,14 @@ export function StockActionDialog({
   }
 
   const locationLabel = t(`storage.record.location.${shape.flow}`);
-  const spotLocationId = shape.flow === "both" ? form.toLocationId : form.locationId;
+  const spotLocationId = landingLocationOf(type, form);
+  const spotLocationName = locations.find((l) => l.id === spotLocationId)?.name;
+  const currentSpotIds = placeAt(spotLocationId).map((l) => l.valueId);
+  // Where it is taken from (Used, Damaged or lost, a move's source).
+  const sourcePlace = shape.flow !== "in" && form.locationId != null ? placeAt(form.locationId) : null;
+  const setUpSpots = onSetUpSpots
+    ? (locationId: number) => guard.requestClose(() => onSetUpSpots(locationId))
+    : undefined;
 
   return (
     <>
@@ -290,7 +319,7 @@ export function StockActionDialog({
                 </Label>
                 <Select
                   value={form.locationId != null ? String(form.locationId) : ""}
-                  onValueChange={(v) => patch({ locationId: Number(v), serials: [], placeValueIds: shape.flow === "in" ? [] : form.placeValueIds }, ["storage_location_id", "serials", "quantity"])}
+                  onValueChange={(v) => patch({ locationId: Number(v), serials: [], placeValueIds: shape.flow === "in" ? null : form.placeValueIds }, ["storage_location_id", "serials", "quantity"])}
                   disabled={!form.partId || (shape.flow !== "in" && stockLoading)}
                 >
                   <SelectTrigger id={FIELD_IDS.storage_location_id} className="h-9" aria-invalid={Boolean(messageFor("storage_location_id"))}>
@@ -312,6 +341,12 @@ export function StockActionDialog({
                 {form.partId != null && shape.flow !== "in" && !stockLoading && sourceLocations.length === 0 && (
                   <p className="text-[11px] text-muted-foreground">{t("storage.record.noneInStorage")}</p>
                 )}
+                {sourcePlace && sourcePlace.length > 0 && (
+                  <p className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                    {t("storage.spotSetup.takenFrom")}
+                    <PlaceBreadcrumb place={sourcePlace} />
+                  </p>
+                )}
                 <FieldError message={messageFor("storage_location_id")} />
               </div>
 
@@ -322,7 +357,7 @@ export function StockActionDialog({
                   </Label>
                   <Select
                     value={form.toLocationId != null ? String(form.toLocationId) : ""}
-                    onValueChange={(v) => patch({ toLocationId: Number(v), placeValueIds: [] }, ["to_location_id"])}
+                    onValueChange={(v) => patch({ toLocationId: Number(v), placeValueIds: null }, ["to_location_id"])}
                     disabled={!form.partId}
                   >
                     <SelectTrigger id={FIELD_IDS.to_location_id} className="h-9" aria-invalid={Boolean(messageFor("to_location_id"))}>
@@ -341,18 +376,24 @@ export function StockActionDialog({
               )}
             </div>
 
-            {/* Spot inside the destination (optional) */}
+            {/* Spot inside the location it lands in (optional) */}
             {shape.offersSpot && spotLocationId != null && (
               <div className="space-y-1.5">
                 <p className="text-sm font-medium">
-                  {t("storage.record.spot")} <span className="text-xs font-normal text-muted-foreground">({t("common.optional")})</span>
+                  {t("storage.spotSetup.whereLabel")} <span className="text-xs font-normal text-muted-foreground">({t("common.optional")})</span>
                 </p>
+                {currentSpotIds.length > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {t("storage.spotSetup.alreadyAt", { spot: placeLabel(placeAt(spotLocationId)) })}
+                  </p>
+                )}
                 <SpotPicker
                   locationId={spotLocationId}
-                  value={form.placeValueIds}
+                  locationName={spotLocationName}
+                  value={form.placeValueIds ?? currentSpotIds}
                   onChange={(ids) => patch({ placeValueIds: ids }, [])}
                   canDeclare={canDeclareSpots}
-                  hideWhenEmpty
+                  onSetUp={setUpSpots}
                 />
               </div>
             )}

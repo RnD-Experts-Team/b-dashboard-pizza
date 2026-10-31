@@ -5,16 +5,16 @@ import { useTranslations } from "next-intl";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { maintenanceWorkflowService } from "@/lib/api/services/maintenance-workflow.service";
-import type { IssueSchedule } from "@/types/maintenance-system";
+import type { Inspection, IssueSchedule } from "@/types/maintenance-system";
 import { DatePicker, TimePicker } from "../../form-bits";
 import { ActionDialog, Field, MoreDetails, useDialogSubmit } from "../dialog-kit";
 import { formatDayTime } from "../format";
 import { TechnicianPicker } from "../technician-picker";
 import type { StepDialogProps } from "./types";
 
-/** Live bookings, newest first. */
+/** Live bookings (not mistaken, not ended), newest first. */
 export function liveSchedules(schedules: readonly IssueSchedule[]): IssueSchedule[] {
-  return schedules.filter((s) => !s.mistaken).sort((a, b) => b.id - a.id);
+  return schedules.filter((s) => !s.mistaken && !s.endedAt).sort((a, b) => b.id - a.id);
 }
 
 interface BookingDialogProps extends StepDialogProps {
@@ -22,6 +22,14 @@ interface BookingDialogProps extends StepDialogProps {
   onBooked: (date: string) => void;
   /** "Add second opinion": another inspection while one is on file. */
   secondOpinion?: boolean;
+}
+
+/** Who did the latest finished inspection: usually the one to do the work. */
+function latestInspectorId(inspections: readonly Inspection[]): number | null {
+  const done = inspections
+    .filter((i) => i.status === "done" && !i.mistaken && i.technician)
+    .sort((a, b) => (a.doneAt ?? "").localeCompare(b.doneAt ?? ""));
+  return done.at(-1)?.technician?.id ?? null;
 }
 
 /** Book inspection or Schedule work: technician (ranked), day, time, then the optional details. */
@@ -37,12 +45,15 @@ function BookingDialog({
 }: BookingDialogProps & { kind: "inspection" | "work" }) {
   const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
-  const [technicianId, setTechnicianId] = useState<number | null>(null);
+  // Scheduling the work starts with whoever inspected it; the dialog mounts
+  // fresh on every open, so this is read once per open.
+  const [suggestedTechnicianId] = useState(() => (kind === "work" ? latestInspectorId(issue.inspections) : null));
+  const [technicianId, setTechnicianId] = useState<number | null>(suggestedTechnicianId);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [expected, setExpected] = useState("");
   const [instructions, setInstructions] = useState("");
-  const dirty = Boolean(technicianId || date || time || expected || instructions.trim());
+  const dirty = Boolean(technicianId !== suggestedTechnicianId || date || time || expected || instructions.trim());
   const urgent = (issue.assignedPriority ?? issue.priority).value === "urgent";
   const isWork = kind === "work";
   const technicianField = "technician_id";

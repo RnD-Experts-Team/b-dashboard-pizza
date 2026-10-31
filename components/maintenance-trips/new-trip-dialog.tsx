@@ -4,10 +4,11 @@ import { useDeferredValue, useState } from "react";
 import { Loader2, Plus, Search, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DialogClose, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { DatePicker, FieldError, Segmented } from "@/components/maintenance-tickets/form-bits";
 import { TechnicianCheckList } from "@/components/maintenance-tickets/technician-check-list";
@@ -80,6 +81,8 @@ function NewTripForm({
   const [stops, setStops] = useState<StopDraft[]>([]);
   const [technicianId, setTechnicianId] = useState<number | null>(null);
   const [techSearch, setTechSearch] = useState("");
+  /** List every technician, not only those who cover the first store. */
+  const [everyone, setEveryone] = useState(false);
   const [instructions, setInstructions] = useState("");
   const [showMore, setShowMore] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
@@ -88,7 +91,7 @@ function NewTripForm({
   const first = stops[0] ?? null;
   const deferredTechSearch = useDeferredValue(techSearch);
   const { technicians, isLoading: techLoading } = useTechnicians({
-    store: first?.storeNumber ?? undefined,
+    store: everyone ? undefined : first?.storeNumber ?? undefined,
     search: deferredTechSearch || undefined,
     perPage: TECH_PAGE_SIZE,
   });
@@ -195,11 +198,23 @@ function NewTripForm({
             aria-invalid={!!errors.technician_id}
           />
         </div>
-        <p className="text-[11px] text-muted-foreground">
-          {first?.storeNumber
-            ? t("trips.newTripDialog.rankedFor", { store: first.storeNumber })
-            : t("trips.newTripDialog.rankedHint")}
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="min-w-0 flex-1 text-[11px] text-muted-foreground">
+            {!first?.storeNumber
+              ? t("trips.newTripDialog.rankedHint")
+              : everyone
+                ? t("trips.newTripDialog.everyoneHint")
+                : t("trips.newTripDialog.rankedFor", { store: first.storeNumber })}
+          </p>
+          {first?.storeNumber ? (
+            <div className="flex items-center gap-2">
+              <Switch id="new-trip-everyone" checked={everyone} onCheckedChange={setEveryone} />
+              <Label htmlFor="new-trip-everyone" className="text-xs font-normal text-muted-foreground">
+                {t("tickets.picker.showEveryone")}
+              </Label>
+            </div>
+          ) : null}
+        </div>
         {techLoading && !technicians.length ? (
           <Skeleton className="h-32 w-full" />
         ) : (
@@ -237,7 +252,13 @@ function NewTripForm({
 
       {errors.form && <p className="text-sm text-destructive">{errors.form}</p>}
 
-      <DialogFooter>
+      <DialogFooter className="gap-2 sm:gap-2">
+        {/* Closes through the dialog, so typed data still asks first. */}
+        <DialogClose asChild>
+          <Button type="button" variant="outline" disabled={busy}>
+            {t("common.cancel")}
+          </Button>
+        </DialogClose>
         <Button type="submit" disabled={busy}>
           {busy && <Loader2 className="animate-spin" aria-hidden="true" />}
           {busy ? t("common.saving") : t("trips.newTripDialog.create")}

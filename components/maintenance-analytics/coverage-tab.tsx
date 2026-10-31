@@ -249,6 +249,7 @@ function Legend() {
     { shade: SHADES[0], label: t("legendNone"), gap: true },
     { shade: SHADES[1], label: t("legendOne"), gap: true },
     { shade: SHADES[2], label: t("legendTwo"), gap: false },
+    { shade: SHADES[3], label: t("legendThree"), gap: false },
     { shade: SHADES[SHADES.length - 1], label: t("legendMore"), gap: false },
   ];
   return (

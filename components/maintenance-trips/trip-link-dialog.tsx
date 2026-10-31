@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { copyText } from "@/lib/maintenance-trips";
 
 const COPIED_RESET_MS = 2000;
 
@@ -28,12 +29,11 @@ export function useTripLinkActions(url: string, shareText: string) {
   const [copied, setCopied] = useState(false);
 
   async function copy(): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(url);
+    if (await copyText(url)) {
       setCopied(true);
       toast.success(t("common.copied"));
       window.setTimeout(() => setCopied(false), COPIED_RESET_MS);
-    } catch {
+    } else {
       toast.error(t("trips.copyFailed"));
     }
   }

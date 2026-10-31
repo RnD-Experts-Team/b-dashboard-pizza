@@ -1,63 +1,63 @@
 "use client";
 
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
+const ROWS = 6;
+const CARDS = 4;
+/** Ticket #, title, store, status, priority, assigned, target, updated — as in the list. */
+const COLUMNS = [
+  { w: "w-12" },
+  { w: "w-48" },
+  { w: "w-14" },
+  { w: "w-24", pill: true },
+  { w: "w-16", pill: true },
+  { w: "w-24" },
+  { w: "w-20" },
+  { w: "w-20" },
+];
+
+/**
+ * The tickets list while it loads: the table's shape on desktop, the cards'
+ * on a phone. The page header and filters above it are already real, so
+ * this draws only the list.
+ */
 export function TicketsSkeleton() {
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <Skeleton className="h-5 w-40" />
-            <Skeleton className="h-4 w-60" />
-          </div>
-          <Skeleton className="h-9 w-24" />
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Filters row */}
-        <div className="flex gap-2">
-          <Skeleton className="h-9 w-36" />
-          <Skeleton className="h-9 w-36" />
-        </div>
+    <div aria-busy="true" className="space-y-3">
+      <Skeleton className="h-4 w-40" />
 
-        {/* Desktop table */}
-        <div className="hidden md:block">
-          <div className="rounded-md border">
-            <div className="border-b p-3">
-              <div className="grid grid-cols-5 gap-4">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Skeleton key={i} className="h-4 w-full" />
-                ))}
-              </div>
-            </div>
-            {Array.from({ length: 6 }).map((_, row) => (
-              <div key={row} className="border-b last:border-0 p-3">
-                <div className="grid grid-cols-5 gap-4">
-                  {Array.from({ length: 5 }).map((_, col) => (
-                    <Skeleton key={col} className="h-4 w-full" />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Mobile cards */}
-        <div className="space-y-3 md:hidden">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="rounded-md border p-4 space-y-2">
-              <div className="flex justify-between">
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-5 w-20 rounded-full" />
-              </div>
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-4 w-40" />
-            </div>
+      <div className="hidden overflow-hidden rounded-lg border md:block">
+        <div className="flex gap-6 border-b bg-muted/30 px-4 py-3">
+          {COLUMNS.map((c, i) => (
+            <Skeleton key={i} className={`h-3 ${c.w}`} />
           ))}
         </div>
-      </CardContent>
-    </Card>
+        {Array.from({ length: ROWS }).map((_, row) => (
+          <div key={row} className="flex items-center gap-6 border-b px-4 py-3.5 last:border-0">
+            {COLUMNS.map((c, col) => (
+              <Skeleton key={col} className={c.pill ? `h-5 ${c.w} rounded-full` : `h-4 ${c.w}`} />
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-2 md:hidden">
+        {Array.from({ length: CARDS }).map((_, i) => (
+          <div key={i} className="space-y-2 rounded-lg border bg-card p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="space-y-1.5">
+                <Skeleton className="h-3 w-12" />
+                <Skeleton className="h-4 w-44" />
+              </div>
+              <Skeleton className="h-5 w-24 rounded-full" />
+            </div>
+            <div className="flex gap-2">
+              <Skeleton className="h-4 w-16" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

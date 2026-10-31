@@ -14,17 +14,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { tripLinkUrl, tripShareText } from "@/lib/maintenance-trips";
+import { copyText, tripLinkUrl, tripShareText } from "@/lib/maintenance-trips";
 import type { TripLinkIssued } from "@/types/maintenance-system";
-
-async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * The technician's NEW trip link, shown once after booking an inspection or

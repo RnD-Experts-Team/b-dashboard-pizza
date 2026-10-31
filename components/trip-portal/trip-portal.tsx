@@ -27,7 +27,7 @@ import { formatDateOnlyWithWeekday, formatTimestamp } from "@/lib/utils/date-dis
 import { tripPortalService, useTripPortal } from "@/lib/hooks/use-trip-portal";
 import { openSession, TRIP_BUTTONS, TRIP_STATE_TONE, type TripButton } from "@/lib/maintenance-trips";
 import { PRIORITIES, TRIP_STATES, TRIP_STOP_STATUSES, VISIT_TASK_STATUSES, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
-import type { PublicTrip, TripPortalErrorKind, TripState, TripStop } from "@/types/maintenance-system";
+import type { PublicTrip, TripPortalErrorKind, TripSession, TripState, TripStop } from "@/types/maintenance-system";
 import { BigButton, usePortalErrorText } from "./portal-bits";
 import {
   AddStoreSheet,
@@ -106,6 +106,15 @@ function PortalSkeleton() {
  * state, big secondary ones, his stops and jobs, then "I bought something"
  * and "Add a note/photo". Every action returns the refreshed trip.
  */
+/** When the current state began: the clock-in while working, else the event that started the break / drive / parts run. */
+function stateSince(session: TripSession, state: TripState): string {
+  if (state === "on_clock") return session.clockIn;
+  const last = session.events
+    .filter((e) => !e.mistaken)
+    .reduce<TripSession["events"][number] | null>((latest, e) => (!latest || e.at > latest.at ? e : latest), null);
+  return last?.at ?? session.clockIn;
+}
+
 export function TripPortal({ token }: { token: string }) {
   const portal = useTripPortal(token);
   const { trip, isLoading, isRefreshing, errorKind, actionErrorKind, refresh } = portal;
@@ -205,7 +214,7 @@ function PortalBody({
   const PrimaryIcon = BUTTON_ICONS[buttons.primary.icon] ?? LogIn;
 
   return (
-    <div className="mx-auto max-w-lg space-y-6 px-4 pt-6 pb-[calc(2rem+env(safe-area-inset-bottom))]">
+    <div className="mx-auto max-w-lg space-y-6 px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(2rem+env(safe-area-inset-bottom))]">
       <header className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -228,7 +237,7 @@ function PortalBody({
           <StateIcon className="size-6" aria-hidden="true" />
           {vocabText(t, stateEntry)}
           {session && state !== "off_clock" && (
-            <span className="text-base font-normal tabular-nums">· {t("trips.since", { time: formatTimestamp(session.clockIn, "h:mm a") })}</span>
+            <span className="text-base font-normal tabular-nums">· {t("trips.since", { time: formatTimestamp(stateSince(session, state), "h:mm a") })}</span>
           )}
         </p>
         {trip.clockedInElsewhere && state === "off_clock" && (
@@ -316,7 +325,7 @@ function PortalBody({
       <IssueDoneSheet target={doneTarget} onClose={() => setDoneTarget(null)} run={run} />
       <ReasonSheet
         open={!!notDone}
-        title={t("tripPortal.couldntDoIt")}
+        title={notDone?.issue ? t("tripPortal.couldntDoIt") : t("tripPortal.couldntGo")}
         description={notDone ? notDone.issue?.title ?? stopName(notDone.stop, t) : undefined}
         onClose={() => setNotDone(null)}
         run={run}
@@ -417,7 +426,9 @@ function StopCard({
         <ul className="space-y-3">
           {stop.issues.map((issue) => {
             const priority = vocabEntry(PRIORITIES, issue.priority);
-            const pending = issue.taskStatus === "pending";
+            // The office closed or cancelled the issue meanwhile: nothing left to do here.
+            const finished = issue.status === "closed" || issue.status === "cancelled";
+            const pending = issue.taskStatus === "pending" && !finished;
             return (
               <li key={issue.ticketIssueId} className="space-y-3 rounded-xl border bg-background p-3">
                 <div className="space-y-1">
@@ -436,6 +447,9 @@ function StopCard({
                     </span>
                   </div>
                   {issue.notDoneReason && <p className="text-base text-rose-700 dark:text-rose-300">{issue.notDoneReason}</p>}
+                  {finished && issue.taskStatus === "pending" && (
+                    <p className="text-base text-muted-foreground">{t("tripPortal.issueFinished")}</p>
+                  )}
                 </div>
                 {pending && here && (
                   <div className="grid grid-cols-1 gap-2">

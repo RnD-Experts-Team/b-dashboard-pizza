@@ -1,5 +1,6 @@
 "use client";
 
+import { OfficeOnly } from "@/components/maintenance-tickets/office-only";
 import { use } from "react";
 import { CountSheet } from "@/components/storage/count-sheet";
 import { StorageEmptyState } from "@/components/storage/storage-shared";
@@ -12,5 +13,9 @@ export default function StockCountPage({ params }: { params: Promise<{ id: strin
   const t = useTranslations("maintenanceSystem");
   const countId = idParam(id);
   if (!countId) return <StorageEmptyState description={t("storage.count.notFound")} />;
-  return <CountSheet countId={countId} />;
+  return (
+    <OfficeOnly path="/stock-counts">
+      <CountSheet countId={countId} />
+    </OfficeOnly>
+  );
 }

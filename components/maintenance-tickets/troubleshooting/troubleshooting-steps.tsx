@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { ExternalLink, Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,7 @@ export function TroubleshootingSteps({
   fileNames?: string[];
   className?: string;
 }) {
+  const t = useTranslations("maintenanceSystem.troubleshooting");
   return (
     <div className={cn("space-y-2", className)}>
       <ol className="list-decimal space-y-1 ps-5 text-sm">
@@ -43,11 +45,11 @@ export function TroubleshootingSteps({
           className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
         >
           <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-          Open the guide (video / manual)
+          {t("openGuide")}
         </a>
       )}
       {fileNames.length > 0 && (
-        <p className="text-xs text-muted-foreground">Files: {fileNames.join(", ")}</p>
+        <p className="text-xs text-muted-foreground">{t("filesList", { names: fileNames.join(", ") })}</p>
       )}
     </div>
   );

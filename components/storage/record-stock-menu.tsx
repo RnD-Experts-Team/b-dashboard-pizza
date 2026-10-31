@@ -94,6 +94,7 @@ export function StockActionHost({
   locations,
   defaultLocationId,
   canDeclareSpots,
+  onSetUpSpots,
   onRecorded,
 }: {
   pending: PendingStockAction | null;
@@ -103,6 +104,8 @@ export function StockActionHost({
   /** The location the page is filtered to, as the default destination. */
   defaultLocationId?: number;
   canDeclareSpots: boolean;
+  /** Opens the Locations tab on a location, to lay out its spots. */
+  onSetUpSpots?: (locationId: number) => void;
   onRecorded: (movement?: StockMovement) => void;
 }) {
   const id = pending?.id ?? null;
@@ -130,6 +133,7 @@ export function StockActionHost({
           locations={locations}
           prefill={pending?.prefill ?? (defaultLocationId ? { locationId: defaultLocationId } : undefined)}
           canDeclareSpots={canDeclareSpots}
+          onSetUpSpots={onSetUpSpots}
           onRecorded={onRecorded}
         />
       )}

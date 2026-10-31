@@ -162,6 +162,8 @@ export interface TripFilters {
   from?: IsoDate;
   to?: IsoDate;
   onClock?: boolean;
+  /** History: trips planned before this day (the viewer's today), plus closed trips of any day. */
+  historyBefore?: IsoDate;
   search?: string;
   page?: number;
   perPage?: number;

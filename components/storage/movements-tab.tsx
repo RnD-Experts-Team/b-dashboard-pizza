@@ -162,7 +162,13 @@ export function MovementsTab({ filters, onFiltersChange, parts, locations, canMa
       )}
       {rows.length > 0 && (
         <>
-          <div className={cn("overflow-x-auto rounded-md border bg-card", isRefreshing && "opacity-70")}>
+          {/* Phone: one card per movement, so nothing (the undo menu included) is scrolled off. */}
+          <ul className={cn("space-y-1.5 sm:hidden", isRefreshing && "opacity-70")}>
+            {rows.map((m) => (
+              <MovementCard key={m.id} movement={m} canMarkMistaken={canMarkMistaken} onMarkMistaken={() => setConfirming(m)} />
+            ))}
+          </ul>
+          <div className={cn("hidden overflow-x-auto rounded-md border bg-card sm:block", isRefreshing && "opacity-70")}>
             <table className={TBL}>
               <thead>
                 <tr>
@@ -217,7 +223,6 @@ function MovementRow({
   onMarkMistaken: () => void;
 }) {
   const t = useTranslations("maintenanceSystem");
-  const locale = useLocale();
   const summary = summarizeMovement(movement);
   const struck = movement.mistaken && "line-through decoration-muted-foreground/60";
   const canUndo = canMarkMistaken && canMarkMovementMistaken(movement);
@@ -251,44 +256,112 @@ function MovementRow({
         <WhereCell from={summary.from} to={summary.to} />
       </td>
       <td className={TD}>
-        {movement.ticketIssue && (
-          <Link
-            href={`/${locale}/dashboard/maintenance-tickets/${movement.ticketIssue.ticketId}?issue=${movement.ticketIssue.id}`}
-            className="block hover:underline"
-          >
-            {t("storage.issue.line", { ticket: movement.ticketIssue.ticketId, store: movement.ticketIssue.storeNumber ?? "—" })}
-            <span className="block truncate text-[11px] text-muted-foreground">{movement.ticketIssue.title}</span>
-          </Link>
-        )}
-        {movement.payment && (
-          <span className="block">{t("storage.movements.payment", { id: movement.payment.id, name: movement.payment.paidToName ?? "—" })}</span>
-        )}
-        {movement.stockCountId && (
-          <Link href={`/${locale}/dashboard/storage/counts/${movement.stockCountId}`} className="block hover:underline">
-            {t("storage.movements.count", { id: movement.stockCountId })}
-          </Link>
-        )}
-        {movement.reversalOfId && <span className="block">{t("storage.movements.cancels", { id: movement.reversalOfId })}</span>}
+        <MovementLinks movement={movement} />
       </td>
       <td className={cn(TD, "text-end tabular-nums", struck)}>{movement.totalCost ? formatMoney(movement.totalCost) : "—"}</td>
       <td className={cn(TD, "text-end")}>
-        {canUndo && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={t("storage.movements.actionsFor", { id: movement.id })}>
-                <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={onMarkMistaken} className="text-destructive focus:text-destructive">
-                <Undo2 className="me-2 h-3.5 w-3.5" aria-hidden="true" />
-                {t("common.markAsMistake")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        {canUndo && <MovementActions movement={movement} onMarkMistaken={onMarkMistaken} />}
       </td>
     </tr>
+  );
+}
+
+/** What a movement is linked to: the ticket, the payment, the stock count, the movement it cancels. */
+function MovementLinks({ movement }: { movement: StockMovement }) {
+  const t = useTranslations("maintenanceSystem");
+  const locale = useLocale();
+  return (
+    <>
+      {movement.ticketIssue && (
+        <Link
+          href={`/${locale}/dashboard/maintenance-tickets/${movement.ticketIssue.ticketId}?issue=${movement.ticketIssue.id}`}
+          className="block hover:underline"
+        >
+          {t("storage.issue.line", { ticket: movement.ticketIssue.ticketId, store: movement.ticketIssue.storeNumber ?? "—" })}
+          <span className="block truncate text-[11px] text-muted-foreground">{movement.ticketIssue.title}</span>
+        </Link>
+      )}
+      {movement.payment && (
+        <span className="block">{t("storage.movements.payment", { id: movement.payment.id, name: movement.payment.paidToName ?? "—" })}</span>
+      )}
+      {movement.stockCountId && (
+        <Link href={`/${locale}/dashboard/storage/counts/${movement.stockCountId}`} className="block hover:underline">
+          {t("storage.movements.count", { id: movement.stockCountId })}
+        </Link>
+      )}
+      {movement.reversalOfId && <span className="block">{t("storage.movements.cancels", { id: movement.reversalOfId })}</span>}
+    </>
+  );
+}
+
+function MovementActions({ movement, onMarkMistaken }: { movement: StockMovement; onMarkMistaken: () => void }) {
+  const t = useTranslations("maintenanceSystem");
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={t("storage.movements.actionsFor", { id: movement.id })}>
+          <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={onMarkMistaken} className="text-destructive focus:text-destructive">
+          <Undo2 className="me-2 h-3.5 w-3.5" aria-hidden="true" />
+          {t("common.markAsMistake")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** A movement as a card, for phones: what happened and when, the parts, where, links, value, undo. */
+function MovementCard({
+  movement,
+  canMarkMistaken,
+  onMarkMistaken,
+}: {
+  movement: StockMovement;
+  canMarkMistaken: boolean;
+  onMarkMistaken: () => void;
+}) {
+  const t = useTranslations("maintenanceSystem");
+  const summary = summarizeMovement(movement);
+  const struck = movement.mistaken && "line-through decoration-muted-foreground/60";
+  const canUndo = canMarkMistaken && canMarkMovementMistaken(movement);
+
+  return (
+    <li className={cn("space-y-1.5 rounded-md border bg-card px-3 py-2.5 text-sm", movement.mistaken && "bg-muted/30 text-muted-foreground")}>
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <MovementTypeLabel type={movement.type.value} serverLabel={movement.type.label} className={cn("font-medium", struck)} />
+          <p className="text-[11px] text-muted-foreground tabular-nums">
+            {formatWireDateTime(movement.movedAt, { dateTimePattern: "MMM d, yyyy h:mm a" })}
+            {movement.creator ? ` · ${movement.creator.name}` : ""}
+          </p>
+        </div>
+        <span className={cn("shrink-0 tabular-nums", struck)}>{movement.totalCost ? formatMoney(movement.totalCost) : "—"}</span>
+        {canUndo && <MovementActions movement={movement} onMarkMistaken={onMarkMistaken} />}
+      </div>
+      {movement.mistaken && (
+        <Badge variant="outline" className="h-4 border-red-500/40 px-1 text-[10px] text-red-700 dark:text-red-400">
+          {t("common.mistaken")}
+        </Badge>
+      )}
+      <ul className={cn("space-y-0.5", struck)}>
+        {summary.parts.map((p) => (
+          <li key={p.id}>
+            <span className="font-medium">{p.name}</span>{" "}
+            <span className="tabular-nums text-muted-foreground">× {formatQuantity(p.quantity)}</span>
+          </li>
+        ))}
+      </ul>
+      {summary.serials.length > 0 && <p className="font-mono text-[10px] text-muted-foreground">{summary.serials.join(", ")}</p>}
+      <div className={cn("text-xs text-muted-foreground", struck)}>
+        <WhereCell from={summary.from} to={summary.to} />
+      </div>
+      <div className="text-xs">
+        <MovementLinks movement={movement} />
+      </div>
+    </li>
   );
 }
 

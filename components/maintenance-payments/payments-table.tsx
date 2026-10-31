@@ -17,7 +17,8 @@ function categoryName(row: PaymentListRow): string | null {
 }
 
 /**
- * The payments list: date, paid to, stores, types, invoice, total. A
+ * The payments list: date, paid to, stores, types, attachments (and an
+ * older payment's invoice #), total. A
  * mistaken payment is struck through and says "Mistake" in words. Cards
  * below md; the table from md up. A row opens the detail sheet.
  */
@@ -26,7 +27,7 @@ export function PaymentsTable({ rows, onOpen }: { rows: PaymentListRow[]; onOpen
 
   const invoiceCell = (row: PaymentListRow) => (
     <span className="inline-flex items-center gap-1 text-xs">
-      {row.hasInvoice && <Paperclip className="size-3.5 text-muted-foreground" aria-label={t("payments.hasInvoiceFile")} />}
+      {row.hasInvoice && <Paperclip className="size-3.5 text-muted-foreground" aria-label={t("payments.extras.hasAttachments")} />}
       <span className="truncate">{row.invoiceNumber || (row.hasInvoice ? "" : "—")}</span>
     </span>
   );
@@ -82,7 +83,7 @@ export function PaymentsTable({ rows, onOpen }: { rows: PaymentListRow[]; onOpen
               <TableHead>{t("payments.paidTo")}</TableHead>
               <TableHead>{t("common.stores")}</TableHead>
               <TableHead>{t("payments.types")}</TableHead>
-              <TableHead>{t("payments.invoice")}</TableHead>
+              <TableHead>{t("payments.extras.attachmentsColumn")}</TableHead>
               <TableHead className="text-end">{t("common.total")}</TableHead>
             </TableRow>
           </TableHeader>

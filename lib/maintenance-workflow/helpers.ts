@@ -1,7 +1,8 @@
 /**
  * Small workflow facts the list and the ticket page share: whose turn it is,
  * whether an issue is finished, whether it is overdue, the "needs attention"
- * chips on the tickets list, and the paired status badge tones.
+ * chips on the tickets list. Status and priority colours live in
+ * components/maintenance-tickets/status-accent.ts (one source for every surface).
  */
 
 import type { IssueStatus, WhoseTurn } from "@/types/maintenance-system";
@@ -50,18 +51,3 @@ export const ATTENTION_CHIPS = [
   { id: "overdue", key: "tickets.attention.overdue", label: "Overdue", status: null },
 ] as const satisfies readonly { id: AttentionChip; key: string; label: string; status: IssueStatus | null }[];
 
-/**
- * Paired light/dark tone per status, for badges (always WITH text — never
- * colour alone). Tailwind palette pairs, as CLAUDE.md asks for status colours.
- */
-export const STATUS_TONE = {
-  new: "bg-sky-500/15 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300",
-  in_review: "bg-indigo-500/15 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300",
-  waiting_on_store: "bg-amber-500/15 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
-  inspection: "bg-cyan-500/15 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300",
-  waiting_approval: "bg-orange-500/15 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
-  scheduled: "bg-violet-500/15 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300",
-  work_done: "bg-teal-500/15 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300",
-  closed: "bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
-  cancelled: "bg-muted text-muted-foreground",
-} as const satisfies Record<IssueStatus, string>;

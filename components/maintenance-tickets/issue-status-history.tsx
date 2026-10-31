@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { ChevronDown, ChevronRight, User } from "lucide-react";
 import { formatTimestamp } from "@/lib/utils/date-display";
 import { StatusChip } from "./ticket-chips";
@@ -23,6 +24,7 @@ export function IssueStatusHistory({
 }: {
   changes: TicketIssueStatusChange[];
 }) {
+  const t = useTranslations("maintenanceSystem.tickets.issueHistory");
   const [open, setOpen] = useState(false);
 
   if (changes.length === 0) return null;
@@ -36,7 +38,7 @@ export function IssueStatusHistory({
         className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        What has happened to this issue ({changes.length})
+        {t("statusHistory", { count: changes.length })}
       </button>
       {open && (
         <div className="mt-2 space-y-1.5 border-s ps-4">

@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { storageService } from "@/lib/api/services/storage.service";
 import { isCancelled } from "@/lib/api/maintenance-tickets-errors";
 import { usePlaceLevels } from "@/lib/hooks/use-storage";
+import { LEVEL_SUGGESTIONS, parsePlaceValues } from "@/lib/storage/place-values";
 import { placeLabel } from "@/lib/storage/stock-forms";
 import { StorageEmptyState } from "./storage-shared";
 import type { StoragePlaceLevel, StoragePlaceValue } from "@/types/storage.types";
@@ -32,13 +34,10 @@ import type { StoragePlaceLevel, StoragePlaceValue } from "@/types/storage.types
  * so "C", "c" and "Shelf C" cannot become three shelves.
  *
  * Spots never split the count: quantities stay per (part, location).
+ *
+ * Low effort on purpose: a level and all its names are added in one go
+ * ("Zone" + "A, B, C", or a range "1-10"), and common level names are one tap.
  */
-
-/**
- * Separators for adding several values at once ("A, B, C" or one per line).
- * https://regex101.com/?flavor=javascript&regex=%5B%2C%5Cn%5D&flags=g&testString=A%2C%20B%0AC
- */
-const VALUE_SEPARATORS = /[,\n]/;
 
 type Pending = { kind: "level"; level: StoragePlaceLevel } | { kind: "value"; level: StoragePlaceLevel; value: StoragePlaceValue };
 
@@ -46,10 +45,13 @@ export function LocationPlaces({ locationId, locationName, canManage }: { locati
   const t = useTranslations("maintenanceSystem");
   const { levels, isLoading, error, refresh, setData } = usePlaceLevels(locationId);
   const [newLevel, setNewLevel] = useState("");
+  const [newLevelValues, setNewLevelValues] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
 
   const live = levels.filter((l) => !l.deletedAt);
+  const usedNames = new Set(live.map((l) => l.name.trim().toLowerCase()));
+  const suggestions = LEVEL_SUGGESTIONS.filter((name) => !usedNames.has(name.toLowerCase()));
   const example = placeLabel(
     live
       .map((l) => ({ level: l.name, value: (l.values ?? []).find((v) => !v.deletedAt)?.value ?? "" }))
@@ -67,11 +69,18 @@ export function LocationPlaces({ locationId, locationName, canManage }: { locati
   async function addLevel() {
     const name = newLevel.trim();
     if (!name) return;
+    if (usedNames.has(name.toLowerCase())) {
+      toast.error(t("storage.spotSetup.levelExists", { level: name }));
+      return;
+    }
     setBusy("new-level");
     try {
       const created = await storageService.createPlaceLevel(locationId, { name, sort_order: live.length });
-      setData((prev) => [...(prev ?? []), { ...created, values: created.values ?? [] }]);
+      const values = await createValues(locationId, created.id, parsePlaceValues(newLevelValues), 0, fail);
+      setData((prev) => [...(prev ?? []), { ...created, values: [...(created.values ?? []), ...values] }]);
       setNewLevel("");
+      setNewLevelValues("");
+      toast.success(t("storage.spotSetup.levelAdded", { level: name, count: values.length }));
     } catch (err) {
       fail(err);
     } finally {
@@ -149,23 +158,63 @@ export function LocationPlaces({ locationId, locationName, canManage }: { locati
 
       {canManage && (
         <form
-          className="flex items-center gap-2"
+          className="space-y-2 rounded-lg border border-dashed p-3"
           onSubmit={(e) => {
             e.preventDefault();
             void addLevel();
           }}
         >
-          <Input
-            value={newLevel}
-            onChange={(e) => setNewLevel(e.target.value)}
-            placeholder={live.length ? t("storage.places.nextLevelPlaceholder") : t("storage.places.firstLevelPlaceholder")}
-            aria-label={t("storage.places.addLevel")}
-            className="h-9 max-w-xs"
-          />
-          <Button type="submit" variant="outline" size="sm" className="h-9" disabled={!newLevel.trim() || busy === "new-level"}>
-            {busy === "new-level" ? <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <Plus className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />}
-            {t("storage.places.addLevel")}
-          </Button>
+          <p className="text-sm font-medium">{live.length ? t("storage.spotSetup.addAnotherLevel") : t("storage.spotSetup.addFirstLevel")}</p>
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_auto] sm:items-end">
+            <div className="space-y-1">
+              <Label htmlFor="new-level-name" className="text-xs text-muted-foreground">
+                {t("storage.places.levelName")}
+              </Label>
+              <Input
+                id="new-level-name"
+                value={newLevel}
+                onChange={(e) => setNewLevel(e.target.value)}
+                placeholder={live.length ? t("storage.places.nextLevelPlaceholder") : t("storage.places.firstLevelPlaceholder")}
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="new-level-values" className="text-xs text-muted-foreground">
+                {t("storage.spotSetup.itsNames")} <span className="font-normal">({t("common.optional")})</span>
+              </Label>
+              <Input
+                id="new-level-values"
+                value={newLevelValues}
+                onChange={(e) => setNewLevelValues(e.target.value)}
+                placeholder={t("storage.spotSetup.namesPlaceholder")}
+                className="h-9"
+              />
+            </div>
+            <Button type="submit" size="sm" className="h-9" disabled={!newLevel.trim() || busy === "new-level"}>
+              {busy === "new-level" ? (
+                <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <Plus className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              {t("storage.places.addLevel")}
+            </Button>
+          </div>
+          {suggestions.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-muted-foreground">{t("storage.spotSetup.suggestions")}</span>
+              {suggestions.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => setNewLevel(t(`storage.spotSetup.level.${name}`))}
+                  className="rounded-full border bg-background px-2 py-0.5 text-xs hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                >
+                  {t(`storage.spotSetup.level.${name}`)}
+                </button>
+              ))}
+            </div>
+          )}
+          <p className="text-[11px] text-muted-foreground">{t("storage.spotSetup.namesHelp")}</p>
         </form>
       )}
 
@@ -192,7 +241,7 @@ export function LocationPlaces({ locationId, locationName, canManage }: { locati
               }}
             >
               {busy === "delete" && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
-              {t("common.delete")}
+              {t("storage.places.remove")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -246,29 +295,16 @@ function LevelCard({
   }
 
   async function addValues() {
-    const known = new Set(values.map((v) => v.value.trim().toLowerCase()));
-    const wanted = [...new Set(newValues.split(VALUE_SEPARATORS).map((v) => v.trim()).filter(Boolean))].filter(
-      (v) => !known.has(v.toLowerCase()),
-    );
+    const wanted = parsePlaceValues(newValues, values.map((v) => v.value));
     if (!wanted.length) {
       setNewValues("");
       return;
     }
     setSaving(true);
-    const created: StoragePlaceValue[] = [];
-    try {
-      // One after another, so their order is the order they were typed in.
-      await wanted.reduce<Promise<void>>(async (previous, value, i) => {
-        await previous;
-        created.push(await storageService.createPlaceValue(locationId, level.id, { value, sort_order: values.length + i }));
-      }, Promise.resolve());
-      setNewValues("");
-    } catch (err) {
-      onError(err);
-    } finally {
-      if (created.length) onChanged({ ...level, values: [...(level.values ?? []), ...created] });
-      setSaving(false);
-    }
+    const created = await createValues(locationId, level.id, wanted, values.length, onError);
+    if (created.length) onChanged({ ...level, values: [...(level.values ?? []), ...created] });
+    if (created.length === wanted.length) setNewValues("");
+    setSaving(false);
   }
 
   return (
@@ -348,7 +384,7 @@ function LevelCard({
           <Input
             value={newValues}
             onChange={(e) => setNewValues(e.target.value)}
-            placeholder={t("storage.places.valuesPlaceholder", { level: level.name })}
+            placeholder={t("storage.spotSetup.moreNamesPlaceholder", { level: level.name })}
             aria-label={t("storage.places.addValues", { level: level.name })}
             className="h-8 max-w-xs text-sm"
           />
@@ -359,4 +395,28 @@ function LevelCard({
       )}
     </li>
   );
+}
+
+/**
+ * Declares `wanted` on one level, one after another so their order is the
+ * order they were typed in. Returns the ones created; the first failure stops
+ * the rest and is reported through `onError`.
+ */
+async function createValues(
+  locationId: number,
+  levelId: number,
+  wanted: readonly string[],
+  startOrder: number,
+  onError: (err: unknown) => void,
+): Promise<StoragePlaceValue[]> {
+  const created: StoragePlaceValue[] = [];
+  try {
+    await wanted.reduce<Promise<void>>(async (previous, value, i) => {
+      await previous;
+      created.push(await storageService.createPlaceValue(locationId, levelId, { value, sort_order: startOrder + i }));
+    }, Promise.resolve());
+  } catch (err) {
+    onError(err);
+  }
+  return created;
 }

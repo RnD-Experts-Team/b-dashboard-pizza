@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Hash, Info, MapPin, Package, Plus, Search, Warehouse } from "lucide-react";
+import { Hash, Info, Package, Plus, Search, Warehouse } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,7 @@ import { useStockTotals } from "@/lib/hooks/use-storage";
 import { formatMoney, formatQuantity } from "@/lib/maintenance/money";
 import { PART_UNITS, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
 import { partHint } from "@/lib/storage/stock-forms";
-import { PlacePickerDialog } from "./place-picker-dialog";
+import { PlacePickerDialog, SpotButton } from "./place-picker-dialog";
 import {
   PaginationBar,
   PlaceBreadcrumb,
@@ -46,7 +46,8 @@ const SEARCH_DEBOUNCE_MS = 250;
 const ALL = "__all__";
 
 interface SpotTarget {
-  balanceId: number;
+  balanceId: number | null;
+  partId: number;
   locationId: number;
   locationName: string;
   partName: string;
@@ -61,7 +62,14 @@ export interface StockTabProps {
   locations: readonly StorageLocation[];
   onOpenPart: (partId: number) => void;
   onAddPart?: () => void;
+  /** The empty list's one action: record what is already on the shelves. */
+  onRecordOpening?: () => void;
+  /** May say where a part sits (PUT stock-balances/{id}/place). */
   canSetSpot: boolean;
+  /** May add a missing Zone/Shelf name while setting a spot. */
+  canDeclareSpots: boolean;
+  /** Opens the Locations tab on a location, to lay out its spots. */
+  onSetUpSpots?: (locationId: number) => void;
   /** Bumped after any write so the list reloads. */
   revision: number;
 }
@@ -74,7 +82,10 @@ export function StockTab({
   locations,
   onOpenPart,
   onAddPart,
+  onRecordOpening,
   canSetSpot,
+  canDeclareSpots,
+  onSetUpSpots,
   revision,
 }: StockTabProps) {
   const t = useTranslations("maintenanceSystem");
@@ -183,6 +194,11 @@ export function StockTab({
               <Button variant="outline" size="sm" onClick={() => onFiltersChange({ q: null, loc: null })}>
                 {t("common.clearAll")}
               </Button>
+            ) : onRecordOpening ? (
+              <Button variant="outline" size="sm" onClick={onRecordOpening}>
+                <Plus className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                {t("stock.actions.opening_stock.label")}
+              </Button>
             ) : undefined
           }
         />
@@ -246,10 +262,11 @@ export function StockTab({
                               key={loc.storageLocationId}
                               loc={loc}
                               unit={unit}
-                              canSetSpot={canSetSpot && loc.stockBalanceId != null}
+                              canSetSpot={canSetSpot}
                               onSetSpot={() =>
                                 setSpot({
-                                  balanceId: loc.stockBalanceId as number,
+                                  balanceId: loc.stockBalanceId,
+                                  partId: row.partId,
                                   locationId: loc.storageLocationId,
                                   locationName: loc.storageLocation?.name ?? "",
                                   partName: name,
@@ -298,12 +315,14 @@ export function StockTab({
           open
           onOpenChange={(open) => !open && setSpot(null)}
           balanceId={spot.balanceId}
+          partId={spot.partId}
           locationId={spot.locationId}
           locationName={spot.locationName}
           partName={spot.partName}
           current={spot.current}
-          canManage={canSetSpot}
+          canManage={canDeclareSpots}
           onSaved={() => void refresh()}
+          onSetUp={onSetUpSpots}
         />
       )}
     </div>
@@ -321,29 +340,15 @@ function LocationLine({
   canSetSpot: boolean;
   onSetSpot: () => void;
 }) {
-  const t = useTranslations("maintenanceSystem");
+  const name = loc.storageLocation?.name ?? `#${loc.storageLocationId}`;
   return (
-    <li className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-      <span className="font-medium">{loc.storageLocation?.name ?? `#${loc.storageLocationId}`}</span>
+    <li className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="font-medium">{name}</span>
       <PlaceBreadcrumb place={loc.place} />
       <span className={cn("ms-auto tabular-nums", loc.onHand < 0 && signTone(loc.onHand))}>
         {formatQuantity(loc.onHand)} {unit}
       </span>
-      {canSetSpot && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSetSpot();
-          }}
-          aria-label={t("storage.spot.setFor", { location: loc.storageLocation?.name ?? "" })}
-        >
-          <MapPin className="h-3 w-3" aria-hidden="true" />
-        </Button>
-      )}
+      {canSetSpot && <SpotButton hasSpot={loc.place.length > 0} locationName={name} onClick={onSetSpot} />}
     </li>
   );
 }

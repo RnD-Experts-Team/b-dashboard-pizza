@@ -37,16 +37,21 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 import { isCancelled } from "@/lib/api/maintenance-tickets-errors";
-import { usePartsCatalog } from "@/lib/hooks/use-storage";
+import { usePartsCatalog, useStockTotals } from "@/lib/hooks/use-storage";
 import { useStockCount } from "@/lib/hooks/use-stock-count";
 import { formatMoney, formatQuantity } from "@/lib/maintenance/money";
 import { PART_UNITS, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
 import { partHint } from "@/lib/storage/stock-forms";
 import { partIdOf, type CountLineState, type CountLineView } from "@/lib/storage/stock-count";
 import { formatWireDateTime } from "@/lib/utils/date-display";
+import { useDockInsets, useFabClearance } from "@/components/maintenance-tickets/ticket/use-dock-insets";
 import { CountStatusBadge, countPlaceLabel } from "./counts-tab";
-import { StorageEmptyState, StorageErrorState, StorageSkeleton, TBL, TD, TH } from "./storage-shared";
+import { PlaceBreadcrumb, StorageEmptyState, StorageErrorState, StorageSkeleton, TBL, TD, TH } from "./storage-shared";
 import type { StockCountLine } from "@/types/maintenance-system";
+import type { StockPlaceLine } from "@/types/storage.types";
+
+/** Enough rows to know the spot of every part on one location's sheet. */
+const SPOT_LOOKUP_SIZE = 200;
 
 /**
  * The count sheet (`/dashboard/storage/counts/[id]`): type what is really on
@@ -95,6 +100,10 @@ export function CountSheet({ countId }: { countId: number }) {
   const [confirmApply, setConfirmApply] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [adding, setAdding] = useState<number | "">("");
+  // The totals bar stays above the phone's bottom nav and clear of the Debrief button.
+  const barRef = useRef<HTMLDivElement>(null);
+  const dock = useDockInsets(barRef, Boolean(sheet.count));
+  const fabRoom = useFabClearance(barRef, Boolean(sheet.count));
 
   const lines: StockCountLine[] = useMemo(() => count?.lines ?? [], [count]);
   const isDraft = count?.status === "draft";
@@ -110,6 +119,22 @@ export function CountSheet({ countId }: { countId: number }) {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [hasUnsavedChanges]);
+
+  // Where each part sits in this location, so the counter can walk to it.
+  const locationId = count?.storageLocationId ?? count?.storageLocation?.id ?? null;
+  const spotFilters = useMemo(
+    () => ({ storage_location_ids: locationId ? [locationId] : undefined, per_page: SPOT_LOOKUP_SIZE }),
+    [locationId],
+  );
+  const { rows: stockHere } = useStockTotals(spotFilters, Boolean(locationId && isDraft));
+  const spotOf = useMemo(() => {
+    const map = new Map<number, StockPlaceLine[]>();
+    stockHere.forEach((row) => {
+      const at = row.locations.find((l) => l.storageLocationId === locationId);
+      if (at?.place.length) map.set(row.partId, at.place);
+    });
+    return map;
+  }, [stockHere, locationId]);
 
   const onSheet = useMemo(() => new Set(lines.map(partIdOf)), [lines]);
   const addOptions = useMemo(
@@ -240,11 +265,11 @@ export function CountSheet({ countId }: { countId: number }) {
             <thead>
               <tr>
                 <th className={TH}>{t("storage.stock.part")}</th>
-                <th className={TH}>{t("storage.parts.unit")}</th>
+                <th className={cn(TH, "hidden sm:table-cell")}>{t("storage.parts.unit")}</th>
                 <th className={cn(TH, "text-end")}>{t("stock.expected")}</th>
                 <th className={cn(TH, "text-end")}>{t("stock.counted")}</th>
-                <th className={TH}>{t("stock.difference")}</th>
-                <th className={cn(TH, "text-end")}>{t("stock.value")}</th>
+                <th className={cn(TH, "hidden sm:table-cell")}>{t("stock.difference")}</th>
+                <th className={cn(TH, "hidden text-end sm:table-cell")}>{t("stock.value")}</th>
               </tr>
             </thead>
             <tbody>
@@ -254,8 +279,20 @@ export function CountSheet({ countId }: { countId: number }) {
                 const unit = vocabText(t, vocabEntry(PART_UNITS, line.part?.unit ?? "each"));
                 return (
                   <tr key={line.id} className={cn(view.state === "not_counted" && isDraft && "bg-muted/20")}>
-                    <td className={cn(TD, "align-middle text-sm font-medium")}>{name}</td>
-                    <td className={cn(TD, "align-middle text-muted-foreground")}>{unit}</td>
+                    <td className={cn(TD, "align-middle")}>
+                      <span className="text-sm font-medium">{name}</span>
+                      {spotOf.has(partIdOf(line)) && (
+                        <div>
+                          <PlaceBreadcrumb place={spotOf.get(partIdOf(line)) ?? []} className="text-[11px] text-muted-foreground" />
+                        </div>
+                      )}
+                      {/* Phone: the unit and the difference sit under the name (their columns are hidden). */}
+                      <div className="mt-0.5 space-y-0.5 sm:hidden">
+                        <p className="text-[11px] text-muted-foreground">{unit}</p>
+                        {view.state !== "not_counted" && <DiffCell view={view} />}
+                      </div>
+                    </td>
+                    <td className={cn(TD, "hidden align-middle text-muted-foreground sm:table-cell")}>{unit}</td>
                     <td className={cn(TD, "align-middle text-end text-sm tabular-nums")}>{formatQuantity(view.expected)}</td>
                     <td className={cn(TD, "align-middle text-end")}>
                       {isDraft ? (
@@ -279,17 +316,17 @@ export function CountSheet({ countId }: { countId: number }) {
                           }}
                           onFocus={(e) => e.target.select()}
                           aria-label={t("storage.count.countedFor", { part: name })}
-                          className="ms-auto h-10 w-28 text-end text-base font-semibold tabular-nums"
+                          className="ms-auto h-10 w-20 text-end text-base font-semibold tabular-nums sm:w-28"
                           disabled={busy}
                         />
                       ) : (
                         <span className="text-sm font-semibold tabular-nums">{view.counted == null ? "—" : formatQuantity(view.counted)}</span>
                       )}
                     </td>
-                    <td className={cn(TD, "align-middle")}>
+                    <td className={cn(TD, "hidden align-middle sm:table-cell")}>
                       <DiffCell view={view} />
                     </td>
-                    <td className={cn(TD, "align-middle text-end tabular-nums", DIFF_STYLE[view.state].tone)}>
+                    <td className={cn(TD, "hidden align-middle text-end tabular-nums sm:table-cell", DIFF_STYLE[view.state].tone)}>
                       {view.valueDifference == null || view.valueDifference === 0 ? "—" : formatMoney(view.valueDifference)}
                     </td>
                   </tr>
@@ -322,8 +359,12 @@ export function CountSheet({ countId }: { countId: number }) {
       )}
 
       {/* Sticky totals bar */}
-      <div className="sticky bottom-0 z-10 -mx-4 border-t bg-background/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur md:-mx-6 md:px-6">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+      <div
+        ref={barRef}
+        style={{ bottom: dock.bottom, marginBottom: dock.marginBottom }}
+        className="sticky z-10 -mx-4 border-t bg-background/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur transition-[bottom] duration-300 ease-out motion-reduce:transition-none md:-mx-6 md:px-6"
+      >
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm" style={fabRoom ? { paddingInlineEnd: fabRoom } : undefined}>
           <span className="tabular-nums">
             {t("stock.countedProgress", { counted: totals.countedLines, total: totals.totalLines })}
           </span>

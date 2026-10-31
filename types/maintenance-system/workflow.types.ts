@@ -168,6 +168,9 @@ export interface IssueSchedule {
   expectedCompletionDate: IsoDate | null;
   tripId: number | null;
   mistaken: boolean;
+  /** Set when the issue was closed or cancelled before the booking's day: it no longer stands. */
+  endedAt?: IsoDateTime | null;
+  endedReason?: string | null;
   delays: ScheduleDelay[];
 }
 

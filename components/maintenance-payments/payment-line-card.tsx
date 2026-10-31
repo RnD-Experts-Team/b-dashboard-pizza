@@ -48,6 +48,7 @@ import { Field, fieldId } from "./field";
 import { InspectionPicker } from "./inspection-picker";
 import { LINE_TYPE_ICONS } from "./line-type-badges";
 import { MultiCheckSelect } from "./multi-check-select";
+import { LineNotesFiles } from "./notes-files-editor";
 import { AddSupplierInline } from "./paid-to-picker";
 import { SessionChecklist, type SessionOption } from "./session-checklist";
 import { usePlaceLevels, useStoreIssues, type StoreOption } from "./use-payment-lookups";
@@ -115,10 +116,14 @@ export function PaymentLineCard({
 
   /* ── Type ─────────────────────────────────────────────────────────── */
 
+  /** The new type keeps the same line (its uid) and what still applies — see changeLineType. */
   const onTypeChange = (type: PaymentLineType) => {
     const rate = type === "hourly" && isTechnician ? lookups.paidTo?.hourlyRate ?? "" : "";
-    onChange(changeLineType(line, type, rate), "type");
-    setShowMore(false);
+    const next = changeLineType(line, type, rate);
+    onChange(next, "type");
+    setShowMore(Boolean(next.description) && type !== "other");
+    // From parts into storage the store is chosen again.
+    if (intoStorage) setOtherMode(false);
   };
 
   /* ── Store / place ────────────────────────────────────────────────── */
@@ -156,7 +161,10 @@ export function PaymentLineCard({
             return;
           }
           setOtherMode(false);
-          patch({ storeId: v == null ? null : Number(v), otherStore: "", ticketIssueIds: [] }, "storeId");
+          // Choosing the store for the first time keeps the tickets already
+          // linked (e.g. from "Pay this"); switching stores starts over.
+          const firstPick = (line.storeId == null || line.storeId === "") && !line.otherStore;
+          patch({ storeId: v == null ? null : Number(v), otherStore: "", ticketIssueIds: firstPick ? line.ticketIssueIds : [] }, "storeId");
         }}
         placeholder={t("payments.storePlaceholder")}
         searchPlaceholder={t("payments.searchStores")}
@@ -410,6 +418,34 @@ export function PaymentLineCard({
             {storeField}
             {moneyInput("amount", t("common.amount"), { required: true })}
             <div className="sm:col-span-2">{ticketsField}</div>
+            {isTechnician && (
+              <PaysBackField
+                line={line}
+                purchases={lookups.purchases}
+                lockedIds={purchasesOnOtherLines}
+                id={idOf("technicianPurchaseIds")}
+                error={err("technicianPurchaseIds")}
+                onChange={(ids) => {
+                  // Ticking what he bought fills the amount and the description
+                  // when they were empty (or still what an earlier tick filled in).
+                  const sumOf = (list: number[]) =>
+                    lookups.purchases.filter((p) => list.includes(p.id)).reduce((sum, p) => sum + (parseDecimal(p.totalCost) ?? 0), 0);
+                  const descOf = (list: number[]) =>
+                    lookups.purchases.filter((p) => list.includes(p.id)).map((p) => p.description).join(", ");
+                  const before = line.technicianPurchaseIds;
+                  const amountWasAuto = !line.amount.trim() || (before.length > 0 && parseDecimal(line.amount) === roundTo2(sumOf(before)));
+                  const descWasAuto = !line.description.trim() || (before.length > 0 && line.description === descOf(before));
+                  patch(
+                    {
+                      technicianPurchaseIds: ids,
+                      amount: amountWasAuto ? (ids.length ? roundTo2(sumOf(ids)).toFixed(2) : "") : line.amount,
+                      description: descWasAuto ? descOf(ids) : line.description,
+                    },
+                    "technicianPurchaseIds",
+                  );
+                }}
+              />
+            )}
           </>
         )}
 
@@ -485,6 +521,16 @@ export function PaymentLineCard({
             )}
           </div>
         )}
+      </div>
+
+      {/* The line's own notes and attachments, collapsed until wanted. */}
+      <div className="mt-3">
+        <LineNotesFiles
+          index={index}
+          value={line.extras}
+          errors={errors.fields}
+          onChange={(extras) => onChange({ ...line, extras }, "extras")}
+        />
       </div>
     </div>
   );
@@ -718,31 +764,15 @@ function PartsFields({
           </div>
         </Field>
       )}
-      {isTechnician && (purchases.length > 0 || line.technicianPurchaseIds.length > 0) && (
-        <Field
-          className="sm:col-span-2"
-          htmlFor={idOf("technicianPurchaseIds")}
-          label={t("payments.paysBack")}
+      {isTechnician && (
+        <PaysBackField
+          line={line}
+          purchases={purchases}
+          lockedIds={purchasesOnOtherLines}
+          id={idOf("technicianPurchaseIds")}
           error={err("technicianPurchaseIds")}
-          help={t("payments.paysBackHelp")}
-        >
-          <PurchaseChecklist
-            id={idOf("technicianPurchaseIds")}
-            purchases={purchases}
-            selected={line.technicianPurchaseIds}
-            lockedIds={purchasesOnOtherLines}
-            onToggle={(pid) =>
-              patch(
-                {
-                  technicianPurchaseIds: line.technicianPurchaseIds.includes(pid)
-                    ? line.technicianPurchaseIds.filter((x) => x !== pid)
-                    : [...line.technicianPurchaseIds, pid],
-                },
-                "technicianPurchaseIds",
-              )
-            }
-          />
-        </Field>
+          onChange={(ids) => patch({ technicianPurchaseIds: ids }, "technicianPurchaseIds")}
+        />
       )}
     </>
   );
@@ -846,6 +876,45 @@ function StorageSpotFields({
 }
 
 /* ── Technician purchases paid back by this line ────────────────────── */
+
+const roundTo2 = (n: number) => Math.round(n * 100) / 100;
+
+/** "Pays back": the technician's unpaid purchases this line repays (parts and Other lines). */
+function PaysBackField({
+  line,
+  purchases,
+  lockedIds,
+  id,
+  error,
+  onChange,
+}: {
+  line: PaymentLineDraft;
+  purchases: TechnicianPurchase[];
+  lockedIds: number[];
+  id: string;
+  error?: string;
+  onChange: (ids: number[]) => void;
+}) {
+  const t = useTranslations("maintenanceSystem");
+  if (purchases.length === 0 && line.technicianPurchaseIds.length === 0) return null;
+  return (
+    <Field className="sm:col-span-2" htmlFor={id} label={t("payments.paysBack")} error={error} help={t("payments.paysBackHelp")}>
+      <PurchaseChecklist
+        id={id}
+        purchases={purchases}
+        selected={line.technicianPurchaseIds}
+        lockedIds={lockedIds}
+        onToggle={(pid) =>
+          onChange(
+            line.technicianPurchaseIds.includes(pid)
+              ? line.technicianPurchaseIds.filter((x) => x !== pid)
+              : [...line.technicianPurchaseIds, pid],
+          )
+        }
+      />
+    </Field>
+  );
+}
 
 function PurchaseChecklist({
   id,

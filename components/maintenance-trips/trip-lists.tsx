@@ -244,9 +244,12 @@ export function HistoryList({
 }) {
   const t = useTranslations("maintenanceSystem");
   const [page, setPage] = useState(1);
+  const [today] = useState(todayLocal);
   const [searchText, setSearchText] = useState(filters.search);
   const { technicians } = useTechnicians({ perPage: TECH_FILTER_PAGE_SIZE });
+  // History = past days (and closed trips); today's and future open trips are under "Today & upcoming".
   const query: TripFilters = {
+    historyBefore: today,
     technicianId: filters.technicianId ?? undefined,
     from: filters.from || undefined,
     to: filters.to || undefined,
@@ -330,8 +333,40 @@ export function HistoryList({
       {error && !trips.length && <ListError onRetry={() => void refresh()} />}
       {!isLoading && !error && !trips.length && <ListEmpty icon={<Route />} text={t("trips.list.noHistory")} />}
 
+      {/* Phone: one card per trip, so status and paid time are never scrolled off. */}
       {!!trips.length && (
-        <div className="overflow-x-auto rounded-md border">
+        <div className="space-y-1.5 sm:hidden">
+          {trips.map((trip) => {
+            const jobs = jobCounts(trip);
+            const places = placesOf(trip, t("common.otherStore"));
+            return (
+              <button
+                key={trip.id}
+                type="button"
+                onClick={() => onOpen(trip.id)}
+                className={cn(
+                  "w-full space-y-1 rounded-md border bg-card px-3 py-2.5 text-start text-sm transition-colors hover:bg-muted/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+                  trip.mistaken && "opacity-60",
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  <span className={cn("min-w-0 flex-1 truncate font-medium", trip.mistaken && "line-through")}>{trip.technician?.name}</span>
+                  <TripStatusBadge status={trip.status} />
+                </span>
+                <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground tabular-nums">
+                  <span>{formatDateOnly(trip.plannedDate)}</span>
+                  <span>{formatMinutes(trip.totals.paidMinutes)}</span>
+                  <span>{t("trips.drawer.jobsValue", { done: jobs.done, total: jobs.total })}</span>
+                </span>
+                {places && <span className="block truncate text-xs text-muted-foreground">{places}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {!!trips.length && (
+        <div className="hidden overflow-x-auto rounded-md border sm:block">
           <Table>
             <TableHeader>
               <TableRow>

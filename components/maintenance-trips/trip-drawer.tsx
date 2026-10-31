@@ -78,7 +78,7 @@ export function TripDrawer({
         {tripId != null ? (
           <DrawerBody key={tripId} tripId={tripId} issuedToken={issuedToken} onLinkIssued={onLinkIssued} onChanged={onChanged} />
         ) : (
-          <SheetHeader>
+          <SheetHeader className="px-5 pt-6">
             <SheetTitle>{t("vocab.terms.trip.label")}</SheetTitle>
           </SheetHeader>
         )}
@@ -90,7 +90,7 @@ export function TripDrawer({
 function DrawerSkeleton() {
   const t = useTranslations("maintenanceSystem");
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-4 px-5 pt-6 pb-4">
       <SheetTitle className="sr-only">{t("vocab.terms.trip.label")}</SheetTitle>
       <Skeleton className="h-6 w-2/3" />
       <Skeleton className="h-4 w-1/3" />
@@ -177,7 +177,7 @@ function DrawerBody({
   return (
     <>
       <DrawerHeader trip={trip} />
-      <div className="flex-1 space-y-5 overflow-y-auto px-4 pb-6">
+      <div className="flex-1 space-y-6 overflow-y-auto px-5 pt-5 pb-6">
         <LinkSection
           trip={trip}
           issuedToken={issuedToken}
@@ -196,7 +196,7 @@ function DrawerBody({
         <FilesSection trip={trip} />
         <AuditSection trip={trip} />
       </div>
-      <SheetFooter className="flex-row flex-wrap items-center justify-end gap-2 border-t p-3">
+      <SheetFooter className="flex-row flex-wrap items-center justify-end gap-2 border-t px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         {!trip.mistaken && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -264,7 +264,8 @@ function DrawerHeader({ trip }: { trip: Trip }) {
   const t = useTranslations("maintenanceSystem");
   const state = officeTripState(trip);
   return (
-    <SheetHeader className="border-b pe-12">
+    // pt-6 (+ the notch on phones) clears the close button; pe-12 keeps the badges off it.
+    <SheetHeader className="gap-2 border-b px-5 pt-[max(1.5rem,env(safe-area-inset-top))] pb-4 pe-12">
       <div className="flex flex-wrap items-center gap-2">
         <TripStatusBadge status={trip.status} />
         {trip.status === "open" && <TripStateBadge state={state} />}
@@ -303,7 +304,8 @@ function LinkSection({
 }) {
   const t = useTranslations("maintenanceSystem");
   const locale = useLocale();
-  const url = issuedToken ? tripLinkUrl(issuedToken, locale) : null;
+  // A link that no longer works (trip closed, link expired) is not offered for copying.
+  const url = issuedToken && trip.link.active ? tripLinkUrl(issuedToken, locale) : null;
   const shareText = url
     ? tripShareText({
         link: url,

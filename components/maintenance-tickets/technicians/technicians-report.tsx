@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { BarChart3, Banknote, Clock, HardHat, MapPin, Search, Star, Users, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -61,6 +62,8 @@ export function TechniciansReport({
   error: string | null;
   rangeLabel: string;
 }) {
+  const tv = useTranslations("maintenanceSystem");
+  const tr = useTranslations("maintenanceSystem.technicians.report");
   const [query, setQuery] = useState("");
   const [showDeleted, setShowDeleted] = useState(false);
 
@@ -115,17 +118,17 @@ export function TechniciansReport({
 
       {data && (
         <div className="grid gap-6 @4xl:grid-cols-2">
-          <AnalyticsCard center icon={Banknote} title="Paid by technician" description={`${rangeLabel}, from the payments.`}>
+          <AnalyticsCard center icon={Banknote} title={tr("paidByTechnician")} description={tr("fromPayments", { range: rangeLabel })}>
             <AnalyticsBarChart
-              title="Paid by technician"
+              title={tr("paidByTechnician")}
               rows={active.filter((t) => Number(t.paid) !== 0).map((t) => ({ label: t.name, value: Number(t.paid) }))}
               valueLabel="paid"
               format={moneyFormat}
             />
           </AnalyticsCard>
-          <AnalyticsCard center icon={BarChart3} title="Hours by technician" description="Work, travel and parts runs: clocked sessions on trips.">
+          <AnalyticsCard center icon={BarChart3} title={tr("hoursByTechnician")} description={tr("hoursByTechnicianDescription")}>
             <AnalyticsBarChart
-              title="Paid hours by technician"
+              title={tr("paidHoursByTechnician")}
               rows={active.filter((t) => paidHours(t.hours) > 0).map((t) => ({ label: t.name, value: paidHours(t.hours) }))}
               valueLabel="hours"
               format={hoursText}
@@ -141,10 +144,10 @@ export function TechniciansReport({
         unit="technicians"
         description={
           <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <span>Most paid first. Open one to see their pay, work, ratings and coverage.</span>
+            <span>{tr("listDescription")}</span>
             <span className="relative">
               <Search className="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name, category, location…" className="h-8 w-56 ps-8" aria-label="Find a technician" />
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={tr("searchPlaceholder")} className="h-8 w-56 ps-8" aria-label={tv("technicians.searchLabel")} />
             </span>
             <span className="flex items-center gap-2">
               <Switch id="show-deleted-technicians" checked={showDeleted} onCheckedChange={setShowDeleted} />

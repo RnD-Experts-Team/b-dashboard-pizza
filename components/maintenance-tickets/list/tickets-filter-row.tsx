@@ -74,8 +74,10 @@ export function TicketsFilterRow({
         onChange={(q) => set({ q: q || undefined })}
         isSearching={isSearching}
         disabled={disabled}
-        className="w-full sm:w-64"
+        className="w-full sm:w-auto sm:min-w-72 sm:max-w-sm sm:flex-1"
       />
+      {/* On a phone the filters are one row that scrolls sideways, so the list starts on the first screen. */}
+      <div className="-mx-4 flex w-[calc(100%+2rem)] items-center gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:contents [&>*]:shrink-0">
       <FilterMulti<IssueStatus>
         label={t("common.status")}
         allLabel={t("tickets.list.all")}
@@ -147,6 +149,7 @@ export function TicketsFilterRow({
           {t("common.clearAll")}
         </Button>
       ) : null}
+      </div>
     </div>
   );
 }

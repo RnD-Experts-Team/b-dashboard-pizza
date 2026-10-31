@@ -22,8 +22,10 @@ import type { StockActionId } from "@/lib/storage/stock-actions";
 import { formatTimestamp, formatWireDateTime } from "@/lib/utils/date-display";
 import { PartFormDialog } from "./part-form-dialog";
 import { RecordStockMenu } from "./record-stock-menu";
+import { PlacePickerDialog, SpotButton } from "./place-picker-dialog";
 import { PlaceBreadcrumb, TBL, TD, TH, signTone } from "./storage-shared";
 import type { Part, PartSerialUnit } from "@/types/maintenance-system";
+import type { PartStockLocation } from "@/types/storage.types";
 
 /**
  * One part: its details (editable), where it is and how many, its serial
@@ -39,6 +41,14 @@ export interface PartSheetProps {
   canEdit: boolean;
   canRecordMovements: boolean;
   canRecordPayments: boolean;
+  /** May say where it sits at a location (PUT stock-balances/{id}/place). */
+  canSetSpot: boolean;
+  /** May add a missing Zone/Shelf name while doing so. */
+  canDeclareSpots: boolean;
+  /** Opens the Locations tab on a location, to lay out its spots. */
+  onSetUpSpots?: (locationId: number) => void;
+  /** A spot was saved: the stock list reloads. */
+  onStockChanged: () => void;
   revision: number;
 }
 
@@ -58,6 +68,10 @@ export function PartSheet({
   canEdit,
   canRecordMovements,
   canRecordPayments,
+  canSetSpot,
+  canDeclareSpots,
+  onSetUpSpots,
+  onStockChanged,
   revision,
 }: PartSheetProps) {
   const t = useTranslations("maintenanceSystem");
@@ -73,7 +87,7 @@ export function PartSheet({
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
         {partId == null ? null : (
           <>
-            <SheetHeader className="space-y-1 pe-8">
+            <SheetHeader className="space-y-1 px-5 pt-6 pe-12">
               <SheetTitle className="font-heading text-lg font-semibold">{part?.name ?? `#${partId}`}</SheetTitle>
               <SheetDescription className="flex flex-wrap items-center gap-1.5">
                 {part && partHint(part) && <span>{partHint(part)}</span>}
@@ -102,9 +116,18 @@ export function PartSheet({
               </div>
             </SheetHeader>
 
-            <div className="space-y-6 px-4 pb-6">
+            <div className="space-y-6 px-5 pb-6">
               {part && <PartDetails part={part} />}
-              <StockByLocation partId={partId} unit={unit} revision={revision} />
+              <StockByLocation
+                partId={partId}
+                partName={part?.name ?? `#${partId}`}
+                unit={unit}
+                revision={revision}
+                canSetSpot={canSetSpot}
+                canDeclareSpots={canDeclareSpots}
+                onSetUpSpots={onSetUpSpots}
+                onChanged={onStockChanged}
+              />
               {part?.trackSerials && <SerialUnits partId={partId} canEdit={canEdit} revision={revision} />}
               <PriceHistory partId={partId} unit={unit} revision={revision} />
             </div>
@@ -163,9 +186,29 @@ function PartDetails({ part }: { part: Part }) {
   );
 }
 
-function StockByLocation({ partId, unit, revision }: { partId: number; unit: string; revision: number }) {
+function StockByLocation({
+  partId,
+  partName,
+  unit,
+  revision,
+  canSetSpot,
+  canDeclareSpots,
+  onSetUpSpots,
+  onChanged,
+}: {
+  partId: number;
+  partName: string;
+  unit: string;
+  revision: number;
+  canSetSpot: boolean;
+  canDeclareSpots: boolean;
+  onSetUpSpots?: (locationId: number) => void;
+  onChanged: () => void;
+}) {
   const t = useTranslations("maintenanceSystem");
   const { total, locations, isLoading, error } = usePartStockAt(partId, revision);
+  const [spotAt, setSpotAt] = useState<PartStockLocation | null>(null);
+
   return (
     <Section title={t("storage.parts.whereItIs")}>
       {isLoading && !total && <Skeleton className="h-16 w-full" />}
@@ -185,8 +228,15 @@ function StockByLocation({ partId, unit, revision }: { partId: number; unit: str
                 <tr key={loc.storageLocationId}>
                   <td className={TD}>
                     <span className="font-medium">{loc.storageLocation?.name}</span>
-                    <div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2">
                       <PlaceBreadcrumb place={loc.place} />
+                      {canSetSpot && (
+                        <SpotButton
+                          hasSpot={loc.place.length > 0}
+                          locationName={loc.storageLocation?.name ?? ""}
+                          onClick={() => setSpotAt(loc)}
+                        />
+                      )}
                     </div>
                   </td>
                   <td className={cn(TD, "text-end tabular-nums", signTone(loc.onHand < 0 ? loc.onHand : 0))}>
@@ -214,6 +264,21 @@ function StockByLocation({ partId, unit, revision }: { partId: number; unit: str
             )}
           </table>
         </div>
+      )}
+      {spotAt && (
+        <PlacePickerDialog
+          open
+          onOpenChange={(open) => !open && setSpotAt(null)}
+          balanceId={spotAt.stockBalanceId}
+          partId={partId}
+          locationId={spotAt.storageLocationId}
+          locationName={spotAt.storageLocation?.name ?? ""}
+          partName={partName}
+          current={spotAt.place}
+          canManage={canDeclareSpots}
+          onSaved={onChanged}
+          onSetUp={onSetUpSpots}
+        />
       )}
     </Section>
   );

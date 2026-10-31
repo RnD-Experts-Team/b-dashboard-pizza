@@ -123,6 +123,9 @@ export interface PaymentLine {
   /** inspection */
   issueInspectionId: number | null;
   ticketIssues: IssueRef[];
+  /** The line's own notes and files ([] when none). */
+  notes: TicketNote[];
+  attachments: TicketAttachment[];
 }
 
 export interface PaymentRevision {
@@ -176,6 +179,12 @@ export interface PaymentLineInput {
   technicianPurchaseIds?: number[];
   miles?: string | number | null;
   issueInspectionId?: number | null;
+  /** New notes and files on this line (files go multipart: `lines[i][files][]`). */
+  notes?: string[];
+  files?: File[];
+  /** Edit only: the saved notes / files of the replaced lines this line keeps. */
+  keepNoteIds?: number[];
+  keepAttachmentIds?: number[];
 }
 
 export interface PaymentInput {
@@ -183,16 +192,23 @@ export interface PaymentInput {
   /** Exactly one of technicianId / supplierId. */
   technicianId?: number | null;
   supplierId?: number | null;
+  /** Optional; the dialog no longer asks for these, an edit sends back what was saved. */
   method?: PaymentMethod | null;
   reference?: string | null;
   invoiceNumber?: string | null;
+  /** Older single note; prefer `notes`. */
   note?: string | null;
+  /** New notes and files on the payment, as many as wanted. */
+  notes?: string[];
   files?: File[];
   lines: PaymentLineInput[];
 }
 
 export interface EditPaymentInput extends PaymentInput {
   expectedUpdatedAt: IsoDateTime;
+  /** The payment's own saved notes / files to take off. */
+  removeNoteIds?: number[];
+  removeAttachmentIds?: number[];
 }
 
 /* ── Unpaid work ─────────────────────────────────────────────────────────── */

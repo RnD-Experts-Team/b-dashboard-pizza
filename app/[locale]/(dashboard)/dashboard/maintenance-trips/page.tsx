@@ -2,6 +2,7 @@
 
 import { Suspense } from "react";
 import { PizzaLoader } from "@/components/shared/pizza-loader";
+import { OfficeOnly } from "@/components/maintenance-tickets/office-only";
 import { TripsPage } from "@/components/maintenance-trips";
 
 /**
@@ -11,7 +12,9 @@ import { TripsPage } from "@/components/maintenance-trips";
 export default function MaintenanceTripsPage() {
   return (
     <Suspense fallback={<PizzaLoader fullScreen={false} />}>
-      <TripsPage />
+      <OfficeOnly path="/trips">
+        <TripsPage />
+      </OfficeOnly>
     </Suspense>
   );
 }

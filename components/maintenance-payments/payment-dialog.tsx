@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { AlertCircle, ChevronDown, ChevronUp, Loader2, Paperclip, Plus, X } from "lucide-react";
+import { AlertCircle, Loader2, Plus } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,9 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
 import { useParts, useSuppliers, useTechnicians } from "@/lib/hooks/use-maintenance-catalog";
 import { maintenancePaymentsService, usePayment, useTechnicianPurchases } from "@/lib/hooks/use-maintenance-payments";
 import { useMaintenanceMutation } from "@/lib/hooks/use-maintenance-resource";
@@ -50,9 +48,9 @@ import {
 } from "@/lib/maintenance-payments/form-state";
 import { changePaidTo, draftFromPrefill, draftSignature, hydratePaidTo, type PaymentPrefill } from "@/lib/maintenance-payments/prefill";
 import { formatMoney } from "@/lib/maintenance/money";
-import { PAYMENT_METHODS, vocabOptions, vocabText } from "@/lib/maintenance/vocabulary";
-import type { Part, Payment, PaymentMethod, Supplier, TechnicianPurchase } from "@/types/maintenance-system";
+import type { Part, Payment, Supplier, TechnicianPurchase } from "@/types/maintenance-system";
 import { Field, fieldId } from "./field";
+import { NotesFilesEditor } from "./notes-files-editor";
 import { PaidToPicker, paidToChoiceFrom } from "./paid-to-picker";
 import { PaymentLineCard, type LineLookups } from "./payment-line-card";
 import type { SessionOption } from "./session-checklist";
@@ -71,15 +69,17 @@ export interface PaymentDialogProps {
 
 /** Enough for the whole catalog in one picker. */
 const CATALOG_PAGE = 200;
-const NO_METHOD = "__none__";
 const ERROR_SHAPE = { rootFields: [...PAYMENT_ROOT_FIELDS], itemArrays: ["lines"] } as const;
-const ACCEPT_FILES = "image/*,application/pdf";
+/** A line's notes / files errors, cleared as the person changes them. */
+const LINE_EXTRAS_FIELDS = ["files", "notes", "keepNoteIds", "keepAttachmentIds"];
 
 /**
  * Record a payment / Edit a payment (docs/MAINTENANCE-UI.md §5): one
- * scrolling form, no wizard. Paid to · date · how we paid · reference ·
- * invoice # · invoice file, then the lines (each a compact card whose Type
- * reveals only its fields), and a sticky running total with Save.
+ * scrolling form, no wizard, in the order it is filled — paid to, date, the
+ * lines (each a compact card whose Type reveals only its fields, with its own
+ * notes and attachments folded under it), then the payment's attachments and
+ * notes — and a sticky running total with Save. How we paid, reference and
+ * invoice # are not asked for (they looked required); an edit keeps them.
  *
  * Mounted only while open, so every open starts from the prefill (or the
  * saved payment) again.
@@ -124,10 +124,7 @@ function PaymentDialogBody({ onOpenChange, paymentId, prefill, onSaved }: Paymen
 
   const [state, setState] = useState<PaymentDraft | null>(null);
   const [errors, setErrors] = useState<FormErrors>(EMPTY_FORM_ERRORS);
-  const [showMore, setShowMore] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
-  /** Remounts the file input after each pick so the same file can be picked again. */
-  const [fileInputKey, setFileInputKey] = useState(0);
 
   const known = useCallback(
     (d: PaymentDraft) => hydratePaidTo(d, paidToChoiceFrom(d.paidTo, techniciansRes.technicians, suppliers)),
@@ -268,12 +265,12 @@ function PaymentDialogBody({ onOpenChange, paymentId, prefill, onSaved }: Paymen
   const onLineChange = (index: number) => (next: PaymentLineDraft, touched?: string) => {
     update((d) => ({ ...d, lines: d.lines.map((l) => (l.uid === next.uid ? next : l)) }));
     if (touched) {
-      const extra = touched === "storeId" ? ["otherStore", "storageLocationId"] : [];
+      const extra = touched === "storeId" ? ["otherStore", "storageLocationId"] : touched === "extras" ? LINE_EXTRAS_FIELDS : [];
       clearError(...[touched, ...extra].map((f) => lineErrorKey(index, f)));
     }
   };
 
-  const methodOptions = vocabOptions(PAYMENT_METHODS);
+  const lineCount = draft?.lines.length ?? 0;
 
   return (
     <>
@@ -328,26 +325,24 @@ function PaymentDialogBody({ onOpenChange, paymentId, prefill, onSaved }: Paymen
                   </p>
                 )}
 
-                {/* 1. Paid to */}
-                <Field htmlFor={fieldId("technician_id")} label={t("payments.paidTo")} required error={paidToError} help={t("payments.paidToHelp")}>
-                  <PaidToPicker
-                    id={fieldId("technician_id")}
-                    technicians={techniciansRes.technicians}
-                    suppliers={suppliers}
-                    value={draft.paidTo}
-                    fallbackName={payment?.paidTo.name}
-                    loading={techniciansRes.isLoading || suppliersRes.isLoading}
-                    invalid={Boolean(paidToError)}
-                    onChange={(choice) => {
-                      update((d) => changePaidTo(d, choice));
-                      clearError("technician_id", "supplier_id");
-                    }}
-                    onSupplierCreated={(s) => setCreatedSuppliers((xs) => [...xs, s])}
-                  />
-                </Field>
-
-                {/* 2. Date · how we paid · reference · invoice # · invoice file */}
-                <div className="grid gap-3 sm:grid-cols-2">
+                {/* 1. Who was paid, and when */}
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_11rem]">
+                  <Field htmlFor={fieldId("technician_id")} label={t("payments.paidTo")} required error={paidToError} help={t("payments.paidToHelp")}>
+                    <PaidToPicker
+                      id={fieldId("technician_id")}
+                      technicians={techniciansRes.technicians}
+                      suppliers={suppliers}
+                      value={draft.paidTo}
+                      fallbackName={payment?.paidTo.name}
+                      loading={techniciansRes.isLoading || suppliersRes.isLoading}
+                      invalid={Boolean(paidToError)}
+                      onChange={(choice) => {
+                        update((d) => changePaidTo(d, choice));
+                        clearError("technician_id", "supplier_id");
+                      }}
+                      onSupplierCreated={(s) => setCreatedSuppliers((xs) => [...xs, s])}
+                    />
+                  </Field>
                   <Field htmlFor={fieldId("paid_at")} label={t("common.date")} required error={errors.fields.paid_at}>
                     <Input
                       id={fieldId("paid_at")}
@@ -363,126 +358,9 @@ function PaymentDialogBody({ onOpenChange, paymentId, prefill, onSaved }: Paymen
                       aria-invalid={Boolean(errors.fields.paid_at) || undefined}
                     />
                   </Field>
-                  <Field htmlFor={fieldId("method")} label={t("payments.howWePaid")} error={errors.fields.method}>
-                    <Select
-                      value={draft.method ?? NO_METHOD}
-                      onValueChange={(v) => {
-                        const method = v === NO_METHOD ? null : (v as PaymentMethod);
-                        update((d) => ({ ...d, method }));
-                        clearError("method");
-                      }}
-                    >
-                      <SelectTrigger id={fieldId("method")} className="h-9 w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={NO_METHOD}>{t("payments.methodNotSaid")}</SelectItem>
-                        {methodOptions.map((m) => (
-                          <SelectItem key={m.value} value={m.value}>
-                            {vocabText(t, m)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field htmlFor={fieldId("reference")} label={t("payments.reference")} error={errors.fields.reference} help={t("payments.referenceHelp")}>
-                    <Input
-                      id={fieldId("reference")}
-                      value={draft.reference}
-                      onChange={(e) => {
-                        const reference = e.target.value;
-                        update((d) => ({ ...d, reference }));
-                        clearError("reference");
-                      }}
-                      className="h-9"
-                    />
-                  </Field>
-                  <Field htmlFor={fieldId("invoice_number")} label={t("payments.invoiceNumber")} error={errors.fields.invoice_number}>
-                    <Input
-                      id={fieldId("invoice_number")}
-                      value={draft.invoiceNumber}
-                      onChange={(e) => {
-                        const invoiceNumber = e.target.value;
-                        update((d) => ({ ...d, invoiceNumber }));
-                        clearError("invoice_number");
-                      }}
-                      className="h-9"
-                    />
-                  </Field>
-                  <Field
-                    className="sm:col-span-2"
-                    htmlFor={fieldId("files")}
-                    label={t("payments.invoiceFile")}
-                    error={errors.fields.files}
-                    help={
-                      editing && payment?.attachments.length
-                        ? t("payments.filesAlreadyAttached", { count: payment.attachments.length })
-                        : t("payments.invoiceFileHelp")
-                    }
-                  >
-                    <Input
-                      key={fileInputKey}
-                      id={fieldId("files")}
-                      type="file"
-                      multiple
-                      accept={ACCEPT_FILES}
-                      onChange={(e) => {
-                        const picked = Array.from(e.target.files ?? []);
-                        setFileInputKey((k) => k + 1);
-                        update((d) => ({ ...d, files: [...d.files, ...picked] }));
-                        clearError("files");
-                      }}
-                      className="h-9 text-sm file:me-2"
-                    />
-                    {draft.files.length > 0 && (
-                      <ul className="mt-1.5 flex flex-wrap gap-1.5">
-                        {draft.files.map((f, i) => (
-                          <li key={`${f.name}-${i}`} className="inline-flex items-center gap-1 rounded-md border bg-muted/40 px-2 py-0.5 text-xs">
-                            <Paperclip className="size-3 text-muted-foreground" aria-hidden="true" />
-                            <span className="max-w-48 truncate">{f.name}</span>
-                            <button
-                              type="button"
-                              onClick={() => update((d) => ({ ...d, files: d.files.filter((_, j) => j !== i) }))}
-                              aria-label={t("payments.removeItem", { label: f.name })}
-                              className="rounded-sm p-0.5 hover:bg-muted"
-                            >
-                              <X className="size-3" />
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </Field>
                 </div>
 
-                {!editing && (
-                  <div>
-                    {showMore ? (
-                      <Field htmlFor={fieldId("note")} label={t("common.note")} error={errors.fields.note}>
-                        <Textarea
-                          id={fieldId("note")}
-                          value={draft.note}
-                          rows={2}
-                          onChange={(e) => {
-                            const note = e.target.value;
-                            update((d) => ({ ...d, note }));
-                          }}
-                          className="min-h-14 text-sm"
-                        />
-                      </Field>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => setShowMore((v) => !v)}
-                      className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                    >
-                      {showMore ? <ChevronUp className="size-3.5" aria-hidden="true" /> : <ChevronDown className="size-3.5" aria-hidden="true" />}
-                      {showMore ? t("common.fewerDetails") : t("common.moreDetails")}
-                    </button>
-                  </div>
-                )}
-
-                {/* 3. Lines */}
+                {/* 2. Lines */}
                 <section aria-labelledby="pay-lines-heading" className="space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <h3 id="pay-lines-heading" className="font-heading text-sm font-semibold">
@@ -517,6 +395,26 @@ function PaymentDialogBody({ onOpenChange, paymentId, prefill, onSaved }: Paymen
                     {t("payments.addLine")}
                   </Button>
                 </section>
+
+                {/* 3. The payment's attachments and notes */}
+                <section aria-labelledby="pay-extras-heading" className="space-y-2.5 rounded-lg border bg-muted/20 p-3">
+                  <div>
+                    <h3 id="pay-extras-heading" className="font-heading text-sm font-semibold">
+                      {t("payments.extras.sectionTitle")}
+                    </h3>
+                    <p className="text-xs text-muted-foreground">{t("payments.extras.sectionHelp")}</p>
+                  </div>
+                  <NotesFilesEditor
+                    scope="payment"
+                    value={draft.extras}
+                    errors={errors.fields}
+                    errorPrefix=""
+                    onChange={(extras) => {
+                      update((d) => ({ ...d, extras }));
+                      clearError("files", "notes", "remove_note_ids", "remove_attachment_ids");
+                    }}
+                  />
+                </section>
                 {/* Enter in a field submits; the visible Save is in the sticky footer. */}
                 <button type="submit" className="hidden" tabIndex={-1} aria-hidden="true" />
               </form>
@@ -526,17 +424,20 @@ function PaymentDialogBody({ onOpenChange, paymentId, prefill, onSaved }: Paymen
           {/* 4. Sticky running total + Save */}
           <div className="flex items-center gap-3 border-t bg-card px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <div className="min-w-0 flex-1">
-              <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{t("payments.runningTotal")}</p>
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {t("payments.runningTotal")}
+                {lineCount > 0 && <span className="ms-1 normal-case tracking-normal">· {t("payments.dialog.linesCount", { count: lineCount })}</span>}
+              </p>
               <p className="text-xl font-semibold tabular-nums" aria-live="polite">
                 {formatMoney(total)}
               </p>
             </div>
-            <Button type="button" variant="outline" onClick={() => requestClose(false)} disabled={saving}>
+            <Button type="button" variant="ghost" onClick={() => requestClose(false)} disabled={saving}>
               {t("common.cancel")}
             </Button>
-            <Button type="button" onClick={() => void save()} disabled={saving || !draft || Boolean(payment?.mistaken)}>
+            <Button type="button" className="min-w-28" onClick={() => void save()} disabled={saving || !draft || Boolean(payment?.mistaken)}>
               {saving && <Loader2 className="size-4 animate-spin" />}
-              {saving ? t("common.saving") : t("common.save")}
+              {saving ? t("common.saving") : editing ? t("payments.dialog.saveChanges") : t("payments.dialog.savePayment")}
             </Button>
           </div>
         </DialogContent>

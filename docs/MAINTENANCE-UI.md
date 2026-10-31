@@ -1,6 +1,6 @@
 # Maintenance — screens and UX rules
 
-_Last updated: 2026-10-30_
+_Last updated: 2026-10-31_
 
 The API these screens call is `MaintenancePizza/docs/MAINTENANCE.md`
 (`C:\Projects\New folder (2)\MaintenancePizza\docs\MAINTENANCE.md`). This file
@@ -37,6 +37,11 @@ pages, few options, nothing that tires the person using it.**
 10. **Theme**: semantic tokens only (`bg-card`, `text-muted-foreground`,
     `border-border`…). Status colours as paired light/dark Tailwind classes
     (`text-emerald-600 dark:text-emerald-400`). RTL with logical properties.
+    Ticket status and priority colours have ONE source,
+    `components/maintenance-tickets/status-accent.ts`, drawn only through
+    `StatusBadge` / `PriorityBadge` (`ticket-chips.tsx`) on every surface —
+    list, ticket page, peek sheet, Dashboard V1 card, DSPR table, analytics.
+    Statuses are tinted pills with a dot; priorities are outlined with an arrow.
 11. **Touch**: on the technician trip page every control is ≥ 48 px tall, 8 px
     apart, full-width; the page works one-handed at 375 px.
 12. **Accessibility**: icon-only buttons have `aria-label`; visible focus rings;
@@ -51,7 +56,11 @@ Troubleshooting (unchanged). `/dashboard/daily-pay` redirects to
 ## 1. Tickets list `/dashboard/maintenance-tickets`
 
 Header: "Tickets" + primary **New ticket**. One flat filter row: search,
-Status (multi), Store, Priority, Technician, Category (technician category).
+Status (multi), Store, Priority, Technician, Category (technician category);
+on a phone the filters and the attention chips are each one sideways-scrolling
+row, so the list starts on the first screen. **New ticket** dialog: header and
+buttons fixed, only the form scrolls; priorities use the same words and
+colours as the badges; closing with something typed asks first.
 A row of "needs attention" chips: Waiting on store · Waiting for approval ·
 Work done to check · Overdue (target date passed). Table: ticket #, title (first
 issue; "+2 more"), store, status badge, priority, assigned to, target date,
@@ -93,7 +102,14 @@ Follows the owner's mockup.
   `workflow.next[0]` (e.g. "Start review", "Ask the store", "Book inspection",
   "Ask for approval", "Record approval", "Schedule work", "Mark work done",
   "Close ticket"). Other valid `next` actions sit in a small chevron menu next to
-  the primary. Each action opens ONE small dialog with only its fields:
+  the primary. The bar is flush with the bottom of the content area in all four
+  AppShell layouts (`ticket/use-dock-insets.ts` measures the shell's padding
+  instead of guessing it) and rides above the mobile bottom nav while that
+  shows; it leaves room at its end for the draggable Debrief button when that
+  button rests on the bar (`useFabClearance`); on sm+ its start side says the
+  status and whose turn it is. Each
+  action opens ONE small dialog with only its fields (header and buttons fixed,
+  only the fields scroll):
   - Ask the store: question + photos.
   - Book inspection / Schedule work: technician picker (ranked, badges: covers
     store · covers issue · emergency · call first · ★rating, category filter),
@@ -141,17 +157,17 @@ Retry.
 
 Header + primary **Record a payment**. Filters: date range, paid to (technician
 or supplier), technician category, store, type, search (invoice #). KPI strip:
-Payments · Total. Table: date, paid to, stores, types (small badges), invoice
-(paperclip if file), total; mistaken rows struck through and hidden unless
+Payments · Total. Table: date, paid to, stores, types (small badges), files
+(paperclip when it has attachments; an older payment's invoice # beside it),
+total; mistaken rows struck through and hidden unless
 "Show mistakes". Side panel **Unpaid work**: per technician, clocked time not
 paid + purchases not paid back, each with "Pay this" (opens the dialog
 pre-filled).
 
-**Payment dialog** (one scrolling form, no wizard):
+**Payment dialog** (one scrolling form, no wizard, in the order it is filled):
 1. Paid to — one combobox searching technicians and suppliers (grouped), "Add
-   supplier" inline.
-2. Date · How we paid (select) · Reference / check # · Invoice # · Invoice file.
-3. **Lines** — each line is a compact card: Type (Select, NOT big squares) →
+   supplier" inline — and the Date beside it.
+2. **Lines** — each line is a compact card: Type (Select, NOT big squares) →
    under it the type's one-sentence explanation in muted text and only its
    fields: Store (or storage for parts) · amount fields per type · Tickets
    (multi-select of that store's issues). Hourly: pick clocked sessions
@@ -159,15 +175,29 @@ pre-filled).
    technician's; typing hours flags "typed over". Parts: part (search/create),
    qty, unit cost, bought from (supplier), goes to: Storage spot / Straight to a
    ticket, serial numbers when the part tracks them, "pays back" technician
-   purchases. "Add line".
-4. Running total at the bottom (sticky), Save.
-Detail sheet: lines, links, files, revisions, Edit, Mark as mistake.
+   purchases. Changing the Type keeps the line and what still applies (store,
+   tickets, description, a typed amount, its notes and files). Under each
+   card, **Notes & attachments** is folded away, with a small count badge when
+   the line has any; open, it is the same editor as step 3, for that line
+   only. "Add line".
+3. **Attachments and notes** of the payment — optional, as many as wanted:
+   files are chips (pick or paste; × takes one off before saving), notes are
+   added one box at a time. When editing, the saved ones show first; × strikes
+   one through with Undo, and it goes only on Save.
+4. Running total at the bottom (sticky, with the line count), Cancel and the
+   primary **Save payment** / **Save changes**.
+How we paid, reference / check # and invoice # are NOT asked for (the owner:
+showing them made them look required). The API still takes them, an edit
+sends back what an older payment had, and the detail sheet shows them only
+when present.
+Detail sheet: lines (each with its own files and notes), links, attachments,
+notes, revisions, Edit, Mark as mistake.
 
 ## 6. Storage `/dashboard/storage`
 
 Tabs: **Stock** (search, location filter; per part: on hand per location with
 its spot "Zone A › Shelf S", value; part sheet with details brand/model/part
-number/unit, serial units list, price history) · **Movements** (ledger, plain
+number/unit, serial units list, price history) · **Stock history** (the ledger, plain
 type labels with icons, filters) · **Stock counts** (list + **Start a count**) ·
 **Locations** (locations and their place levels, a clearer spot editor).
 Primary on Stock: **Record stock** → a menu: Parts bought (opens the payment
@@ -191,7 +221,9 @@ categories"), contact person, hourly rate, location, emergency available
 notes. Detail page: profile card, **Issues covered** (list: issue, ★ rating
 editor, call first, notes; "Add issue"), trips, payments, work report.
 Suppliers tab: name, phone, website, total paid; same add/edit dialog pattern
-and duplicate check.
+and duplicate check. Both tabs have a "Show deleted" switch so a deleted one
+can be opened and restored. "Add issue" on a technician adds the issue as
+covered, not rated yet (stars, notes and call first are set after).
 
 ## 8. Analytics `/dashboard/maintenance-analytics?tab=overview|finances|coverage`
 
