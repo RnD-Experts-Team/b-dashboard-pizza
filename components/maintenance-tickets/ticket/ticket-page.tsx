@@ -27,6 +27,7 @@ import { withPrivateNotes } from "@/lib/maintenance-workflow";
 import type { WorkflowNextAction } from "@/types/maintenance-system";
 import { ActivityTab } from "./activity-tab";
 import { CostsTab } from "./costs-tab";
+import { HistoryTab } from "./history-tab";
 import { ActionHost, hasDialog, type OpenAction } from "./dialogs/action-host";
 import { AddUpdateDialog, UsePartsDialog } from "./dialogs/update-parts-dialogs";
 import { OverviewTab } from "./overview-tab";
@@ -35,7 +36,7 @@ import { IssueSwitcher, ProgressStrip, TicketHeader } from "./ticket-top";
 import { TripLinkDialog } from "./trip-link-dialog";
 import { WorkTab } from "./work-tab";
 
-const TABS = ["overview", "work", "costs", "activity"] as const;
+const TABS = ["overview", "work", "costs", "activity", "history"] as const;
 type TabId = (typeof TABS)[number];
 
 /** Steps that live in the header's … menu, not in the footer. */
@@ -119,6 +120,13 @@ export function TicketPage() {
     const mine = (privateNotes.data ?? []).filter((n) => n.owner.type === "ticket_issue" && n.owner.id === issue.id);
     return withPrivateNotes(issue.timeline, mine);
   }, [issue, privateNotes.data]);
+  /** The ticket's own notes: the public ones it ships with, plus MOS-only ones for those who may read them. */
+  const ticketNotes = useMemo(() => {
+    const shown = ticket?.notes ?? [];
+    const known = new Set(shown.map((n) => n.id));
+    const hidden = (privateNotes.data ?? []).filter((n) => n.owner.type === "ticket" && !known.has(n.id));
+    return [...shown, ...hidden];
+  }, [ticket?.notes, privateNotes.data]);
 
   /* ── URL state ───────────────────────────────────────────────────────── */
   const setParam = useCallback(
@@ -263,6 +271,8 @@ export function TicketPage() {
             canConfirm={canRun && canConfirm}
             canEditDetails={canRun && reviewNow}
             onEditDetails={() => setOpenAction({ id: "review" })}
+            ticketNotes={ticketNotes}
+            ticketAttachments={ticket.attachments}
           />
         </TabsContent>
         <TabsContent value="work" className="mt-4">
@@ -281,6 +291,9 @@ export function TicketPage() {
         </TabsContent>
         <TabsContent value="activity" className="mt-4">
           <ActivityTab entries={timeline} />
+        </TabsContent>
+        <TabsContent value="history" className="mt-4">
+          <HistoryTab ticketId={ticket.id} issue={issue} storeNumber={storeNumber} />
         </TabsContent>
       </Tabs>
 

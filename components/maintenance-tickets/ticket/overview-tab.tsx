@@ -1,14 +1,16 @@
 "use client";
 
-import { FileText, Image as ImageIcon, MessageCircleQuestion, MessageSquareReply, Pencil, Phone, ShieldCheck, User, Wrench } from "lucide-react";
+import { FileText, Image as ImageIcon, MessageCircleQuestion, MessageSquareReply, Paperclip, Pencil, Phone, ShieldCheck, User, Wrench } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RESOLUTIONS, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
 import { isOverdue } from "@/lib/maintenance-workflow";
 import type { TicketIssueDetail } from "@/types/maintenance-system";
+import type { TicketAttachment, TicketNote } from "@/types/maintenance-tickets.types";
 import { AttachmentGallery } from "../attachment-gallery";
 import { LocalTimestamp } from "../local-timestamp";
+import { NotesList } from "../notes-list";
 import { TroubleshootingSteps } from "../troubleshooting/troubleshooting-steps";
 import { ChecklistView } from "./dialogs/finish-dialogs";
 import { InlineAnswer, InlineConfirmation, openInfoRequest } from "./dialogs/review-store-dialogs";
@@ -46,8 +48,13 @@ export function OverviewTab({
   canConfirm,
   canEditDetails,
   onEditDetails,
+  ticketNotes,
+  ticketAttachments,
 }: {
   issue: TicketIssueDetail;
+  /** Notes and files on the ticket itself (not on one issue) — mostly older tickets. */
+  ticketNotes: TicketNote[];
+  ticketAttachments: TicketAttachment[];
   run: RunStep;
   isMos: boolean;
   canAnswer: boolean;
@@ -257,6 +264,16 @@ export function OverviewTab({
           <p className="text-sm text-muted-foreground">{t("tickets.overview.noPhotos")}</p>
         )}
       </Section>
+
+      {/* Notes and files on the ticket as a whole */}
+      {ticketNotes.length || ticketAttachments.length ? (
+        <Section title={t("tickets.overview.ticketNotes")} icon={Paperclip}>
+          <div className="space-y-3">
+            <NotesList notes={ticketNotes} />
+            <AttachmentGallery attachments={ticketAttachments} className="mt-0" />
+          </div>
+        </Section>
+      ) : null}
 
       {/* Warranties */}
       {issue.warranties.some((w) => !w.mistaken) ? (

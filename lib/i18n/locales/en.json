@@ -5665,7 +5665,15 @@
           "upcoming": "still to come"
         }
       },
+      "history": {
+        "noStore": "This ticket is not at one of our stores, so there is no store history to show.",
+        "otherIssue": "This issue was typed in by hand (not picked from the list), so earlier tickets for it cannot be matched.",
+        "openHere": "Other open tickets at this store",
+        "noOtherOpen": "No other open tickets at this store.",
+        "tryAgain": "Try again"
+      },
       "overview": {
+        "ticketNotes": "Ticket notes and files",
         "detailsTitle": "Ticket details",
         "nobodyYet": "Nobody yet",
         "notSet": "Not set",
@@ -6190,7 +6198,8 @@
         "overview": "Overview",
         "work": "Work",
         "costs": "Costs",
-        "activity": "Activity"
+        "activity": "Activity",
+        "history": "History"
       },
       "whoseTurn": "Whose turn",
       "needsApprovalFrom": "Needs {label} approval",
