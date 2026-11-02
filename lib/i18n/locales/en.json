@@ -5221,14 +5221,6 @@
           "label": "Rejected"
         }
       },
-      "answeredVia": {
-        "store": {
-          "label": "The store"
-        },
-        "specialist": {
-          "label": "The office, for the store"
-        }
-      },
       "closeChecklist": {
         "resolved": {
           "label": "The store says it works"
@@ -5665,6 +5657,17 @@
           "upcoming": "still to come"
         }
       },
+      "now": {
+        "stepOf": "Step {step} of {total} · {label}",
+        "yourMove": "Your move",
+        "waitingOn": "Waiting on: {who}",
+        "inspectionBy": "{name} is booked to inspect · {date}",
+        "noResultYet": "No result recorded yet.",
+        "workBooked": "{name} is booked for the work · {date}",
+        "workNotBooked": "No work booked yet.",
+        "seeDetails": "See all in {tab}",
+        "tabHasStep": "The current step's details are here"
+      },
       "history": {
         "noStore": "This ticket is not at one of our stores, so there is no store history to show.",
         "otherIssue": "This issue was typed in by hand (not picked from the list), so earlier tickets for it cannot be matched.",
@@ -5699,37 +5702,37 @@
         "step": {
           "new": {
             "title": "Submitted — waiting for review",
-            "office": "Look at the problem, set a target date and decide the next step.",
+            "office": "Read the problem, then press “Start review” to set a target date and choose the next step.",
             "store": "The maintenance team will look at it soon."
           },
           "in_review": {
             "title": "In review",
-            "office": "Decide what happens next: ask the store, book an inspection, or schedule the work.",
+            "office": "Choose the next step below: ask the store a question, book an inspection, or schedule the work.",
             "store": "The maintenance team is working out what to do."
           },
           "waiting_on_store": {
             "title": "Waiting on the store",
-            "office": "The store has been asked a question. Record their answer when it comes in.",
+            "office": "Waiting for the store’s answer. If they told you another way (by phone, in person), press “Answer the question” and type it in.",
             "store": "The maintenance team needs an answer from you before they can go on."
           },
           "inspection": {
             "title": "Inspection",
-            "office": "A technician is going to look at it. Record what they found and their quote.",
+            "office": "When the technician has looked at it, press “Record inspection result” and enter what they found and their quote.",
             "store": "A technician is coming to look at the problem."
           },
           "waiting_approval": {
             "title": "Waiting for approval",
-            "office": "The cost needs approval. Record the decision when you have it.",
+            "office": "Get the cost approved, then press “Record approval” with the decision.",
             "store": "The cost is waiting for approval."
           },
           "scheduled": {
             "title": "Scheduled",
-            "office": "The work is booked. Mark it done when the technician has finished.",
+            "office": "The repair is booked. When the technician has finished, press “Mark work done”. Need another day? Use “Move booking”.",
             "store": "The repair is booked."
           },
           "work_done": {
             "title": "Work done — checking",
-            "office": "Check with the store that it works, then close it once the checklist is ticked.",
+            "office": "Check with the store that it works, then press “Close ticket”. The checklist below shows what is still missing.",
             "store": "The technician says it's fixed. Is it working now?"
           },
           "closed": {
@@ -5745,7 +5748,7 @@
         },
         "askedQuestion": "Question for the store",
         "answeredByStore": "The store answered",
-        "answeredByOffice": "Answered by the office for the store"
+        "answeredByName": "{name} answered"
       },
       "work": {
         "inspections": "Inspections",
@@ -5855,8 +5858,9 @@
           "answerPlaceholder": "Write the answer here",
           "answerRequired": "Write the answer.",
           "noQuestion": "There is no open question right now.",
-          "who": "Who answered",
-          "whoHelp": "Choose \"The office, for the store\" when the store told you by phone.",
+          "who": "Who answered (optional)",
+          "whoHelp": "For example: Sara, the store manager, by phone.",
+          "whoPlaceholder": "Name, and how they told you",
           "submit": "Send answer",
           "sent": "Answer sent"
         },

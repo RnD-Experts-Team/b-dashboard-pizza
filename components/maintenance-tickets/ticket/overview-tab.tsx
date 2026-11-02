@@ -1,10 +1,9 @@
 "use client";
 
-import { FileText, Image as ImageIcon, MessageCircleQuestion, MessageSquareReply, Paperclip, Pencil, Phone, ShieldCheck, User, Wrench } from "lucide-react";
+import { FileText, Image as ImageIcon, Paperclip, Pencil, Phone, ShieldCheck, User, Wrench } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { RESOLUTIONS, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
 import { isOverdue } from "@/lib/maintenance-workflow";
 import type { TicketIssueDetail } from "@/types/maintenance-system";
 import type { TicketAttachment, TicketNote } from "@/types/maintenance-tickets.types";
@@ -12,9 +11,6 @@ import { AttachmentGallery } from "../attachment-gallery";
 import { LocalTimestamp } from "../local-timestamp";
 import { NotesList } from "../notes-list";
 import { TroubleshootingSteps } from "../troubleshooting/troubleshooting-steps";
-import { ChecklistView } from "./dialogs/finish-dialogs";
-import { InlineAnswer, InlineConfirmation, openInfoRequest } from "./dialogs/review-store-dialogs";
-import type { RunStep } from "./dialogs/types";
 import { formatDay } from "./format";
 
 function Cell({ label, children }: { label: string; children: React.ReactNode }) {
@@ -42,10 +38,6 @@ function Section({ title, icon: Icon, children }: { title: string; icon: typeof 
 
 export function OverviewTab({
   issue,
-  run,
-  isMos,
-  canAnswer,
-  canConfirm,
   canEditDetails,
   onEditDetails,
   ticketNotes,
@@ -55,23 +47,13 @@ export function OverviewTab({
   /** Notes and files on the ticket itself (not on one issue) — mostly older tickets. */
   ticketNotes: TicketNote[];
   ticketAttachments: TicketAttachment[];
-  run: RunStep;
-  isMos: boolean;
-  canAnswer: boolean;
-  canConfirm: boolean;
   /** The MOS may update target / next action now (review is a valid step). */
   canEditDetails: boolean;
   onEditDetails: () => void;
 }) {
   const t = useTranslations("maintenanceSystem");
-  const status = issue.status.value;
-  const request = openInfoRequest(issue);
-  /** The last question the store answered, shown while the office reviews it. */
-  const answered = status === "in_review" ? [...issue.infoRequests].reverse().find((r) => !r.mistaken && r.answeredAt) ?? null : null;
-  const overdue = isOverdue(issue.targetCompletionAt, status);
-  const checklist = issue.workflow?.checklist ?? [];
+  const overdue = isOverdue(issue.targetCompletionAt, issue.status.value);
   const snapshot = issue.troubleshootingSnapshot;
-  const showChecklist = status === "work_done" || status === "closed";
 
   return (
     <div className="space-y-4">
@@ -124,94 +106,6 @@ export function OverviewTab({
               {issue.nextAction ? <span>{issue.nextAction}</span> : <span className="text-muted-foreground">{t("tickets.overview.notSet")}</span>}
             </Cell>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* The current step */}
-      <Card className="gap-3 border-primary/30 py-5">
-        <CardHeader className="pb-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("tickets.overview.currentStep")}</p>
-          <CardTitle className="font-heading text-base font-semibold">{t(`tickets.overview.step.${status}.title`)}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">{t(`tickets.overview.step.${status}.${isMos ? "office" : "store"}`)}</p>
-
-          {status === "waiting_on_store" && request ? (
-            <div className="space-y-3">
-              <div className="flex gap-2 rounded-md border bg-amber-500/5 px-3 py-2">
-                <MessageCircleQuestion className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">
-                    {t("tickets.overview.openQuestion")}
-                    {request.askedBy?.name ? ` · ${request.askedBy.name}` : ""}
-                  </p>
-                  <p className="whitespace-pre-wrap text-sm">{request.question}</p>
-                  <AttachmentGallery attachments={request.attachments ?? []} />
-                </div>
-              </div>
-              {!isMos && canAnswer ? <InlineAnswer issue={issue} run={run} isMos={false} /> : null}
-            </div>
-          ) : null}
-
-          {answered ? (
-            <div className="space-y-2 rounded-md border bg-muted/30 px-3 py-2">
-              <div className="flex gap-2">
-                <MessageCircleQuestion className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">
-                    {t("tickets.overview.askedQuestion")}
-                    {answered.askedBy?.name ? ` · ${answered.askedBy.name}` : ""}
-                  </p>
-                  <p className="whitespace-pre-wrap text-sm">{answered.question}</p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <MessageSquareReply className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">
-                    {t(answered.answeredVia === "specialist" ? "tickets.overview.answeredByOffice" : "tickets.overview.answeredByStore")}
-                    {answered.answeredBy?.name ? ` · ${answered.answeredBy.name}` : ""}
-                    {answered.answeredAt ? (
-                      <>
-                        {" · "}
-                        <LocalTimestamp iso={answered.answeredAt} showZone={false} />
-                      </>
-                    ) : null}
-                  </p>
-                  <p className="whitespace-pre-wrap text-sm">{answered.answer}</p>
-                  <AttachmentGallery attachments={answered.attachments ?? []} />
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {status === "work_done" && !isMos && canConfirm ? <InlineConfirmation run={run} isMos={false} /> : null}
-
-          {status === "work_done" && issue.storeConfirmedAt ? (
-            <p className="text-sm">
-              {issue.storeConfirmedWorking ? t("tickets.overview.confirmedWorking") : t("tickets.overview.confirmedBroken")}
-            </p>
-          ) : null}
-
-          {issue.workPerformed && (status === "work_done" || status === "closed") ? (
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground">{t("tickets.overview.workPerformed")}</p>
-              <p className="whitespace-pre-wrap text-sm">{issue.workPerformed}</p>
-            </div>
-          ) : null}
-
-          {status === "closed" && issue.resolution ? (
-            <p className="text-sm">
-              {t("tickets.overview.closedAs", { resolution: vocabText(t, vocabEntry(RESOLUTIONS, issue.resolution.value, issue.resolution.label)) })}
-            </p>
-          ) : null}
-
-          {showChecklist && checklist.length ? (
-            <div className="space-y-2 rounded-md border p-3">
-              <p className="text-sm font-medium">{t("tickets.overview.closeChecklist")}</p>
-              <ChecklistView items={checklist} resolution={null} />
-            </div>
-          ) : null}
         </CardContent>
       </Card>
 

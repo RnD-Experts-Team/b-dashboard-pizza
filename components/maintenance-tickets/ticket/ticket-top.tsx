@@ -21,10 +21,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TicketHeaderInfo } from "@/lib/api/services/maintenance-workflow.service";
-import { IMPACTS, ISSUE_STATUSES, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
-import { stepDots, type StepDotState } from "@/lib/maintenance-workflow";
+import { IMPACTS, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
 import type { IssueStatus, TicketIssueDetail } from "@/types/maintenance-system";
 import { LocalTimestamp } from "../local-timestamp";
 import { PriorityBadge, StatusBadge } from "../ticket-chips";
@@ -206,21 +204,7 @@ export function IssueSwitcher({
   );
 }
 
-/* ── Progress strip ──────────────────────────────────────────────────────── */
-
-const DOT_CLASS: Record<StepDotState, string> = {
-  done: "border-primary bg-primary",
-  current: "border-primary bg-primary ring-4 ring-primary/20",
-  skipped: "border-muted-foreground/50 bg-background",
-  upcoming: "border-border bg-muted",
-};
-
-const LINE_CLASS: Record<StepDotState, string> = {
-  done: "bg-primary",
-  current: "bg-border",
-  skipped: "bg-primary/40",
-  upcoming: "bg-border",
-};
+/* ── Step history ────────────────────────────────────────────────────────── */
 
 /** Every status the issue has been in (the presenter sends `to_status` on each change). */
 export function visitedStatuses(issue: TicketIssueDetail): IssueStatus[] {
@@ -229,56 +213,4 @@ export function visitedStatuses(issue: TicketIssueDetail): IssueStatus[] {
     const value = raw.toStatus ?? raw.status?.value;
     return value ? [value as IssueStatus] : [];
   });
-}
-
-export function ProgressStrip({ issue }: { issue: TicketIssueDetail }) {
-  const t = useTranslations("maintenanceSystem");
-  const visited = visitedStatuses(issue);
-  const dots = stepDots(issue.status.value, [...visited, issue.status.value]);
-  const cancelled = issue.status.value === "cancelled";
-
-  return (
-    <nav aria-label={t("tickets.page.progress")} className="rounded-lg border bg-card px-3 py-3">
-      <ol className="flex items-start">
-        {dots.map((dot, index) => {
-          const label = cancelled && dot.id === "closed" ? vocabText(t, ISSUE_STATUSES.cancelled) : t(dot.key);
-          return (
-            <li key={dot.id} className="flex min-w-0 flex-1 flex-col items-center gap-1.5" aria-current={dot.state === "current" ? "step" : undefined}>
-              <div className="flex w-full items-center">
-                <span className={cn("h-0.5 flex-1", index === 0 ? "bg-transparent" : LINE_CLASS[dot.state])} aria-hidden="true" />
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span tabIndex={0} className={cn("h-3 w-3 shrink-0 rounded-full border-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", DOT_CLASS[dot.state])}>
-                      <span className="sr-only">{`${label}: ${t(`tickets.page.stepState.${dot.state}`)}`}</span>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>{`${label} · ${t(`tickets.page.stepState.${dot.state}`)}`}</TooltipContent>
-                </Tooltip>
-                <span
-                  className={cn("h-0.5 flex-1", index === dots.length - 1 ? "bg-transparent" : LINE_CLASS[dots[index + 1]?.state ?? "upcoming"])}
-                  aria-hidden="true"
-                />
-              </div>
-              <span
-                className={cn(
-                  "hidden truncate px-0.5 text-center text-[11px] md:block",
-                  dot.state === "current" ? "font-semibold text-foreground" : "text-muted-foreground",
-                )}
-                aria-hidden="true"
-              >
-                {label}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-      <p className="mt-2 text-center text-xs font-medium md:hidden">
-        {t("tickets.page.stepOf", {
-          step: dots.findIndex((d) => d.state === "current") + 1,
-          total: dots.length,
-          label: cancelled ? vocabText(t, ISSUE_STATUSES.cancelled) : t(dots.find((d) => d.state === "current")?.key ?? "workflow.steps.submitted"),
-        })}
-      </p>
-    </nav>
-  );
 }

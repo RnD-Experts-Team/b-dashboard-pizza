@@ -29,7 +29,9 @@ export function useActionLabel() {
  *   [status · whose turn]            [Add update]  [Primary next step | ˄]
  *
  * The primary button is the workflow's `next[0]`; the other valid steps sit
- * in the menu joined to it. On a phone it is two rows: the primary takes the
+ * in the menu joined to it. While the Now panel's own buttons are on screen
+ * (`hideSteps`) the bar keeps only the context and "Add update", so the page
+ * never shows the same step twice. On a phone it is two rows: the primary takes the
  * full width on top, so its whole label shows, and the context line and "Add
  * update" sit under it, where the floating Debrief button rests.
  */
@@ -38,10 +40,13 @@ export function TicketFooter({
   status,
   canAddUpdate,
   disabled,
+  hideSteps = false,
   onAction,
   onAddUpdate,
 }: {
   next: WorkflowNextAction[];
+  /** The Now panel's buttons are visible: leave the steps to it. */
+  hideSteps?: boolean;
   status: IssueStatus;
   canAddUpdate: boolean;
   disabled?: boolean;
@@ -53,7 +58,7 @@ export function TicketFooter({
   const ref = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<HTMLDivElement>(null);
   const contextRef = useRef<HTMLDivElement>(null);
-  const { primary, others } = splitNextActions(next);
+  const { primary, others } = splitNextActions(hideSteps ? [] : next);
   const shown = Boolean(primary) || canAddUpdate;
   const dock = useDockInsets(ref, shown);
   // Each row leaves room for the Debrief button only where the button actually sits on it.

@@ -56,8 +56,6 @@ export type Resolution =
 
 export type InspectionStatus = "scheduled" | "done" | "cancelled";
 export type ApprovalDecision = "approved" | "rejected";
-/** Who answered a store question / confirmed the fix. */
-export type AnsweredVia = "store" | "specialist";
 export type SchedulePurpose = "work" | "inspection";
 export type VisitTaskStatus = "pending" | "done" | "not_done";
 
@@ -111,7 +109,8 @@ export interface InfoRequest {
   askedBy: { name: string } | null;
   createdAt: IsoDateTime;
   answer: string | null;
-  answeredVia: AnsweredVia | null;
+  /** Who answered, as typed ("Sara, by phone"). Optional. */
+  answeredByName: string | null;
   answeredBy: { name: string } | null;
   answeredAt: IsoDateTime | null;
   mistaken: boolean;
@@ -325,7 +324,8 @@ export interface TicketIssueDetail {
   resolution: MEnum<Resolution> | null;
   storeConfirmedAt: IsoDateTime | null;
   storeConfirmedWorking: boolean | null;
-  storeConfirmedVia: AnsweredVia | null;
+  /** Who said it works / doesn't, as typed. Optional. */
+  storeConfirmedByName: string | null;
   closedAt: IsoDateTime | null;
   createdAt: IsoDateTime;
   updatedAt?: IsoDateTime;
@@ -383,8 +383,8 @@ export interface InfoRequestPayload extends WithFiles {
 
 export interface InfoAnswerPayload extends WithFiles {
   answer: string;
-  /** Defaults to "store" upstream. */
-  via?: AnsweredVia;
+  /** Who answered, as typed. Optional. */
+  answeredByName?: string | null;
 }
 
 export interface BookInspectionPayload {
@@ -436,7 +436,8 @@ export interface WorkDonePayload extends WithFiles {
 export interface ConfirmationPayload {
   working: boolean;
   note?: string | null;
-  via: AnsweredVia;
+  /** Who said so, as typed. Optional. */
+  confirmedByName?: string | null;
 }
 
 /** Resolutions the close dialog offers. */

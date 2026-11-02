@@ -32,7 +32,8 @@ import { ActionHost, hasDialog, type OpenAction } from "./dialogs/action-host";
 import { AddUpdateDialog, UsePartsDialog } from "./dialogs/update-parts-dialogs";
 import { OverviewTab } from "./overview-tab";
 import { TicketFooter } from "./ticket-footer";
-import { IssueSwitcher, ProgressStrip, TicketHeader } from "./ticket-top";
+import { NextStepPanel, STEP_TAB, useOnScreen } from "./next-step";
+import { IssueSwitcher, TicketHeader } from "./ticket-top";
 import { TripLinkDialog } from "./trip-link-dialog";
 import { WorkTab } from "./work-tab";
 
@@ -148,6 +149,7 @@ export function TicketPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [bookedDate, setBookedDate] = useState<string | null>(null);
+  const [panelActionsRef, panelActionsOnScreen] = useOnScreen();
 
   const backHref = `/${locale}/dashboard/maintenance-tickets`;
   const refreshAll = useCallback(() => {
@@ -217,6 +219,15 @@ export function TicketPage() {
   const reviewNow = isMos && (issue.workflow?.next ?? []).some((a) => a.action === "review");
   const jumpAllowed = canRun && canJump && (issue.workflow?.next ?? []).some((a) => a.action === "jump");
 
+  // What each tab holds, so the tab row says where things are before you open them.
+  const live = <T extends { mistaken?: boolean }>(rows: T[]) => rows.filter((r) => !r.mistaken).length;
+  const tabCount: Partial<Record<TabId, number>> = {
+    work: live(issue.inspections) + live(issue.schedules) + issue.visits.length + issue.stockUsed.length,
+    costs: issue.payments.length + live(issue.approvals) + live(issue.purchases),
+    activity: timeline.length,
+  };
+  const stepTab = STEP_TAB[status];
+
   const dialogBase = { issue, run: act, storeNumber, isMos, ticketId, onBooked: setBookedDate, onTicketCancelled: refreshAll };
 
   return (
@@ -237,7 +248,18 @@ export function TicketPage() {
 
       <IssueSwitcher issues={issues} selectedId={issue.id} onSelect={(id) => setParam("issue", String(id))} />
 
-      <ProgressStrip issue={issue} />
+      <NextStepPanel
+        issue={issue}
+        next={footerNext}
+        isMos={isMos}
+        canAnswer={canRun && canAnswer}
+        canConfirm={canRun && canConfirm}
+        run={act}
+        disabled={page.pending}
+        actionsRef={panelActionsRef}
+        onAction={(a) => setOpenAction({ id: a.action })}
+        onShowTab={(id) => setParam("tab", id)}
+      />
 
       {!canRun ? (
         <p className="flex items-start gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
@@ -256,8 +278,12 @@ export function TicketPage() {
         <div className="-mx-1 overflow-x-auto px-1">
           <TabsList className="h-auto w-max flex-nowrap gap-1 p-1">
             {TABS.map((id) => (
-              <TabsTrigger key={id} value={id}>
+              <TabsTrigger key={id} value={id} className="gap-1.5">
                 {t(`workflow.tabs.${id}`)}
+                {tabCount[id] ? <span className="rounded-full bg-muted px-1.5 text-[11px] font-medium tabular-nums text-muted-foreground">{tabCount[id]}</span> : null}
+                {stepTab === id && tab !== id ? (
+                  <span className="h-2 w-2 rounded-full bg-primary" role="img" aria-label={t("tickets.now.tabHasStep")} />
+                ) : null}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -265,10 +291,6 @@ export function TicketPage() {
         <TabsContent value="overview" className="mt-4">
           <OverviewTab
             issue={issue}
-            run={act}
-            isMos={isMos}
-            canAnswer={canRun && canAnswer}
-            canConfirm={canRun && canConfirm}
             canEditDetails={canRun && reviewNow}
             onEditDetails={() => setOpenAction({ id: "review" })}
             ticketNotes={ticketNotes}
@@ -354,6 +376,7 @@ export function TicketPage() {
         status={status}
         canAddUpdate={canRun && canNote}
         disabled={page.pending}
+        hideSteps={panelActionsOnScreen}
         onAction={(a) => setOpenAction({ id: a.action })}
         onAddUpdate={() => setAddUpdateOpen(true)}
       />

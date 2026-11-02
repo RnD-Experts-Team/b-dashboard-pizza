@@ -17,7 +17,6 @@
  */
 
 import type {
-  AnsweredVia,
   ApprovalDecision,
   CloseChecklistKey,
   Impact,
@@ -142,11 +141,6 @@ export const INSPECTION_STATUSES = group<InspectionStatus>("inspectionStatus", {
 export const APPROVAL_DECISIONS = group<ApprovalDecision>("approvalDecision", {
   approved: { label: "Approved", icon: "ThumbsUp" },
   rejected: { label: "Rejected", icon: "ThumbsDown" },
-});
-
-export const ANSWERED_VIA = group<AnsweredVia>("answeredVia", {
-  store: { label: "The store" },
-  specialist: { label: "The office, for the store" },
 });
 
 export const CLOSE_CHECKLIST = group<CloseChecklistKey>("closeChecklist", {
@@ -317,7 +311,6 @@ export const VOCABULARY = {
   resolution: RESOLUTIONS,
   inspectionStatus: INSPECTION_STATUSES,
   approvalDecision: APPROVAL_DECISIONS,
-  answeredVia: ANSWERED_VIA,
   closeChecklist: CLOSE_CHECKLIST,
   visitTaskStatus: VISIT_TASK_STATUSES,
   tripStatus: TRIP_STATUSES,

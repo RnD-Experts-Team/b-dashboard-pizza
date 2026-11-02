@@ -9,9 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { maintenanceWorkflowService } from "@/lib/api/services/maintenance-workflow.service";
-import { ANSWERED_VIA, PRIORITIES, vocabOptions, vocabText } from "@/lib/maintenance/vocabulary";
-import type { AnsweredVia, InfoRequest, Priority, TicketIssueDetail } from "@/types/maintenance-system";
-import { DateTimePicker, Segmented } from "../../form-bits";
+import { PRIORITIES, vocabOptions, vocabText } from "@/lib/maintenance/vocabulary";
+import type { InfoRequest, Priority, TicketIssueDetail } from "@/types/maintenance-system";
+import { DateTimePicker } from "../../form-bits";
 import { PasteFileZone } from "../../paste-file-zone";
 import { ActionDialog, Field, MoreDetails, useDialogSubmit } from "../dialog-kit";
 import { isoToLocalInput, localInputToIso } from "../format";
@@ -146,13 +146,23 @@ export function AskStoreDialog({ open, onOpenChange, run }: StepDialogProps) {
 
 /* ── The store's answer ──────────────────────────────────────────────────── */
 
-function useAnswer(issue: TicketIssueDetail, run: RunStep, isMos: boolean) {
+/** "Who answered" — optional, free text ("Sara, by phone"). */
+function WhoField({ id, value, onChange, error }: { id: string; value: string; onChange: (v: string) => void; error?: string | null }) {
+  const t = useTranslations("maintenanceSystem.tickets.dialogs.answer");
+  return (
+    <Field id={id} label={t("who")} help={t("whoHelp")} error={error ?? undefined}>
+      <Input id={id} value={value} maxLength={120} onChange={(e) => onChange(e.target.value)} placeholder={t("whoPlaceholder")} />
+    </Field>
+  );
+}
+
+function useAnswer(issue: TicketIssueDetail, run: RunStep) {
   const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
   const request = openInfoRequest(issue);
   const [answer, setAnswer] = useState("");
   const [files, setFiles] = useState<File[]>([]);
-  const [via, setVia] = useState<AnsweredVia>(isMos ? "specialist" : "store");
+  const [who, setWho] = useState("");
 
   async function send(): Promise<boolean> {
     if (!request) return false;
@@ -161,24 +171,25 @@ function useAnswer(issue: TicketIssueDetail, run: RunStep, isMos: boolean) {
       return false;
     }
     const ok = await form.submit(
-      () => run((key) => maintenanceWorkflowService.answerStoreQuestion(key, request.id, { answer: answer.trim(), files, via })),
+      () => run((key) => maintenanceWorkflowService.answerStoreQuestion(key, request.id, { answer: answer.trim(), files, answeredByName: who.trim() || null })),
       t("tickets.dialogs.answer.sent"),
     );
     if (ok) {
       setAnswer("");
       setFiles([]);
+      setWho("");
     }
     return ok;
   }
 
-  return { t, form, request, answer, setAnswer, files, setFiles, via, setVia, send };
+  return { t, form, request, answer, setAnswer, files, setFiles, who, setWho, send };
 }
 
 type AnswerState = ReturnType<typeof useAnswer>;
 
 /** `showQuestion` is off where the question is already on the page (the Overview card above the inline form). */
-function AnswerFields({ state, isMos, idPrefix, showQuestion = true }: { state: AnswerState; isMos: boolean; idPrefix: string; showQuestion?: boolean }) {
-  const { t, form, request, answer, setAnswer, files, setFiles, via, setVia } = state;
+function AnswerFields({ state, idPrefix, showQuestion = true }: { state: AnswerState; idPrefix: string; showQuestion?: boolean }) {
+  const { t, form, request, answer, setAnswer, files, setFiles, who, setWho } = state;
   return (
     <>
       {request && showQuestion ? (
@@ -202,21 +213,13 @@ function AnswerFields({ state, isMos, idPrefix, showQuestion = true }: { state: 
       <Field label={t("common.photos")} error={form.fieldError("files")}>
         <PasteFileZone files={files} onChange={setFiles} />
       </Field>
-      {isMos ? (
-        <Field label={t("tickets.dialogs.answer.who")} help={t("tickets.dialogs.answer.whoHelp")}>
-          <Segmented
-            value={via}
-            onChange={setVia}
-            options={vocabOptions(ANSWERED_VIA).map((o) => ({ value: o.value, label: vocabText(t, o) }))}
-          />
-        </Field>
-      ) : null}
+      <WhoField id={`${idPrefix}-who`} value={who} onChange={setWho} error={form.fieldError("answered_by_name")} />
     </>
   );
 }
 
-export function AnswerDialog({ open, onOpenChange, issue, run, isMos }: StepDialogProps) {
-  const state = useAnswer(issue, run, isMos);
+export function AnswerDialog({ open, onOpenChange, issue, run }: StepDialogProps) {
+  const state = useAnswer(issue, run);
   const { t, form, answer, files } = state;
   return (
     <ActionDialog
@@ -230,14 +233,14 @@ export function AnswerDialog({ open, onOpenChange, issue, run, isMos }: StepDial
       canSubmit={Boolean(state.request)}
       onSubmit={() => void (async () => (await state.send()) && onOpenChange(false))()}
     >
-      <AnswerFields state={state} isMos={isMos} idPrefix="dialog" />
+      <AnswerFields state={state} idPrefix="dialog" />
     </ActionDialog>
   );
 }
 
 /** The store manager's answer box on the Overview's current step card. */
-export function InlineAnswer({ issue, run, isMos }: { issue: TicketIssueDetail; run: RunStep; isMos: boolean }) {
-  const state = useAnswer(issue, run, isMos);
+export function InlineAnswer({ issue, run }: { issue: TicketIssueDetail; run: RunStep }) {
+  const state = useAnswer(issue, run);
   const { t, form } = state;
   if (!state.request) return null;
   return (
@@ -249,7 +252,7 @@ export function InlineAnswer({ issue, run, isMos }: { issue: TicketIssueDetail; 
           if (!form.busy) void state.send();
         }}
       >
-        <AnswerFields state={state} isMos={isMos} idPrefix="inline" showQuestion={false} />
+        <AnswerFields state={state} idPrefix="inline" showQuestion={false} />
         {form.formError ? (
           <p className="text-sm text-destructive" role="alert">
             {form.formError}
@@ -265,21 +268,21 @@ export function InlineAnswer({ issue, run, isMos }: { issue: TicketIssueDetail; 
 
 /* ── Is it working now? ──────────────────────────────────────────────────── */
 
-function useConfirmation(run: RunStep, isMos: boolean) {
+function useConfirmation(run: RunStep) {
   const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
   const [working, setWorking] = useState<boolean | null>(null);
   const [note, setNote] = useState("");
-  const [via, setVia] = useState<AnsweredVia>(isMos ? "specialist" : "store");
+  const [who, setWho] = useState("");
 
   async function send(answer: boolean): Promise<boolean> {
     return form.submit(
-      () => run((key) => maintenanceWorkflowService.confirm(key, { working: answer, note: note.trim() || null, via })),
+      () => run((key) => maintenanceWorkflowService.confirm(key, { working: answer, note: note.trim() || null, confirmedByName: who.trim() || null })),
       answer ? t("tickets.dialogs.confirmation.thanksWorking") : t("tickets.dialogs.confirmation.thanksBroken"),
     );
   }
 
-  return { t, form, working, setWorking, note, setNote, via, setVia, send };
+  return { t, form, working, setWorking, note, setNote, who, setWho, send };
 }
 
 function YesNo({ value, onChange, disabled }: { value: boolean | null; onChange: (v: boolean) => void; disabled?: boolean }) {
@@ -311,15 +314,15 @@ function YesNo({ value, onChange, disabled }: { value: boolean | null; onChange:
   );
 }
 
-export function ConfirmationDialog({ open, onOpenChange, run, isMos }: StepDialogProps) {
-  const state = useConfirmation(run, isMos);
-  const { t, form, working, setWorking, note, setNote, via, setVia } = state;
+export function ConfirmationDialog({ open, onOpenChange, run }: StepDialogProps) {
+  const state = useConfirmation(run);
+  const { t, form, working, setWorking, note, setNote, who, setWho } = state;
   return (
     <ActionDialog
       open={open}
       onOpenChange={onOpenChange}
       form={form}
-      dirty={working !== null || Boolean(note.trim())}
+      dirty={working !== null || Boolean(note.trim() || who.trim())}
       title={t("workflow.actions.confirmation")}
       description={t("tickets.dialogs.confirmation.help")}
       submitLabel={t("common.save")}
@@ -333,18 +336,14 @@ export function ConfirmationDialog({ open, onOpenChange, run, isMos }: StepDialo
           <Textarea id="confirm-note" value={note} onChange={(e) => setNote(e.target.value)} className="min-h-16" />
         </Field>
       </MoreDetails>
-      {isMos ? (
-        <Field label={t("tickets.dialogs.answer.who")} help={t("tickets.dialogs.answer.whoHelp")}>
-          <Segmented value={via} onChange={setVia} options={vocabOptions(ANSWERED_VIA).map((o) => ({ value: o.value, label: vocabText(t, o) }))} />
-        </Field>
-      ) : null}
+      <WhoField id="confirm-who" value={who} onChange={setWho} error={form.fieldError("confirmed_by_name")} />
     </ActionDialog>
   );
 }
 
 /** Yes / No straight on the Overview's current step card (the store's view). */
-export function InlineConfirmation({ run, isMos }: { run: RunStep; isMos: boolean }) {
-  const state = useConfirmation(run, isMos);
+export function InlineConfirmation({ run }: { run: RunStep }) {
+  const state = useConfirmation(run);
   const { t, form, working, setWorking } = state;
   return (
     <div className="space-y-2">

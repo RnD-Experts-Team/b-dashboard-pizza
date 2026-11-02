@@ -75,16 +75,27 @@ Follows the owner's mockup.
   | Submitted by Store Manager". `…` menu: Jump to a status (reason), Cancel,
   Delete ticket.
 - **Issue switcher** (only when the ticket has >1 issue): segmented pills.
-- **Progress strip**: the 11 flowchart steps compressed to 8 dots with labels on
-  hover/desktop: Submitted · Review · Store · Inspection · Approval · Scheduled ·
-  Work done · Closed. Current one filled; skipped ones hollow.
-- **Tabs**: Overview · Work · Costs · Activity (URL `?tab=`).
+- **Now panel** (`ticket/next-step.tsx`, above the tabs, so it shows on every
+  tab): answers "where is this and what do I do now?" in one place —
+  - the step strip: the 11 flowchart steps compressed to 8 labelled dots
+    (Submitted · Review · Store · Inspection · Approval · Scheduled · Work done ·
+    Closed); current filled, skipped struck through;
+  - "Step 5 of 8 · Inspection" with a **Your move** chip when this viewer has a
+    step to run, otherwise "Waiting on: Technician / Store / Approver";
+  - the step title and ONE sentence that names the button to press;
+  - the facts of this step only: the open question (and, for a store manager,
+    the answer box), the answer just given, the inspection booked / its findings
+    and quote, the amount waiting for approval and the level, the work booking,
+    work performed, the store's "it works" answer, the close checklist;
+  - every step that can run now as a visible button — the main one solid, the
+    others outlined (no hidden chevron) — plus "See all in Work / Costs" for the
+    steps whose details live in a tab.
+- **Tabs**: Overview · Work · Costs · Activity · History (URL `?tab=`). Each tab
+  shows how many things it holds; the tab that has the current step's details
+  carries a dot until it is opened.
   - **Overview**: "Ticket details" card with three cells — Assigned to · Target
-    completion · Next action (inline-editable by the MOS). Then the **current
-    step card**: what this step needs, in a sentence, with its checklist (e.g.
-    close checklist with ticks). Waiting on store: the open question; for a store
-    manager an answer box + photo upload. Work done: "Is it working now?" Yes/No
-    for the store. Then description, troubleshooting snapshot, photos.
+    completion · Next action (inline-editable by the MOS). Then description,
+    troubleshooting snapshot, photos, the ticket's own notes and files.
   - **Work**: Inspections (each a card: technician, when, findings, quote,
     photos; "Add second opinion"), Bookings (technician, date, expected
     completion, link to trip, "Move"), Visits from trips (arrived/left, done/not
@@ -97,12 +108,15 @@ Follows the owner's mockup.
     store + issue).
   - **Activity**: one vertical timeline (dot + card per event, newest first),
     like the mockup; notes show a lock icon when MOS-only.
+  - **History**: earlier tickets for the same issue at this store (who worked
+    on it, how it ended), then the store's other open tickets.
 - **Sticky footer** (bottom of the content, safe-area aware): **Add update**
   (outline: note + photos + who can see it) and the **primary next step** from
   `workflow.next[0]` (e.g. "Start review", "Ask the store", "Book inspection",
   "Ask for approval", "Record approval", "Schedule work", "Mark work done",
   "Close ticket"). Other valid `next` actions sit in a small chevron menu next to
-  the primary. The bar is flush with the bottom of the content area in all four
+  the primary. While the Now panel's buttons are on screen the bar shows only
+  the context and Add update (`hideSteps`), so a step never appears twice. The bar is flush with the bottom of the content area in all four
   AppShell layouts (`ticket/use-dock-insets.ts` measures the shell's padding
   instead of guessing it) and rides above the mobile bottom nav while that
   shows; it leaves room at its end for the draggable Debrief button when that
@@ -111,6 +125,8 @@ Follows the owner's mockup.
   action opens ONE small dialog with only its fields (header and buttons fixed,
   only the fields scroll):
   - Ask the store: question + photos.
+  - Answer the question / Is it working now?: plus an optional "Who answered"
+    text ("Sara, by phone") — no store/office choice.
   - Book inspection / Schedule work: technician picker (ranked, badges: covers
     store · covers issue · emergency · call first · ★rating, category filter),
     date, time (optional), expected completion (work only), instructions. On
