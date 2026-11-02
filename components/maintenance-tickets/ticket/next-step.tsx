@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { formatMoney } from "@/lib/maintenance/money";
 import { ISSUE_STATUSES, RESOLUTIONS, WHOSE_TURN, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
-import { actionMeta, splitNextActions, stepDots, whoseTurn, type StepDotState } from "@/lib/maintenance-workflow";
-import type { IssueStatus, TicketIssueDetail, WorkflowNextAction } from "@/types/maintenance-system";
+import { actionMeta, issuePhase, phaseStatus, splitNextActions, stepDots, whoseTurn, type IssuePhase, type StepDotState } from "@/lib/maintenance-workflow";
+import type { TicketIssueDetail, WorkflowNextAction } from "@/types/maintenance-system";
 import { AttachmentGallery } from "../attachment-gallery";
 import { LocalTimestamp } from "../local-timestamp";
 import { ChecklistView } from "./dialogs/finish-dialogs";
@@ -22,7 +22,7 @@ import { visitedStatuses } from "./ticket-top";
 export type DetailTab = "work" | "costs";
 
 /** Which tab holds the details of the step an issue is on. */
-export const STEP_TAB: Partial<Record<IssueStatus, DetailTab>> = {
+export const STEP_TAB: Partial<Record<IssuePhase, DetailTab>> = {
   inspection: "work",
   waiting_approval: "costs",
   scheduled: "work",
@@ -67,7 +67,8 @@ export function useOnScreen(): [(node: HTMLDivElement | null) => void, boolean] 
 
 function StepStrip({ issue }: { issue: TicketIssueDetail }) {
   const t = useTranslations("maintenanceSystem");
-  const dots = stepDots(issue.status.value, [...visitedStatuses(issue), issue.status.value]);
+  const at = phaseStatus(issuePhase(issue));
+  const dots = stepDots(at, [...visitedStatuses(issue), issue.status.value, at]);
   const cancelled = issue.status.value === "cancelled";
   return (
     <ol className="flex items-start" aria-label={t("tickets.page.progress")}>
@@ -182,6 +183,27 @@ function StepFacts({ issue, isMos, canAnswer, canConfirm, run }: { issue: Ticket
     );
   }
 
+  const phase = issuePhase(issue);
+  const approval = issue.approvals.filter((a) => !a.mistaken).sort((a, b) => b.id - a.id)[0] ?? null;
+  if (phase === "approved" && approval) {
+    facts.push(
+      <Fact key="approved" icon={Stamp}>
+        <p className="font-medium">{t("tickets.now.approvedBy", { name: approval.approverName, amount: formatMoney(approval.amount), label: approval.levelLabel })}</p>
+        {approval.note ? <p className="whitespace-pre-wrap text-muted-foreground">{approval.note}</p> : null}
+      </Fact>,
+    );
+  }
+  if (phase === "not_fixed") {
+    facts.push(
+      <Fact key="not-fixed" icon={MessageSquareReply}>
+        <p>
+          {t("tickets.overview.confirmedBroken")}
+          {issue.storeConfirmedByName ? ` (${issue.storeConfirmedByName})` : ""}
+        </p>
+      </Fact>,
+    );
+  }
+
   if (status === "scheduled") {
     facts.push(
       <Fact key="booking" icon={CalendarClock}>
@@ -278,7 +300,9 @@ export function NextStepPanel({
   const t = useTranslations("maintenanceSystem");
   const label = useActionLabel();
   const status = issue.status.value;
-  const dots = stepDots(status);
+  // Back in review after an approval / a failed fix reads as "ready to schedule", not step 2.
+  const phase = issuePhase(issue);
+  const dots = stepDots(phaseStatus(phase));
   const current = Math.max(0, dots.findIndex((d) => d.state === "current"));
   const stepName = status === "cancelled" ? vocabText(t, ISSUE_STATUSES.cancelled) : t(dots[current].key);
 
@@ -289,7 +313,7 @@ export function NextStepPanel({
   const yourMove = next.length > 0;
   const turn = whoseTurn(status);
   const finished = status === "closed" || status === "cancelled";
-  const detailTab = STEP_TAB[status];
+  const detailTab = STEP_TAB[phase];
 
   return (
     <section aria-labelledby="ticket-now-title" className="space-y-4 rounded-xl border border-primary/30 bg-primary/[0.03] p-4 shadow-sm dark:bg-primary/[0.06] sm:p-5">
@@ -314,9 +338,9 @@ export function NextStepPanel({
           ) : null}
         </div>
         <h2 id="ticket-now-title" className="font-heading text-lg font-semibold leading-snug">
-          {t(`tickets.overview.step.${status}.title`)}
+          {t(`tickets.overview.step.${phase}.title`)}
         </h2>
-        <p className="text-sm text-muted-foreground">{t(`tickets.overview.step.${status}.${isMos ? "office" : "store"}`)}</p>
+        <p className="text-sm text-muted-foreground">{t(`tickets.overview.step.${phase}.${isMos ? "office" : "store"}`)}</p>
       </div>
 
       <StepFacts issue={issue} isMos={isMos} canAnswer={canAnswer} canConfirm={canConfirm} run={run} />

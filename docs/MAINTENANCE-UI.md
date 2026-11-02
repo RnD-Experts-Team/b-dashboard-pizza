@@ -79,7 +79,10 @@ Follows the owner's mockup.
   tab): answers "where is this and what do I do now?" in one place —
   - the step strip: the 11 flowchart steps compressed to 8 labelled dots
     (Submitted · Review · Store · Inspection · Approval · Scheduled · Work done ·
-    Closed); current filled, skipped struck through;
+    Closed); current filled, skipped struck through. An issue sent back to
+    In review by an approval or by the store saying it still doesn't work sits
+    on the Scheduled step ("Approved — book the work" / "Not fixed yet — book
+    more work"), not on Review (`lib/maintenance-workflow/phase.ts`);
   - "Step 5 of 8 · Inspection" with a **Your move** chip when this viewer has a
     step to run, otherwise "Waiting on: Technician / Store / Approver";
   - the step title and ONE sentence that names the button to press;

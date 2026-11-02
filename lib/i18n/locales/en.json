@@ -5660,6 +5660,7 @@
       "now": {
         "stepOf": "Step {step} of {total} · {label}",
         "yourMove": "Your move",
+        "approvedBy": "Approved by {name} ({label}) for {amount}",
         "waitingOn": "Waiting on: {who}",
         "inspectionBy": "{name} is booked to inspect · {date}",
         "noResultYet": "No result recorded yet.",
@@ -5709,6 +5710,16 @@
             "title": "In review",
             "office": "Choose the next step below: ask the store a question, book an inspection, or schedule the work.",
             "store": "The maintenance team is working out what to do."
+          },
+          "approved": {
+            "title": "Approved — book the work",
+            "office": "The cost is approved. Press “Schedule work” to book the technician.",
+            "store": "The cost is approved. The repair will be booked next."
+          },
+          "not_fixed": {
+            "title": "Not fixed yet — book more work",
+            "office": "The store says it still doesn’t work. Press “Schedule work” to send a technician again.",
+            "store": "Thanks for telling us. The maintenance team will book more work."
           },
           "waiting_on_store": {
             "title": "Waiting on the store",
