@@ -43,6 +43,35 @@ export function BigButton({
   );
 }
 
+/**
+ * A square-ish tile: icon on top, a short label under it. For a row of quick
+ * actions (break / driving / parts, the bottom bar) where full-width buttons
+ * would push everything else down. Still ≥ 64 px tall.
+ */
+export function TileButton({
+  children,
+  icon,
+  busy = false,
+  variant = "outline",
+  className,
+  ...props
+}: Omit<React.ComponentProps<typeof Button>, "size"> & { icon: ReactNode; busy?: boolean }) {
+  return (
+    <Button
+      variant={variant}
+      className={cn(
+        "h-auto min-h-16 w-full flex-col gap-1 rounded-xl px-2 py-2 text-sm leading-tight font-semibold whitespace-normal [&_svg:not([class*='size-'])]:size-6",
+        className,
+      )}
+      disabled={busy || props.disabled}
+      {...props}
+    >
+      {busy ? <Loader2 className="animate-spin" aria-hidden="true" /> : icon}
+      <span className="text-center">{children}</span>
+    </Button>
+  );
+}
+
 /** A bottom sheet for one action: big title, the fields, a big Cancel. */
 export function PortalSheet({
   open,

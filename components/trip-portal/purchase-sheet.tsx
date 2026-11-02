@@ -57,7 +57,12 @@ function PurchaseForm({ trip, token, run, onDone }: { trip: PublicTrip; token: s
   const [supplier, setSupplier] = useState<IdName | null>(null);
   const [matches, setMatches] = useState<IdName[]>([]);
   const [receipt, setReceipt] = useState<File[]>([]);
-  const [issueId, setIssueId] = useState<number | null>(null);
+  // At a store with one job to do, a purchase is almost always for that job.
+  const [issueId, setIssueId] = useState<number | null>(() => {
+    const here = trip.stops.find((s) => !s.mistaken && s.status === "arrived" && !s.leftAt);
+    const open = here?.issues.filter((i) => i.taskStatus === "pending") ?? [];
+    return open.length === 1 ? open[0].ticketIssueId : null;
+  });
   const [serial, setSerial] = useState("");
   const [showMore, setShowMore] = useState(false);
   const [errors, setErrors] = useState<Errors>({});

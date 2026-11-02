@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   Car,
   Check,
+  ChevronDown,
   Coffee,
   Link2Off,
   LogIn,
@@ -28,7 +29,7 @@ import { tripPortalService, useTripPortal } from "@/lib/hooks/use-trip-portal";
 import { openSession, TRIP_BUTTONS, TRIP_STATE_TONE, type TripButton } from "@/lib/maintenance-trips";
 import { PRIORITIES, TRIP_STATES, TRIP_STOP_STATUSES, VISIT_TASK_STATUSES, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
 import type { PublicTrip, TripPortalErrorKind, TripSession, TripState, TripStop } from "@/types/maintenance-system";
-import { BigButton, usePortalErrorText } from "./portal-bits";
+import { BigButton, TileButton, usePortalErrorText } from "./portal-bits";
 import {
   AddStoreSheet,
   ArriveSheet,
@@ -163,7 +164,12 @@ function PortalBody({
   const stateEntry = TRIP_STATES[state];
   const StateIcon = STATE_ICONS[state];
   const buttons = portalButtons(state);
+  // The store he is at first, then the ones still to visit; finished stores
+  // fold away at the end so the list stays short.
   const stops = trip.stops.filter((s) => !s.mistaken);
+  const isHere = (s: TripStop) => s.status === "arrived" && !s.leftAt;
+  const activeStops = [...stops.filter(isHere), ...stops.filter((s) => s.status === "planned")];
+  const finishedStops = stops.filter((s) => !isHere(s) && s.status !== "planned");
 
   async function press(button: TripButton): Promise<void> {
     if (button.id === "clock_in") {
@@ -214,7 +220,7 @@ function PortalBody({
   const PrimaryIcon = BUTTON_ICONS[buttons.primary.icon] ?? LogIn;
 
   return (
-    <div className="mx-auto max-w-lg space-y-6 px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(2rem+env(safe-area-inset-bottom))]">
+    <div className="mx-auto max-w-lg space-y-6 px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(7rem+env(safe-area-inset-bottom))]">
       <header className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -263,21 +269,42 @@ function PortalBody({
         >
           {t(buttons.primary.key)}
         </BigButton>
-        {buttons.secondary.map((b) => {
-          const Icon = BUTTON_ICONS[b.icon] ?? Check;
-          return (
-            <BigButton
-              key={b.id}
-              variant="outline"
-              icon={<Icon aria-hidden="true" />}
-              busy={eventBusy === b.id}
-              disabled={!!eventBusy}
-              onClick={() => void press(b)}
-            >
-              {t(b.key)}
-            </BigButton>
-          );
-        })}
+        {buttons.secondary.length > 1 ? (
+          // Break / driving / getting parts side by side: one row, not three.
+          <div className="grid grid-cols-3 gap-2">
+            {buttons.secondary.map((b) => {
+              const Icon = BUTTON_ICONS[b.icon] ?? Check;
+              return (
+                <TileButton
+                  key={b.id}
+                  icon={<Icon aria-hidden="true" />}
+                  busy={eventBusy === b.id}
+                  disabled={!!eventBusy}
+                  onClick={() => void press(b)}
+                >
+                  {t(b.key)}
+                </TileButton>
+              );
+            })}
+          </div>
+        ) : (
+          // Ending a break / drive / parts run is the one thing to do next.
+          buttons.secondary.map((b) => {
+            const Icon = BUTTON_ICONS[b.icon] ?? Check;
+            return (
+              <BigButton
+                key={b.id}
+                variant="outline"
+                icon={<Icon aria-hidden="true" />}
+                busy={eventBusy === b.id}
+                disabled={!!eventBusy}
+                onClick={() => void press(b)}
+              >
+                {t(b.key)}
+              </BigButton>
+            );
+          })
+        )}
       </section>
 
       <section className="space-y-3" aria-labelledby="portal-stops">
@@ -287,7 +314,7 @@ function PortalBody({
         {!stops.length && (
           <p className="rounded-xl border border-dashed px-4 py-6 text-center text-base text-muted-foreground">{t("tripPortal.noStops")}</p>
         )}
-        {stops.map((stop) => (
+        {activeStops.map((stop) => (
           <StopCard
             key={stop.id}
             stop={stop}
@@ -297,19 +324,45 @@ function PortalBody({
             onNotDone={(issue) => setNotDone({ stop, issue })}
           />
         ))}
-        <BigButton variant="outline" icon={<Plus aria-hidden="true" />} onClick={() => setSheet("addStore")}>
-          {t("tripPortal.addStore")}
-        </BigButton>
+        {!!finishedStops.length && (
+          <details className="group rounded-2xl border bg-card">
+            <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-4 text-lg font-semibold [&::-webkit-details-marker]:hidden">
+              {t("tripPortal.finishedStops", { count: finishedStops.length })}
+              <ChevronDown className="size-5 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+            </summary>
+            <div className="space-y-3 border-t p-3">
+              {finishedStops.map((stop) => (
+                <StopCard
+                  key={stop.id}
+                  stop={stop}
+                  onArrive={() => arrive(stop)}
+                  onLeave={() => void leave(stop)}
+                  onDone={(issue) => setDoneTarget({ stop, issue })}
+                  onNotDone={(issue) => setNotDone({ stop, issue })}
+                />
+              ))}
+            </div>
+          </details>
+        )}
       </section>
 
-      <section className="space-y-2 border-t pt-6" aria-label={t("tripPortal.more")}>
-        <BigButton variant="secondary" icon={<ShoppingBag aria-hidden="true" />} onClick={() => setSheet("purchase")}>
-          {t("tripPortal.boughtSomething")}
-        </BigButton>
-        <BigButton variant="secondary" icon={<MessageSquarePlus aria-hidden="true" />} onClick={() => setSheet("note")}>
-          {t("tripPortal.addNote")}
-        </BigButton>
-      </section>
+      {/* Always within thumb reach, however long the list of stores gets. */}
+      <nav
+        aria-label={t("tripPortal.quickActions")}
+        className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85"
+      >
+        <div className="mx-auto grid max-w-lg grid-cols-3 gap-2 px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+          <TileButton variant="secondary" icon={<ShoppingBag aria-hidden="true" />} onClick={() => setSheet("purchase")}>
+            {t("tripPortal.dockBought")}
+          </TileButton>
+          <TileButton variant="secondary" icon={<MessageSquarePlus aria-hidden="true" />} onClick={() => setSheet("note")}>
+            {t("tripPortal.dockNote")}
+          </TileButton>
+          <TileButton variant="secondary" icon={<Plus aria-hidden="true" />} onClick={() => setSheet("addStore")}>
+            {t("tripPortal.dockAddStore")}
+          </TileButton>
+        </div>
+      </nav>
 
       <ClockInSheet open={sheet === "clockIn"} onOpenChange={(o) => setSheet(o ? "clockIn" : null)} run={run} />
       <ClockOutSheet

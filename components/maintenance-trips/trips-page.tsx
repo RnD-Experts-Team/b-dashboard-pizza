@@ -25,6 +25,8 @@ interface ShownLink {
   url: string;
   shareText: string;
   technicianName: string | null;
+  /** The new trip; its drawer opens once the link dialog is closed. */
+  tripId: number;
 }
 
 /**
@@ -74,12 +76,15 @@ export function TripsPage() {
     toast.success(t("trips.newTripDialog.created"));
     bump();
     if (!trip?.id) return;
+    // One thing at a time: a new link is shown first (it is the only moment
+    // it can be copied), and the trip opens when that dialog is closed.
     if (tripLink?.urlToken) {
       const token = tripLink.urlToken;
       setIssuedTokens((cur) => ({ ...cur, [trip.id]: token }));
       const url = tripLinkUrl(token, locale);
       setShownLink({
         url,
+        tripId: trip.id,
         technicianName: trip.technician?.name ?? null,
         shareText: tripShareText({
           link: url,
@@ -89,6 +94,7 @@ export function TripsPage() {
           template: t.raw("trips.shareText") as string,
         }),
       });
+      return;
     }
     openTrip(trip.id);
   }
@@ -152,7 +158,12 @@ export function TripsPage() {
       {shownLink && (
         <TripLinkDialog
           open
-          onOpenChange={(open) => !open && setShownLink(null)}
+          onOpenChange={(open) => {
+            if (open) return;
+            const { tripId } = shownLink;
+            setShownLink(null);
+            openTrip(tripId);
+          }}
           url={shownLink.url}
           shareText={shownLink.shareText}
           technicianName={shownLink.technicianName}
