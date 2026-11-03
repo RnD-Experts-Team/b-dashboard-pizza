@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { filterWeeks, parseWeekQuery, toBusinessWeek, weekFromNumber, type BusinessWeek } from "@/lib/utils/business-week";
 
+/** The picked week sits halfway down the list: (free space) / 2 above it. */
+const HALVES = 2;
+
 /**
  * Picks one Tuesday→Monday week: scroll the list, or type "43 2026" / "43/26" / "43"
  * to filter it and press Enter. A typed week/year outside the list (older than it)
@@ -75,9 +78,19 @@ export function WeekSelect({
             {!compact && <ChevronDown className="size-4 opacity-50" aria-hidden="true" />}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-52 p-1.5" align="start">
+        <PopoverContent
+          className="w-52 p-1.5"
+          align="start"
+          onOpenAutoFocus={(e) => {
+            // Straight into the search box with a mouse; on a touch screen that would pop the
+            // keyboard every time, so the list is shown and the box is one tap away.
+            e.preventDefault();
+            if (window.matchMedia("(pointer: fine)").matches) {
+              (e.currentTarget as HTMLElement).querySelector("input")?.focus({ preventScroll: true });
+            }
+          }}
+        >
           <Input
-            autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -101,7 +114,14 @@ export function WeekSelect({
                   role="option"
                   aria-selected={w.start === value}
                   ref={(el) => {
-                    if (el && w.start === value && !query) el.scrollIntoView({ block: "center" });
+                    // Centre the picked week in the list by scrolling the list alone. scrollIntoView
+                    // also scrolls the page frame (see scroll-to-section.ts), sliding the whole app up
+                    // off the screen on a tablet and leaving it stuck there.
+                    const list = el?.parentElement;
+                    if (el && list && w.start === value && !query) {
+                      const offset = el.getBoundingClientRect().top - list.getBoundingClientRect().top;
+                      list.scrollTop += offset - (list.clientHeight - el.clientHeight) / HALVES;
+                    }
                   }}
                   onClick={() => pick(w)}
                   className={cn(
