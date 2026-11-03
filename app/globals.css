@@ -291,6 +291,17 @@ html[data-secondary-font="instrumentSans"] body {
   }
 }
 
+/* iPad/iPhone Safari zooms the page into any focused field under 16px and stays zoomed
+   after it closes (a filter's search box, a date field). On touch screens fields are 16px.
+   Unlayered on purpose, so it wins over the text-sm/text-xs utilities. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"], [type="radio"], [type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 /* Announcement HTML body rendering */
 .announcement-body p { margin-top: 0.25rem; margin-bottom: 0.25rem; }
 .announcement-body ul { list-style-type: disc; padding-left: 1.25rem; margin-top: 0.25rem; margin-bottom: 0.25rem; }
