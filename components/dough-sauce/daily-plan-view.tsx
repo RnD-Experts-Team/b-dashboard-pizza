@@ -369,6 +369,7 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
             {[
               { iso: yesterday, label: t("relYesterday"), hint: t("quickYesterdayHint") },
               { iso: today, label: t("relToday"), hint: t("quickTodayHint") },
+              { iso: tomorrow, label: t("relTomorrow"), hint: t("quickTomorrowHint") },
             ].map((q) => (
               <button
                 key={q.iso}

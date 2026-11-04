@@ -3050,6 +3050,7 @@
       "relYesterday": "Yesterday",
       "quickYesterdayHint": "Its sales are built — you can plan it",
       "quickTodayHint": "Sales are built tomorrow after 10:30 — view only",
+      "quickTomorrowHint": "Hasn't happened yet — nothing to build a base from, view only",
       "baseNotReady": "Sales for {date} aren't built yet. They are built the next day, {next}, after 10:30 (and again at 13:30). Refresh then — until then nothing can be confirmed.",
       "baseNotReadyFuture": "{date} hasn't happened yet, so there are no sales to build a base from.",
       "baseNotReadyChip": "Base available {next} after 10:30",
