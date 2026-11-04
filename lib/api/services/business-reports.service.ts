@@ -1,14 +1,32 @@
 import axios from "axios";
+import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
+import type { TicketsAnalytics } from "@/types/maintenance-tickets.types";
 import type {
   BusinessReportsParams,
-  MultiDashboardResponse,
-  V1ReportsResponse,
+  DebriefsSection,
+  LaborReport,
+  MenuSection,
+  OperationsSection,
+  OrdersSection,
+  QualitySection,
+  SalesSection,
+  StoreScoreSection,
   WbrBulkResponse,
-  StoreSelection,
 } from "@/types/business-reports.types";
 
-/** Heavy-page client timeout (matches the proxy routes' default). */
-const CLIENT_TIMEOUT_MS = 60_000;
+const MS_PER_SECOND = 1000;
+/** A little over the proxies' own 5-minute wait, so the server answers first. */
+const CLIENT_TIMEOUT_SECONDS = 310;
+const CLIENT_TIMEOUT_MS = CLIENT_TIMEOUT_SECONDS * MS_PER_SECOND;
+
+/**
+ * The store score is computed per store and per week, so it is asked for in
+ * batches of stores that run side by side: each request stays short and the
+ * grid fills in as batches land. (A batch size, not a cap — every store is
+ * scored.)
+ */
+const STORE_SCORE_BATCH = 25;
+const STORE_SCORE_PARALLEL = 4;
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -28,68 +46,106 @@ function buildHeaders() {
   return { Authorization: `Bearer ${token}`, Accept: "application/json" };
 }
 
-/**
- * Build a query string for the GET endpoints.
- * - "all" → `stores[]=all` (when allAsArray) or `stores=all` (otherwise)
- * - list  → repeated `stores[]=<id>`
- */
-function buildQuery(
-  params: BusinessReportsParams,
-  allAsArray: boolean,
-): string {
-  const qs = new URLSearchParams();
-  qs.set("start_date", params.startDate);
-  qs.set("end_date", params.endDate);
+function body(params: BusinessReportsParams) {
+  return { start_date: params.startDate, end_date: params.endDate, stores: params.stores };
+}
 
-  const stores: StoreSelection = params.stores;
-  if (stores === "all") {
-    if (allAsArray) qs.append("stores[]", "all");
-    else qs.set("stores", "all");
-  } else {
-    for (const id of stores) qs.append("stores[]", id);
-  }
-  return qs.toString();
+function query(params: BusinessReportsParams): string {
+  return new URLSearchParams([
+    ["start_date", params.startDate],
+    ["end_date", params.endDate],
+    ...params.stores.map((store): [string, string] => ["stores[]", store]),
+  ]).toString();
+}
+
+async function postSection<T>(
+  section: string,
+  params: BusinessReportsParams,
+  signal?: AbortSignal,
+): Promise<T> {
+  const { data } = await axios.post<T>(`/api/reports/business/${section}`, body(params), {
+    headers: buildHeaders(),
+    timeout: CLIENT_TIMEOUT_MS,
+    signal,
+  });
+  return data;
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  return Array.from({ length: Math.ceil(items.length / size) }, (_, i) =>
+    items.slice(i * size, (i + 1) * size),
+  );
 }
 
 export const businessReportsService = {
-  /** POST /api/reports/multi-dashboard — sales & operations rollup. */
-  async getMultiDashboard(
+  getSales: (p: BusinessReportsParams, s?: AbortSignal) => postSection<SalesSection>("sales", p, s),
+  getOperations: (p: BusinessReportsParams, s?: AbortSignal) =>
+    postSection<OperationsSection>("operations", p, s),
+  getMenu: (p: BusinessReportsParams, s?: AbortSignal) => postSection<MenuSection>("menu", p, s),
+  getOrders: (p: BusinessReportsParams, s?: AbortSignal) => postSection<OrdersSection>("orders", p, s),
+  getQuality: (p: BusinessReportsParams, s?: AbortSignal) => postSection<QualitySection>("quality", p, s),
+  getDebriefs: (p: BusinessReportsParams, s?: AbortSignal) =>
+    postSection<DebriefsSection>("debriefs", p, s),
+
+  /** Store score in store batches; `onBatch` gets the merged result after each one lands. */
+  async getStoreScore(
     params: BusinessReportsParams,
     signal?: AbortSignal,
-  ): Promise<MultiDashboardResponse> {
-    const { data } = await axios.post<MultiDashboardResponse>(
-      "/api/reports/multi-dashboard",
-      {
-        start_date: params.startDate,
-        end_date: params.endDate,
-        stores: params.stores,
-      },
-      { headers: buildHeaders(), timeout: CLIENT_TIMEOUT_MS, signal },
+    onBatch?: (partial: StoreScoreSection) => void,
+  ): Promise<StoreScoreSection> {
+    const batches = chunk(params.stores, STORE_SCORE_BATCH);
+    let merged: StoreScoreSection | null = null;
+    let next = 0;
+
+    const absorb = (part: StoreScoreSection): void => {
+      merged = merged
+        ? { ...merged, by_store: { ...merged.by_store, ...part.by_store } }
+        : { ...part, meta: { ...part.meta, stores: params.stores, store_count: params.stores.length } };
+      onBatch?.(merged);
+    };
+
+    // Each runner takes the next batch when its previous one lands.
+    const runner = async (): Promise<void> => {
+      const stores = batches[next++];
+      if (!stores) return;
+      absorb(await postSection<StoreScoreSection>("store-score", { ...params, stores }, signal));
+      return runner();
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(STORE_SCORE_PARALLEL, batches.length) }, runner),
     );
+    // Assigned inside the runners, which control-flow analysis can't see.
+    const result = merged as StoreScoreSection | null;
+    if (!result) throw new Error("No stores to score.");
+    return result;
+  },
+
+  /** GET /api/reports/labor — the Labor report (Hiring). */
+  async getLabor(params: BusinessReportsParams, signal?: AbortSignal): Promise<LaborReport> {
+    const { data } = await axios.get<LaborReport>(`/api/reports/labor?${query(params)}`, {
+      headers: buildHeaders(),
+      timeout: CLIENT_TIMEOUT_MS,
+      signal,
+    });
     return data;
   },
 
-  /** GET /api/reports/v1 — labor & employees. */
-  async getV1Reports(
-    params: BusinessReportsParams,
-    signal?: AbortSignal,
-  ): Promise<V1ReportsResponse> {
-    const { data } = await axios.get<V1ReportsResponse>(
-      `/api/reports/v1?${buildQuery(params, true)}`,
-      { headers: buildHeaders(), timeout: CLIENT_TIMEOUT_MS, signal },
-    );
+  /** GET /api/reports/wbr-bulk — feedback, complaints & money owed (hooks). */
+  async getFeedback(params: BusinessReportsParams, signal?: AbortSignal): Promise<WbrBulkResponse> {
+    const { data } = await axios.get<WbrBulkResponse>(`/api/reports/wbr-bulk?${query(params)}`, {
+      headers: buildHeaders(),
+      timeout: CLIENT_TIMEOUT_MS,
+      signal,
+    });
     return data;
   },
 
-  /** GET /api/reports/wbr-bulk — feedback, complaints & money owed. */
-  async getWbrBulk(
-    params: BusinessReportsParams,
-    signal?: AbortSignal,
-  ): Promise<WbrBulkResponse> {
-    const { data } = await axios.get<WbrBulkResponse>(
-      `/api/reports/wbr-bulk?${buildQuery(params, false)}`,
-      { headers: buildHeaders(), timeout: CLIENT_TIMEOUT_MS, signal },
+  /** Maintenance tickets opened in the range (analytics over the same stores). */
+  getTickets(params: BusinessReportsParams, signal?: AbortSignal): Promise<TicketsAnalytics> {
+    return maintenanceTicketsService.getGlobalTicketsAnalytics(
+      { stores: params.stores, created_from: params.startDate, created_to: params.endDate },
+      signal,
     );
-    return data;
   },
 };

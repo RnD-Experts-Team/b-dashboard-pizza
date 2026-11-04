@@ -1,0 +1,112 @@
+import { format, parseISO } from "date-fns";
+import type { ReportWeek } from "@/types/business-reports.types";
+
+/**
+ * Business Reports formatting and bucketing. Number formats come from the V1
+ * kit (`components/dspr/wbr-format.tsx`) and the labor colour bands from the V1
+ * Labor card, so both pages read the same.
+ */
+export {
+  fmt$,
+  fmt$2,
+  fmtNum,
+  fmtNumD,
+  fmtPct,
+  fmtPct2,
+  fmtDate,
+  pctChangeOrNull,
+  Delta,
+} from "@/components/dspr/wbr-format";
+export { LABOR_ZONES, laborColor, laborLabel } from "@/components/dashboard-v1/cards/v1-labor";
+
+const PERCENT = 100;
+
+/** Per-store-day average, or 0 when nothing was recorded. */
+export function perStoreDay(value: number, storeDays: number): number {
+  return storeDays > 0 ? value / storeDays : 0;
+}
+
+/** Share of a total, in %. */
+export function share(part: number, total: number): number {
+  return total > 0 ? (part / total) * PERCENT : 0;
+}
+
+/** Percentage-point difference (current − previous), or null without a previous. */
+export function ppDelta(curr: number | null | undefined, prev: number | null | undefined): number | null {
+  if (prev === null || prev === undefined || curr === null || curr === undefined) return null;
+  return curr - prev;
+}
+
+/* ── Time buckets ────────────────────────────────────────────────────────── */
+
+export type Granularity = "day" | "week" | "period" | "quarter" | "year";
+
+export const GRANULARITY_OPTIONS: { value: Granularity; label: string }[] = [
+  { value: "day", label: "Day" },
+  { value: "week", label: "Week" },
+  { value: "period", label: "Period" },
+  { value: "quarter", label: "Quarter" },
+  { value: "year", label: "Year" },
+];
+
+const DAILY_UP_TO_DAYS = 62;
+const WEEKLY_UP_TO_DAYS = 731;
+
+/** Days up to ~2 months, weeks up to 2 years, then fiscal periods. */
+export function defaultGranularity(days: number): Granularity {
+  if (days <= DAILY_UP_TO_DAYS) return "day";
+  if (days <= WEEKLY_UP_TO_DAYS) return "week";
+  return "period";
+}
+
+export function fmtDay(iso: string): string {
+  return format(parseISO(iso), "MMM d");
+}
+
+export function fmtRange(start: string, end: string): string {
+  return start === end ? fmtDay(start) : `${fmtDay(start)} → ${fmtDay(end)}`;
+}
+
+/** "Wk 43 · Oct 21" for a week row. */
+export function weekLabel(w: Pick<ReportWeek, "week_number" | "start">): string {
+  return `Wk ${w.week_number} · ${fmtDay(w.start)}`;
+}
+
+export interface Bucket<T> {
+  key: string;
+  label: string;
+  start: string;
+  end: string;
+  rows: T[];
+}
+
+/**
+ * Groups business weeks into fiscal periods / quarters / years (the same
+ * calendar V1's Sales History uses). "week" keeps one bucket per week.
+ */
+export function bucketWeeks<T extends ReportWeek>(weeks: T[], by: Exclude<Granularity, "day">): Bucket<T>[] {
+  const keyOf = (w: T): [string, string] => {
+    if (by === "week") return [w.week_start, weekLabel(w)];
+    if (by === "period") return [`${w.fiscal_year}-P${w.period_number}`, `P${w.period_number} · ${w.fiscal_year}`];
+    if (by === "quarter") return [`${w.fiscal_year}-Q${w.quarter_number}`, `Q${w.quarter_number} · ${w.fiscal_year}`];
+    return [String(w.fiscal_year), `FY ${w.fiscal_year}`];
+  };
+
+  return weeks.reduce<Bucket<T>[]>((buckets, w) => {
+    const [key, label] = keyOf(w);
+    const last = buckets[buckets.length - 1];
+    if (last && last.key === key) {
+      last.rows.push(w);
+      last.end = w.end;
+      return buckets;
+    }
+    return [...buckets, { key, label, start: w.start, end: w.end, rows: [w] }];
+  }, []);
+}
+
+/** Sums the given numeric keys over rows. */
+export function sumKeys<T, K extends keyof T>(rows: T[], keys: readonly K[]): Record<K, number> {
+  return Object.fromEntries(
+    keys.map((k) => [k, rows.reduce((s, r) => s + (Number(r[k]) || 0), 0)]),
+  ) as Record<K, number>;
+}

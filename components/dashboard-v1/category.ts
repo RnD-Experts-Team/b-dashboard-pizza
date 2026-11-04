@@ -126,10 +126,12 @@ export const CATEGORIES: Record<CategoryKey, CategoryToken> = {
 };
 
 /** Period a card's data represents — drives the small badge on each card. */
-export type Period = "D" | "W" | "D·WTD";
+export type Period = "D" | "W" | "D·WTD" | "R";
 
 export const PERIOD_LABEL: Record<Period, string> = {
   D: "Daily",
   W: "Weekly",
   "D·WTD": "Day · WTD",
+  /** Business Reports: the whole selected date range. */
+  R: "Range",
 };

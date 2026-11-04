@@ -1,86 +1,113 @@
 "use client";
 
-import { RefreshCw } from "lucide-react";
+import { CalendarRange, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { StoreSelection } from "@/types/business-reports.types";
 import { StoreMultiSelect, type StoreOption } from "./store-multi-select";
+import {
+  RANGE_PRESETS,
+  matchPreset,
+  presetRange,
+  type DateRange,
+  type RangePresetKey,
+} from "./range-presets";
+
+const CUSTOM = "custom";
 
 interface BusinessReportsControlsProps {
   storeOptions: StoreOption[];
   selection: StoreSelection;
   onSelectionChange: (value: StoreSelection) => void;
-  startDate: string;
-  onStartDateChange: (value: string) => void;
-  endDate: string;
-  onEndDateChange: (value: string) => void;
+  range: DateRange;
+  onRangeChange: (range: DateRange) => void;
   onLoad: () => void;
-  isLoading: boolean;
-  /** True once the first load has completed — switches the button label. */
+  busy: boolean;
   hasLoaded: boolean;
 }
 
 /**
- * Header controls for the Business Reports page: store multi-select, a
- * start/end date range, and a manual Load / Refresh trigger. Nothing fetches
- * until the button is clicked (this page is heavy).
+ * Header controls: stores, a business-calendar quick range (or any custom
+ * dates), and Load. Nothing is fetched until Load — the page is heavy.
  */
 export function BusinessReportsControls({
   storeOptions,
   selection,
   onSelectionChange,
-  startDate,
-  onStartDateChange,
-  endDate,
-  onEndDateChange,
+  range,
+  onRangeChange,
   onLoad,
-  isLoading,
+  busy,
   hasLoaded,
 }: BusinessReportsControlsProps) {
-  const hasStores = selection === "all" || selection.length > 0;
-  const validRange =
-    !!startDate && !!endDate && startDate <= endDate;
-  const canLoad = hasStores && validRange && !isLoading;
+  const hasStores = selection === "all" ? storeOptions.length > 0 : selection.length > 0;
+  const validRange = !!range.start && !!range.end && range.start <= range.end;
+  const preset = matchPreset(range) ?? CUSTOM;
+  const blockedReason = [
+    { blocked: !hasStores, reason: "Select at least one store" },
+    { blocked: !validRange, reason: "Pick a valid date range" },
+  ].find((r) => r.blocked)?.reason;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-1.5">
       <StoreMultiSelect
         options={storeOptions}
         value={selection}
         onChange={onSelectionChange}
-        disabled={isLoading}
+        className="h-9 w-44"
       />
 
+      <Select
+        value={preset}
+        onValueChange={(v) => {
+          if (v !== CUSTOM) onRangeChange(presetRange(v as RangePresetKey));
+        }}
+      >
+        <SelectTrigger className="w-40 text-xs">
+          <CalendarRange className="h-3.5 w-3.5 text-muted-foreground" />
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {RANGE_PRESETS.map((p) => (
+            <SelectItem key={p.key} value={p.key} className="text-xs">
+              {p.label}
+            </SelectItem>
+          ))}
+          <SelectItem value={CUSTOM} className="text-xs">
+            Custom range
+          </SelectItem>
+        </SelectContent>
+      </Select>
+
       <DatePicker
-        value={startDate}
-        onChange={onStartDateChange}
+        value={range.start}
+        onChange={(start) => onRangeChange({ ...range, start })}
         placeholder="Start date"
-        disabled={isLoading}
-        className="w-40"
+        className="w-36"
       />
+      <span className="text-xs text-muted-foreground">→</span>
       <DatePicker
-        value={endDate}
-        onChange={onEndDateChange}
+        value={range.end}
+        onChange={(end) => onRangeChange({ ...range, end })}
         placeholder="End date"
-        disabled={isLoading}
-        className="w-40"
+        className="w-36"
       />
 
       <Button
         type="button"
-        size="sm"
         onClick={onLoad}
-        disabled={!canLoad}
-        title={
-          !hasStores
-            ? "Select at least one store"
-            : !validRange
-              ? "Pick a valid date range"
-              : undefined
-        }
+        disabled={Boolean(blockedReason) || busy}
+        title={blockedReason}
       >
-        <RefreshCw className={cn("me-2 h-4 w-4", isLoading && "animate-spin")} />
+        <RefreshCw className={cn("me-1.5 h-3.5 w-3.5", busy && "animate-spin")} />
         {hasLoaded ? "Refresh" : "Load"}
       </Button>
     </div>

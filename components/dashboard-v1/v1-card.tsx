@@ -18,7 +18,10 @@ import { CATEGORIES, PERIOD_LABEL, type CategoryKey, type Period } from "./categ
  *  they have a detail view, own their own dialog + pass `onExpand`.
  * ────────────────────────────────────────────────────────────────────────── */
 
-const SPAN_CLASS: Record<1 | 2 | 3 | 4, string> = {
+/** Grid column span of a card (4 = full width). */
+export type V1Span = 1 | 2 | 3 | 4;
+
+export const SPAN_CLASS: Record<V1Span, string> = {
   1: "col-span-1 md:col-span-1 lg:col-span-1",
   2: "col-span-1 md:col-span-1 lg:col-span-2",
   3: "col-span-1 md:col-span-1 lg:col-span-3",
@@ -30,7 +33,7 @@ export interface V1CardProps {
   category: CategoryKey;
   period: Period;
   /** Grid column span. Reserve 4 (full-width) for a rare, deliberately bigger feature card. */
-  span?: 1 | 2 | 3 | 4;
+  span?: V1Span;
   /** Right-aligned note in the header (e.g. a week range). */
   headerNote?: ReactNode;
   /** Inline control rendered after the period badge (e.g. a Day/WTD toggle). */

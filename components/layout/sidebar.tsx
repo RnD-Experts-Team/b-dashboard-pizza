@@ -366,7 +366,10 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     title: "Business Reports",
     href: `/${locale}/dashboard/business-reports`,
     icon: BarChart3,
-    // No auth rule defined yet — always visible for stores the user can access.
+    // The page's main section; probed with no store (the rule allows an empty store list).
+    requirements: [
+      { service: "Data", method: "POST", path: "/reports/business/sales" },
+    ],
   };
 
   // const maintenanceItem: NavItem = {

@@ -4,6 +4,7 @@ import {
   errorResponse,
   fetchWithTimeout,
 } from "@/app/api/_lib/auth";
+import { BUSINESS_REPORTS_TIMEOUT_MS } from "@/app/api/reports/_lib/business-proxy";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -19,9 +20,7 @@ const HOOKS_SECRET_KEY =
   process.env.NEXT_PUBLIC_HOOKS_API_URL_HEADER_KEY ||
   "";
 
-/** Heavy-page timeout (default 60 s). */
-const UPSTREAM_TIMEOUT_MS =
-  Number(process.env.BUSINESS_REPORTS_TIMEOUT_MS) || 60_000;
+const UPSTREAM_TIMEOUT_MS = BUSINESS_REPORTS_TIMEOUT_MS;
 
 /**
  * GET /api/reports/wbr-bulk?stores[]=…&start_date=…&end_date=…
@@ -66,7 +65,7 @@ export async function GET(request: NextRequest) {
     if (err instanceof DOMException && err.name === "AbortError") {
       return errorResponse(
         "TIMEOUT",
-        `The hooks server did not respond within ${UPSTREAM_TIMEOUT_MS / 1000}s. Please try a smaller range or fewer stores.`,
+        `The hooks server did not respond within ${UPSTREAM_TIMEOUT_MS / 1000}s.`,
         504,
       );
     }
