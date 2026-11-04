@@ -278,6 +278,8 @@ html[data-secondary-font="instrumentSans"] body {
   html {
     height: 100%;
     overflow: hidden;
+    /* Panning only, no pinch-zoom (see the viewport in app/[locale]/layout.tsx). */
+    touch-action: pan-x pan-y;
   }
   
   body {
@@ -288,17 +290,6 @@ html[data-secondary-font="instrumentSans"] body {
   
   * {
     @apply border-border outline-ring/50;
-  }
-}
-
-/* iPad/iPhone Safari zooms the page into any focused field under 16px and stays zoomed
-   after it closes (a filter's search box, a date field). On touch screens fields are 16px.
-   Unlayered on purpose, so it wins over the text-sm/text-xs utilities. */
-@media (pointer: coarse) {
-  input:not([type="checkbox"], [type="radio"], [type="range"]),
-  select,
-  textarea {
-    font-size: 16px;
   }
 }
 
