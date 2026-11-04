@@ -55,6 +55,7 @@ import {
   LifeBuoy,
   Activity,
   Route,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   Dialog,
@@ -286,6 +287,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const devToolsEnabled = useFeature("devTools");
   const i18nIntelligenceEnabled = useFeature("i18nIntelligence");
   const securityMonitorEnabled = useFeature("securityMonitor");
+  const reportBuilderEnabled = useFeature("reportBuilder");
 
   /* ---- Unread-notification → sidebar count mapping ----
    * Derived from the same `notifications` array the bell's badge count and
@@ -639,6 +641,20 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           { service: "Data", method: "GET", path: "/stores/*/goals", storeId: effectiveStoreId }
         ],
       },
+      // Report Builder (behind the `reportBuilder` flag). Probed with NO storeId:
+      // the templates path carries none and its rule is unscoped.
+      ...(reportBuilderEnabled
+        ? [
+            {
+              title: t("reportBuilder"),
+              href: `/${locale}/dashboard/report-builder`,
+              icon: FileSpreadsheet,
+              requirements: [
+                { service: "Data", method: "GET", path: "/report-builder/templates" },
+              ],
+            },
+          ]
+        : []),
       // {
       //   title: t("employeeDebriefHistory"),
       //   href: `/${locale}/dashboard/employee-debrief-history`,

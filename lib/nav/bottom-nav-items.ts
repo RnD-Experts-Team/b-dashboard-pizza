@@ -38,9 +38,11 @@ import {
   Table2,
   HardHat,
   Route,
+  FileSpreadsheet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { CanAccessParams } from "@/lib/auth/can-access";
+import type { FeatureId } from "@/lib/config/features.types";
 import { DS_ROUTES } from "@/lib/dough-sauce/access";
 
 /**
@@ -63,6 +65,8 @@ export interface BottomNavItem {
   /** Direct permission check via hasPermission(), when present. */
   requiredPermission?: string;
   exact?: boolean;
+  /** Shown only while this feature flag is on (mirrors a flag-gated sidebar item). */
+  feature?: FeatureId;
   /**
    * Matches one of BOTTOM_NAV_GROUPS' keys when this item belongs to a
    * collapsible sidebar group. Omitted for sidebar's flat (ungrouped) items
@@ -292,6 +296,18 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     requirements: (storeId) => [
       { service: "Data", method: "GET", path: "/stores/*/goals", storeId },
     ],
+    groupKey: "dataManagement",
+  },
+  {
+    id: "reportBuilder",
+    href: (locale) => `/${locale}/dashboard/report-builder`,
+    icon: FileSpreadsheet,
+    titleKey: "reportBuilder",
+    // Zero-arg: the templates path carries no store and its rule is unscoped.
+    requirements: () => [
+      { service: "Data", method: "GET", path: "/report-builder/templates" },
+    ],
+    feature: "reportBuilder",
     groupKey: "dataManagement",
   },
 
