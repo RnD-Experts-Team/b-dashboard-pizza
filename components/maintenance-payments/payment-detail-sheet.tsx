@@ -33,7 +33,6 @@ import {
   PAID_TO_TYPES,
   PARTS_DESTINATIONS,
   PAYMENT_LINE_TYPES,
-  PAYMENT_METHODS,
   vocabEntry,
   vocabText,
 } from "@/lib/maintenance/vocabulary";
@@ -133,13 +132,11 @@ export function PaymentDetailSheet({
 
 function PaymentDetailBody({ payment }: { payment: Payment }) {
   const t = useTranslations("maintenanceSystem");
-  const method = vocabEntry(PAYMENT_METHODS, payment.method);
-  // How we paid, reference and invoice # are no longer asked for: shown only
-  // when an older payment has them.
+  // Reference and invoice # are no longer asked for: shown only when an older payment has them.
   const facts: { label: string; value: string }[] = [
     { label: t("payments.paidTo"), value: `${payment.paidTo.name} (${vocabText(t, vocabEntry(PAID_TO_TYPES, payment.paidTo.type))})` },
     { label: t("common.date"), value: formatPaidDate(payment.paidAt) },
-    ...(payment.method && method ? [{ label: t("payments.howWePaid"), value: vocabText(t, method) }] : []),
+    ...(payment.paymentMethod ? [{ label: t("payments.howWePaid"), value: payment.paymentMethod.name }] : []),
     ...(payment.reference ? [{ label: t("payments.reference"), value: payment.reference }] : []),
     ...(payment.invoiceNumber ? [{ label: t("payments.invoiceNumber"), value: payment.invoiceNumber }] : []),
   ];

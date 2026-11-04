@@ -21,6 +21,8 @@ export interface FinancesParams {
   stores?: string[];
   categoryId?: number;
   technicianId?: number;
+  /** Several technicians checked together (sent as technician_ids[]). */
+  technicianIds?: number[];
   supplierId?: number;
 }
 

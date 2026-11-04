@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { TechnicianSelect } from "@/components/maintenance-technicians/technician-select";
 import { Lock, Users } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
@@ -132,6 +133,7 @@ export function UsePartsDialog({
   const [picked, setPicked] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [serials, setSerials] = useState<string[]>([]);
+  const [technicianId, setTechnicianId] = useState<number | null>(null);
   const { parts } = useParts();
 
   useEffect(() => {
@@ -174,6 +176,7 @@ export function UsePartsDialog({
           moved_at: localNow(),
           type: "used",
           ticket_issue_id: ticketIssueId,
+          technician_id: technicianId,
           lines: [
             {
               part_id: chosen.partId,
@@ -273,6 +276,9 @@ export function UsePartsDialog({
           />
         </Field>
       ) : null}
+      <Field id="parts-technician" label={t("storage.record.whoDidIt")} help={t("common.optional")} error={form.fieldError("technician_id")}>
+        <TechnicianSelect id="parts-technician" value={technicianId} onChange={setTechnicianId} />
+      </Field>
     </ActionDialog>
   );
 }

@@ -2,24 +2,13 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, Info, Loader2, RefreshCw } from "lucide-react";
+import { AlertTriangle, Info, RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { toast } from "sonner";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PaymentDialog } from "@/components/maintenance-payments/payment-dialog";
-import { maintenanceTicketsService, MaintenanceTicketsError } from "@/lib/api/services/maintenance-tickets.service";
+import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useMaintenanceResource } from "@/lib/hooks/use-maintenance-resource";
 import { useTicketPage } from "@/lib/hooks/use-ticket-issue";
@@ -92,13 +81,14 @@ export function TicketPage() {
   /* ── Who may do what (pizzasys auth rules) ──────────────────────────── */
   const canAccessRoute = useAuthStore((s) => s.canAccessRoute);
   const overviewStores = useAuthStore((s) => s.overviewStores);
+  const ticketStoreId = ticket?.storeId ?? null;
   const allowedAt = useCallback(
     (method: string, path: string) => {
       if (!storeNumber) return false;
-      const numericId = overviewStores.find((s) => s.storeId === storeNumber)?.id ?? (ticket?.storeId != null ? String(ticket.storeId) : storeNumber);
+      const numericId = overviewStores.find((s) => s.storeId === storeNumber)?.id ?? (ticketStoreId != null ? String(ticketStoreId) : storeNumber);
       return [numericId, storeNumber].some((storeId) => canAccessRoute({ service: "Maintenance", method, path, storeId }));
     },
-    [storeNumber, overviewStores, ticket?.storeId, canAccessRoute],
+    [storeNumber, overviewStores, ticketStoreId, canAccessRoute],
   );
   const isMos = allowedAt("POST", `${ISSUE_PATH}/review`);
   const canAnswer = allowedAt("POST", `${ISSUE_PATH}/info-requests/${P}/answer`);
@@ -106,7 +96,6 @@ export function TicketPage() {
   const canNote = allowedAt("POST", `${ISSUE_PATH}/notes`);
   const canJump = allowedAt("POST", `${ISSUE_PATH}/jump`);
   const canCancel = allowedAt("POST", `${ISSUE_PATH}/cancel`);
-  const canDelete = allowedAt("DELETE", `/stores/${P}/tickets/${P}`);
   const readsAllNotes = allowedAt("GET", `/stores/${P}/tickets/${P}/notes/all`);
   const canUseStock = canAccessRoute({ service: "Maintenance", method: "POST", path: "/stock-movements" });
   const canPay = canAccessRoute({ service: "Maintenance", method: "POST", path: "/payments" });
@@ -146,8 +135,6 @@ export function TicketPage() {
   const [addUpdateOpen, setAddUpdateOpen] = useState(false);
   const [usePartsOpen, setUsePartsOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [bookedDate, setBookedDate] = useState<string | null>(null);
   const [panelActionsRef, panelActionsOnScreen] = useOnScreen();
 
@@ -157,20 +144,6 @@ export function TicketPage() {
     void privateNotes.refresh();
   }, [page, privateNotes]);
 
-  async function onDelete() {
-    if (!storeNumber) return;
-    setDeleting(true);
-    try {
-      await maintenanceTicketsService.deleteTicket(storeNumber, ticketId);
-      toast.success(t("tickets.page.deleted"));
-      router.push(backHref);
-    } catch (err) {
-      toast.error(err instanceof MaintenanceTicketsError ? err.message : t("common.saveError"));
-    } finally {
-      setDeleting(false);
-      setDeleteOpen(false);
-    }
-  }
 
   if (page.isLoading && !page.data) return <TicketPageSkeleton />;
 
@@ -239,11 +212,10 @@ export function TicketPage() {
         backHref={backHref}
         isRefreshing={page.isRefreshing}
         onRefresh={refreshAll}
-        permissions={{ canJump: jumpAllowed, canCancel: canRun && canCancel, canDelete: canRun && canDelete }}
+        permissions={{ canJump: jumpAllowed, canCancel: canRun && canCancel }}
         onJump={() => setOpenAction({ id: "jump" })}
         onCancelIssue={() => setOpenAction({ id: "cancel" })}
         onCancelTicket={() => setOpenAction({ id: "cancel_ticket" })}
-        onDelete={() => setDeleteOpen(true)}
       />
 
       <IssueSwitcher issues={issues} selectedId={issue.id} onSelect={(id) => setParam("issue", String(id))} />
@@ -259,6 +231,7 @@ export function TicketPage() {
         actionsRef={panelActionsRef}
         onAction={(a) => setOpenAction({ id: a.action })}
         onShowTab={(id) => setParam("tab", id)}
+        onRecordPayment={canPay ? () => setPaymentOpen(true) : undefined}
       />
 
       {!canRun ? (
@@ -347,28 +320,6 @@ export function TicketPage() {
         onClose={page.clearTripLink}
       />
 
-      <AlertDialog open={deleteOpen} onOpenChange={(open) => !deleting && setDeleteOpen(open)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("tickets.page.deleteTitle", { id: ticket.id })}</AlertDialogTitle>
-            <AlertDialogDescription>{t("tickets.page.deleteBody")}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>{t("common.cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                void onDelete();
-              }}
-              disabled={deleting}
-              className="bg-destructive text-white hover:bg-destructive/90"
-            >
-              {deleting ? <Loader2 className="me-1.5 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-              {t("tickets.page.deleteTicket")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Last on purpose: the action bar pulls itself into the page's bottom padding. */}
       <TicketFooter

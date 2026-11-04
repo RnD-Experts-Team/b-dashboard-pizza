@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { TechnicianSelect } from "@/components/maintenance-technicians/technician-select";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
@@ -88,6 +89,7 @@ const FIELD_IDS: Record<StockFormField, string> = {
   to_location_id: "stock-to-location",
   quantity: "stock-quantity",
   serials: "stock-serials",
+  technician_id: "stock-technician",
   moved_at: "stock-moved-at",
 };
 
@@ -310,6 +312,15 @@ export function StockActionDialog({
                 <FieldError message={messageFor("ticket_issue_id")} />
               </div>
             )}
+
+            {/* Who did it (optional) */}
+            <div className="space-y-1.5">
+              <Label htmlFor={FIELD_IDS.technician_id}>
+                {t("storage.record.whoDidIt")} <span className="text-xs text-muted-foreground">({t("common.optional")})</span>
+              </Label>
+              <TechnicianSelect id={FIELD_IDS.technician_id} value={form.technicianId} onChange={(technicianId) => patch({ technicianId }, ["technician_id"])} />
+              <FieldError message={messageFor("technician_id")} />
+            </div>
 
             {/* Location(s) */}
             <div className={shape.flow === "both" ? "grid gap-4 sm:grid-cols-2" : undefined}>

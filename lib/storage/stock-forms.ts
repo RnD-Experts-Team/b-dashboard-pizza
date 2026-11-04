@@ -97,6 +97,8 @@ export interface StockForm {
   quantity: string;
   serials: string[];
   ticketIssueId: number | null;
+  /** Who did it (optional). */
+  technicianId: number | null;
   /**
    * The spot inside the destination, one value per level. NULL = not touched:
    * whatever spot the part already has there stays as it is.
@@ -114,6 +116,7 @@ export function emptyStockForm(prefill: { partId?: number | null; locationId?: n
     quantity: "1",
     serials: [],
     ticketIssueId: null,
+    technicianId: null,
     placeValueIds: null,
     movedAt: nowLocalDateTime(),
     note: "",
@@ -129,6 +132,7 @@ export function isStockFormDirty(form: StockForm, initial: StockForm): boolean {
     form.quantity !== initial.quantity ||
     form.serials.length > 0 ||
     form.ticketIssueId !== initial.ticketIssueId ||
+    form.technicianId !== initial.technicianId ||
     form.placeValueIds !== null ||
     form.note.trim() !== ""
   );
@@ -151,7 +155,7 @@ export type StockFormProblem =
   | "serialRepeated";
 
 /** Keyed like the API's 422 bag, so client and server errors land on the same field. */
-export type StockFormField = "part_id" | "storage_location_id" | "to_location_id" | "quantity" | "serials" | "ticket_issue_id" | "moved_at";
+export type StockFormField = "part_id" | "storage_location_id" | "to_location_id" | "quantity" | "serials" | "ticket_issue_id" | "technician_id" | "moved_at";
 
 export type StockFormProblems = Partial<Record<StockFormField, StockFormProblem>>;
 
@@ -234,6 +238,7 @@ export function buildStockMovementPayload(
     moved_at: localInputToIso(form.movedAt) ?? form.movedAt,
     type,
     ...(type === "used" && form.ticketIssueId != null ? { ticket_issue_id: form.ticketIssueId } : {}),
+    ...(form.technicianId != null ? { technician_id: form.technicianId } : {}),
     lines,
     ...(note ? { notes: [{ body: note }] } : {}),
   };

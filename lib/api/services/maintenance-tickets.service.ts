@@ -1066,17 +1066,6 @@ export const maintenanceTicketsService = {
 
   /* ── Ticket lifecycle ──────────────────────────────────────────────────── */
 
-  /** Soft-delete a ticket (recoverable via restoreTicket) */
-  async deleteTicket(storeId: string, ticketId: number): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.delete(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}`,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
-      );
-    } catch (err) { return handleAxiosError(err); }
-  },
-
   /** Restore a soft-deleted ticket */
   async restoreTicket(storeId: string, ticketId: number): Promise<void> {
     const token = requireToken();

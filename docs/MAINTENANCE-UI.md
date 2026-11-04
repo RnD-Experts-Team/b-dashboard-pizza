@@ -56,7 +56,8 @@ Troubleshooting (unchanged). `/dashboard/daily-pay` redirects to
 ## 1. Tickets list `/dashboard/maintenance-tickets`
 
 Header: "Tickets" + primary **New ticket**. One flat filter row: search,
-Status (multi), Store, Priority, Technician, Category (technician category);
+Status (multi), Store, Priority, Opened (date range: presets or two days,
+either end may stay open), Technician, Category (technician category);
 on a phone the filters and the attention chips are each one sideways-scrolling
 row, so the list starts on the first screen. **New ticket** dialog: header and
 buttons fixed, only the form scrolls; priorities use the same words and
@@ -72,8 +73,8 @@ Follows the owner's mockup.
 
 - **Header**: `Ticket #123` small, issue title large, then badges: status,
   priority (arrow icon), store (store icon), impact. Line: "Opened Apr 22, 9:15 AM
-  | Submitted by Store Manager". `…` menu: Jump to a status (reason), Cancel,
-  Delete ticket.
+  | Submitted by Store Manager". `…` menu: Jump to a status (reason), Cancel.
+  Tickets cannot be deleted (removed 2026-11-04); cancel instead.
 - **Issue switcher** (only when the ticket has >1 issue): segmented pills.
 - **Now panel** (`ticket/next-step.tsx`, above the tabs, so it shows on every
   tab): answers "where is this and what do I do now?" in one place —
@@ -132,7 +133,10 @@ Follows the owner's mockup.
     text ("Sara, by phone") — no store/office choice.
   - Book inspection / Schedule work: technician picker (ranked, badges: covers
     store · covers issue · emergency · call first · ★rating, category filter),
-    date, time (optional), expected completion (work only), instructions. On
+    date, a time WINDOW From–To (both optional; the end needs a start and comes
+    after it), the inspection fee (inspection only, optional: it is the
+    inspection's cost until a payment's inspection line covers it), expected
+    completion (work only), instructions. Move booking takes the same window. On
     success: a "Trip link" dialog with the link, **Copy**, **Share** (Web Share
     API → WhatsApp/SMS with "Your trip for Store 12 on Tue: <link>") — shown only
     when a new link was issued.
@@ -143,7 +147,11 @@ Follows the owner's mockup.
   - Record approval: approved/rejected, approver name, note, screenshot.
   - Mark work done: work performed, before/after photos, warranty (optional, behind
     "Add warranty").
-  - Close: resolution select + checklist; unticked items need a reason.
+  - Close: resolution select + **What was wrong and how it was fixed**
+    (required, seeded with the work performed) + checklist; unticked items need
+    a reason. A closed issue's Now panel shows that text and, while no
+    payment / invoice is recorded, a **Record payment or invoice** button —
+    payments can be added after closing.
 - Store managers see the same page read-only except the two store steps.
 
 ## 3. Trips `/dashboard/maintenance-trips`
@@ -174,7 +182,9 @@ Retry.
 
 ## 5. Payments `/dashboard/maintenance-payments`
 
-Header + primary **Record a payment**. Filters: date range, paid to (technician
+Header: **Payment methods** (the editable list behind "How we paid"; also a
+tab in the ticket catalog dialog) + primary **Record a payment**. The payment
+dialog's "How we paid" picks from that list (optional). Filters: date range, paid to (technician
 or supplier), technician category, store, type, search (invoice #). KPI strip:
 Payments · Total. Table: date, paid to, stores, types (small badges), files
 (paperclip when it has attachments; an older payment's invoice # beside it),
@@ -214,7 +224,8 @@ notes, revisions, Edit, Mark as mistake.
 
 ## 6. Storage `/dashboard/storage`
 
-Tabs: **Stock** (search, location filter; per part: on hand per location with
+Every movement dialog (and "Use parts" on a ticket) has an optional **Who
+did it** technician. Tabs: **Stock** (search, location filter; per part: on hand per location with
 its spot "Zone A › Shelf S", value; part sheet with details brand/model/part
 number/unit, serial units list, price history) · **Stock history** (the ledger, plain
 type labels with icons, filters) · **Stock counts** (list + **Start a count**) ·
@@ -230,7 +241,8 @@ count** (confirm dialog summarising the corrections).
 
 ## 7. Technicians & Suppliers `/dashboard/maintenance-technicians?tab=technicians|suppliers`
 
-Technicians tab: filters search, category, store covered, issue covered,
+Technicians tab: filters search, category, stores covered (a checklist; one
+store also ranks the list), issue covered,
 "Emergency only" switch. Table: name (+company contact), category, phone,
 emergency badge, stores covered count, issues covered count, ★ average, paid
 this month. Primary **Add technician**. Form: name (live duplicate check:
@@ -246,7 +258,8 @@ covered, not rated yet (stars, notes and call first are set after).
 
 ## 8. Analytics `/dashboard/maintenance-analytics?tab=overview|finances|coverage`
 
-Shared filter bar: date range, stores, technician category.
+Shared filter bar: date range, stores, technician category; on Finances also a
+**Technicians** checklist — tick several and every figure is for them together.
 - **Overview**: today's analytics (KPIs, charts) with the new statuses.
 - **Finances**: KPI tiles (Spent · vs previous period · Payments · Unpaid work ·
   Stock on hand value); spend trend (stacked bar by type, month/week toggle);

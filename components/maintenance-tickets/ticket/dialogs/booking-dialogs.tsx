@@ -8,9 +8,46 @@ import { maintenanceWorkflowService } from "@/lib/api/services/maintenance-workf
 import type { Inspection, IssueSchedule } from "@/types/maintenance-system";
 import { DatePicker, TimePicker } from "../../form-bits";
 import { ActionDialog, Field, MoreDetails, useDialogSubmit } from "../dialog-kit";
-import { formatDayTime } from "../format";
+import { amountOrNull, formatDayTime } from "../format";
+import { AmountInput } from "./inspection-approval-dialogs";
 import { TechnicianPicker } from "../technician-picker";
 import type { StepDialogProps } from "./types";
+
+/** What is wrong with a typed window: an end with no start, or an end not after the start. */
+export function timeWindowError(from: string, to: string): "start" | "order" | null {
+  if (to && !from) return "start";
+  if (from && to && to <= from) return "order";
+  return null;
+}
+
+/** "From" and "To" for a booking: a window of time, both optional. */
+function TimeWindowFields({
+  from,
+  to,
+  onFrom,
+  onTo,
+  fromError,
+  toError,
+}: {
+  from: string;
+  to: string;
+  onFrom: (v: string) => void;
+  onTo: (v: string) => void;
+  fromError?: string;
+  toError?: string;
+}) {
+  const t = useTranslations("maintenanceSystem");
+  return (
+    <>
+      <Field label={t("tickets.dialogs.booking.from")} help={t("common.optional")} error={fromError}>
+        <TimePicker value={from} onChange={onFrom} placeholder={t("tickets.dialogs.booking.anyTime")} />
+      </Field>
+      <Field label={t("tickets.dialogs.booking.to")} help={t("common.optional")} error={toError}>
+        <TimePicker value={to} onChange={onTo} placeholder={t("tickets.dialogs.booking.anyTime")} />
+      </Field>
+    </>
+  );
+}
 
 /** Live bookings (not mistaken, not ended), newest first. */
 export function liveSchedules(schedules: readonly IssueSchedule[]): IssueSchedule[] {
@@ -51,18 +88,25 @@ function BookingDialog({
   const [technicianId, setTechnicianId] = useState<number | null>(suggestedTechnicianId);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
+  const [timeTo, setTimeTo] = useState("");
+  const [fee, setFee] = useState("");
   const [expected, setExpected] = useState("");
   const [instructions, setInstructions] = useState("");
-  const dirty = Boolean(technicianId !== suggestedTechnicianId || date || time || expected || instructions.trim());
+  const dirty = Boolean(technicianId !== suggestedTechnicianId || date || time || timeTo || fee || expected || instructions.trim());
   const urgent = (issue.assignedPriority ?? issue.priority).value === "urgent";
   const isWork = kind === "work";
   const technicianField = "technician_id";
   const dateField = isWork ? "date" : "scheduled_date";
+  const fromField = isWork ? "time" : "scheduled_time";
+  const toField = isWork ? "time_to" : "scheduled_time_to";
 
   async function onSubmit() {
     const missing: Record<string, string> = {};
     if (!technicianId) missing[technicianField] = t("tickets.dialogs.booking.technicianRequired");
     if (!date) missing[dateField] = t("tickets.dialogs.booking.dateRequired");
+    const windowError = timeWindowError(time, timeTo);
+    if (windowError) missing[windowError === "start" ? fromField : toField] = t(`tickets.dialogs.booking.window.${windowError}`);
+    if (fee.trim() && amountOrNull(fee) == null) missing.inspection_fee = t("tickets.dialogs.booking.feeInvalid");
     if (Object.keys(missing).length) return form.setFieldErrors(missing);
     const ok = await form.submit(
       () =>
@@ -72,6 +116,7 @@ function BookingDialog({
                 technicianId: technicianId as number,
                 date,
                 time: time || null,
+                timeTo: timeTo || null,
                 expectedCompletionDate: expected || null,
                 instructions: instructions.trim() || null,
               })
@@ -79,6 +124,8 @@ function BookingDialog({
                 technicianId: technicianId as number,
                 scheduledDate: date,
                 scheduledTime: time || null,
+                scheduledTimeTo: timeTo || null,
+                inspectionFee: amountOrNull(fee),
                 instructions: instructions.trim() || null,
               }),
         ),
@@ -115,16 +162,26 @@ function BookingDialog({
           invalid={Boolean(form.fieldError(technicianField))}
         />
       </Field>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         <Field label={t("common.date")} required error={form.fieldError(dateField)}>
           <div aria-invalid={Boolean(form.fieldError(dateField)) || undefined} tabIndex={-1}>
             <DatePicker value={date} onChange={setDate} placeholder={t("tickets.dialogs.booking.pickDay")} />
           </div>
         </Field>
-        <Field label={t("common.time")} help={t("common.optional")} error={form.fieldError(isWork ? "time" : "scheduled_time")}>
-          <TimePicker value={time} onChange={setTime} placeholder={t("tickets.dialogs.booking.anyTime")} />
-        </Field>
+        <TimeWindowFields
+          from={time}
+          to={timeTo}
+          onFrom={setTime}
+          onTo={setTimeTo}
+          fromError={form.fieldError(fromField)}
+          toError={form.fieldError(toField)}
+        />
       </div>
+      {isWork ? null : (
+        <Field id="book-inspection-fee" label={t("tickets.dialogs.booking.fee")} help={t("tickets.dialogs.booking.feeHelp")} error={form.fieldError("inspection_fee")}>
+          <AmountInput id="book-inspection-fee" value={fee} onChange={setFee} invalid={Boolean(form.fieldError("inspection_fee"))} />
+        </Field>
+      )}
       <MoreDetails>
         {isWork ? (
           <Field
@@ -171,6 +228,7 @@ export function MoveBookingDialog({
   const [picked, setPicked] = useState<string>(String(scheduleId ?? bookings[0]?.id ?? ""));
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
+  const [timeTo, setTimeTo] = useState("");
   const [reason, setReason] = useState("");
   const current = bookings.find((b) => String(b.id) === picked) ?? null;
 
@@ -179,9 +237,11 @@ export function MoveBookingDialog({
     if (!date) missing.date = t("tickets.dialogs.booking.dateRequired");
     if (!reason.trim()) missing.reason = t("tickets.dialogs.reasonRequired");
     if (!current) missing.schedule = t("tickets.dialogs.move.pickBooking");
+    const windowError = timeWindowError(time, timeTo);
+    if (windowError) missing[windowError === "start" ? "time" : "time_to"] = t(`tickets.dialogs.booking.window.${windowError}`);
     if (Object.keys(missing).length) return form.setFieldErrors(missing);
     const ok = await form.submit(
-      () => run((key) => maintenanceWorkflowService.moveSchedule(key, (current as IssueSchedule).id, { date, time: time || null, reason: reason.trim() })),
+      () => run((key) => maintenanceWorkflowService.moveSchedule(key, (current as IssueSchedule).id, { date, time: time || null, timeTo: timeTo || null, reason: reason.trim() })),
       t("tickets.dialogs.move.moved"),
     );
     if (ok) onOpenChange(false);
@@ -192,7 +252,7 @@ export function MoveBookingDialog({
       open={open}
       onOpenChange={onOpenChange}
       form={form}
-      dirty={Boolean(date || time || reason.trim())}
+      dirty={Boolean(date || time || timeTo || reason.trim())}
       title={t("workflow.actions.move")}
       description={t("tickets.dialogs.move.help")}
       submitLabel={t("tickets.dialogs.move.submit")}
@@ -208,7 +268,7 @@ export function MoveBookingDialog({
             <SelectContent>
               {bookings.map((b) => (
                 <SelectItem key={b.id} value={String(b.id)}>
-                  {`${t(`tickets.work.kind.${b.kind}`)} · ${b.technician?.name ?? "—"} · ${formatDayTime(b.date, b.time)}`}
+                  {`${t(`tickets.work.kind.${b.kind}`)} · ${b.technician?.name ?? "—"} · ${formatDayTime(b.date, b.time, b.timeTo)}`}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -217,20 +277,18 @@ export function MoveBookingDialog({
       ) : null}
       {current ? (
         <p className="text-sm text-muted-foreground">
-          {t("tickets.dialogs.move.now", { when: formatDayTime(current.date, current.time), technician: current.technician?.name ?? "—" })}
+          {t("tickets.dialogs.move.now", { when: formatDayTime(current.date, current.time, current.timeTo), technician: current.technician?.name ?? "—" })}
         </p>
       ) : (
         <p className="text-sm text-muted-foreground">{t("tickets.work.noBookings")}</p>
       )}
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         <Field label={t("tickets.dialogs.move.newDay")} required error={form.fieldError("date")}>
           <div aria-invalid={Boolean(form.fieldError("date")) || undefined} tabIndex={-1}>
             <DatePicker value={date} onChange={setDate} placeholder={t("tickets.dialogs.booking.pickDay")} />
           </div>
         </Field>
-        <Field label={t("common.time")} help={t("common.optional")} error={form.fieldError("time")}>
-          <TimePicker value={time} onChange={setTime} placeholder={t("tickets.dialogs.booking.anyTime")} />
-        </Field>
+        <TimeWindowFields from={time} to={timeTo} onFrom={setTime} onTo={setTimeTo} fromError={form.fieldError("time")} toError={form.fieldError("time_to")} />
       </div>
       <Field id="move-reason" label={t("common.reason")} required help={t("common.reasonHelp")} error={form.fieldError("reason")}>
         <Textarea

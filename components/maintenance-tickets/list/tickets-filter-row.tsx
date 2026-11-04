@@ -9,6 +9,7 @@ import { useTechnicianCategories, useTechnicians } from "@/lib/hooks/use-mainten
 import { ISSUE_STATUSES, PRIORITIES, vocabOptions, vocabText } from "@/lib/maintenance/vocabulary";
 import type { IssueStatus, Priority, TicketsFilters } from "@/types/maintenance-tickets.types";
 import { TicketsSearch } from "../tickets-search";
+import { DateRangeFilter } from "./date-range-filter";
 import { FilterMulti } from "./filter-multi";
 
 const TECHNICIAN_PAGE_SIZE = 500;
@@ -22,7 +23,8 @@ function idsOrNobody(ids: number[]): number[] {
 
 /**
  * The tickets list's one flat filter row (UI doc §1): search, Status,
- * Store, Priority, Technician, Category (technician category), Clear all.
+ * Store, Priority, Opened (date range), Technician, Category (technician
+ * category), Clear all.
  * Category is a shortcut: picking one narrows the Technician options and
  * filters by everyone in it until specific technicians are picked.
  */
@@ -64,7 +66,7 @@ export function TicketsFilterRow({
 
   const set = (patch: Partial<TicketsFilters>) => onFiltersChange({ ...filters, ...patch, page: 1 });
   const hasAny = Boolean(
-    filters.q || filters.statuses?.length || filters.priorities?.length || filters.technician_ids?.length || filters.issue_statuses?.length || filters.assigned_to || categoryId,
+    filters.q || filters.statuses?.length || filters.priorities?.length || filters.technician_ids?.length || filters.issue_statuses?.length || filters.assigned_to || filters.created_from || filters.created_to || categoryId,
   );
 
   return (
@@ -106,6 +108,12 @@ export function TicketsFilterRow({
         options={vocabOptions(PRIORITIES).map((p) => ({ value: p.value, label: vocabText(t, p) }))}
         value={filters.priorities ?? []}
         onChange={(v) => set({ priorities: v.length ? v : undefined })}
+        disabled={disabled}
+      />
+      <DateRangeFilter
+        from={filters.created_from ?? ""}
+        to={filters.created_to ?? ""}
+        onChange={(from, to) => set({ created_from: from || undefined, created_to: to || undefined })}
         disabled={disabled}
       />
       {canFilterTechnicians ? (

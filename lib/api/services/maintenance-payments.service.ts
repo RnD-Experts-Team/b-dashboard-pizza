@@ -26,6 +26,7 @@ import type {
   PaymentList,
   PaymentListMeta,
   PaymentListRow,
+  PaymentMethodOption,
   ReasonPayload,
   TechnicianPurchase,
   TechnicianPurchaseFilters,
@@ -37,6 +38,20 @@ import type { TicketAttachment, TicketNote } from "@/types/maintenance-tickets.t
 const paymentPath = (id: number) => `/payments/${seg(id)}`;
 
 export const maintenancePaymentsService = {
+  /** The editable "How we paid" list, in its order. */
+  listPaymentMethods(signal?: AbortSignal): Promise<PaymentMethodOption[]> {
+    return http.get<PaymentMethodOption[]>("/payment-methods", { signal });
+  },
+  createPaymentMethod(name: string): Promise<PaymentMethodOption> {
+    return http.post<PaymentMethodOption>("/payment-methods", { name });
+  },
+  updatePaymentMethod(id: number, patch: { name?: string; sort?: number }): Promise<PaymentMethodOption> {
+    return http.patch<PaymentMethodOption>(`/payment-methods/${seg(id)}`, patch);
+  },
+  /** 422 while a payment uses it. */
+  deletePaymentMethod(id: number): Promise<null> {
+    return http.delete(`/payment-methods/${seg(id)}`);
+  },
   /** `meta.totals` carries the count and total of the whole filtered list. */
   listPayments(filters: PaymentFilters = {}, signal?: AbortSignal): Promise<PaymentList> {
     return http.page<PaymentListRow, PaymentListMeta>("/payments", { query: filters, signal });

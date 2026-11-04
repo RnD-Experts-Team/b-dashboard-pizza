@@ -6,13 +6,15 @@ import { cn } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StoreMultiSelect } from "@/components/business-reports/store-multi-select";
-import { useTechnicianCategories } from "@/lib/hooks/use-maintenance-catalog";
+import { FilterMulti } from "@/components/maintenance-tickets/list/filter-multi";
+import { useTechnicianCategories, useTechnicians } from "@/lib/hooks/use-maintenance-catalog";
 import { matchPreset, presetDays, type RangePreset } from "@/lib/maintenance-tickets/local-range";
 import type { AnalyticsFilters } from "./use-analytics-filters";
 
 const PRESETS: RangePreset[] = ["yesterday", "last7", "last30", "thisMonth", "thisYear"];
 const PRESET_OPTIONS = PRESETS.map((id) => ({ id, label: id }));
 const ALL = "all";
+const TECHNICIAN_PAGE_SIZE = 500;
 
 /**
  * The analytics page's one filter row (docs/MAINTENANCE-UI.md §8): the
@@ -24,6 +26,8 @@ export function AnalyticsFilterBar({ filters }: { filters: AnalyticsFilters }) {
   const { categories } = useTechnicianCategories();
   const usesDates = filters.tab !== "coverage";
   const usesCategory = filters.tab !== "overview";
+  const usesTechnicians = filters.tab === "finances";
+  const { technicians } = useTechnicians({ perPage: TECHNICIAN_PAGE_SIZE, ...(filters.categoryId ? { categoryId: filters.categoryId } : {}) }, usesTechnicians);
   const active = matchPreset(filters.from, filters.to, undefined, PRESET_OPTIONS);
 
   return (
@@ -85,7 +89,24 @@ export function AnalyticsFilterBar({ filters }: { filters: AnalyticsFilters }) {
             </SelectContent>
           </Select>
         )}
+
+        {usesTechnicians && (
+          <FilterMulti<number>
+            label={t("technicians")}
+            allLabel={t("allTechnicians")}
+            options={technicians.map((tech) => ({ value: tech.id, label: tech.name }))}
+            value={filters.technicianIds}
+            onChange={filters.setTechnicians}
+            deferred
+          />
+        )}
       </div>
+      {usesTechnicians && filters.technicianIds.length > 0 && (
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          {t("techniciansPicked", { count: filters.technicianIds.length })}
+        </p>
+      )}
       {!usesDates && (
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Info className="h-3.5 w-3.5" aria-hidden="true" />

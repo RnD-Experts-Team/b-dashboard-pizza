@@ -52,6 +52,7 @@ import type { Part, Payment, Supplier, TechnicianPurchase } from "@/types/mainte
 import { Field, fieldId } from "./field";
 import { NotesFilesEditor } from "./notes-files-editor";
 import { PaidToPicker, paidToChoiceFrom } from "./paid-to-picker";
+import { PaymentMethodSelect } from "./payment-methods";
 import { PaymentLineCard, type LineLookups } from "./payment-line-card";
 import type { SessionOption } from "./session-checklist";
 import { useStorageLocations, useStoreOptions } from "./use-payment-lookups";
@@ -326,7 +327,7 @@ function PaymentDialogBody({ onOpenChange, paymentId, prefill, onSaved }: Paymen
                 )}
 
                 {/* 1. Who was paid, and when */}
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_11rem]">
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_11rem_11rem]">
                   <Field htmlFor={fieldId("technician_id")} label={t("payments.paidTo")} required error={paidToError} help={t("payments.paidToHelp")}>
                     <PaidToPicker
                       id={fieldId("technician_id")}
@@ -356,6 +357,16 @@ function PaymentDialogBody({ onOpenChange, paymentId, prefill, onSaved }: Paymen
                       }}
                       className="h-9 tabular-nums [color-scheme:light] dark:[color-scheme:dark]"
                       aria-invalid={Boolean(errors.fields.paid_at) || undefined}
+                    />
+                  </Field>
+                  <Field htmlFor={fieldId("payment_method_id")} label={t("payments.howWePaid")} error={errors.fields.payment_method_id}>
+                    <PaymentMethodSelect
+                      id={fieldId("payment_method_id")}
+                      value={draft.paymentMethodId}
+                      onChange={(paymentMethodId) => {
+                        update((d) => ({ ...d, paymentMethodId }));
+                        clearError("payment_method_id");
+                      }}
                     />
                   </Field>
                 </div>

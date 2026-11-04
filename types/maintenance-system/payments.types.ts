@@ -21,8 +21,17 @@ import type { InspectionStatus } from "./workflow.types";
 /** `App\Enums\PaymentLineType`. */
 export type PaymentLineType = "hourly" | "fixed" | "inspection" | "parts" | "gas" | "other";
 
-/** `App\Enums\PaymentMethod`. null = not recorded (migrated rows). */
+/** `App\Enums\PaymentMethod`, the old fixed list (older rows only). null = not recorded. */
 export type PaymentMethod = "cash" | "check" | "card" | "bank_transfer" | "zelle" | "other";
+
+/** One entry of the editable "How we paid" list (GET /payment-methods). */
+export interface PaymentMethodOption {
+  id: number;
+  name: string;
+  sort: number;
+  /** How many payments use it (a used one cannot be deleted). */
+  paymentsCount: number | null;
+}
 
 /** A payment goes to exactly one technician XOR one supplier. */
 export type PaidToType = "technician" | "supplier";
@@ -44,7 +53,8 @@ export interface PaymentListRow {
   id: number;
   paidAt: IsoDate;
   paidTo: PaidTo;
-  method: PaymentMethod | null;
+  /** How we paid, from the editable list. */
+  paymentMethod: { id: number; name: string } | null;
   reference: string | null;
   invoiceNumber: string | null;
   total: Money;
@@ -138,7 +148,8 @@ export interface Payment {
   id: number;
   paidAt: IsoDate;
   paidTo: PaidTo;
-  method: PaymentMethod | null;
+  /** How we paid, from the editable list. */
+  paymentMethod: { id: number; name: string } | null;
   reference: string | null;
   invoiceNumber: string | null;
   note: string | null;
@@ -192,8 +203,9 @@ export interface PaymentInput {
   /** Exactly one of technicianId / supplierId. */
   technicianId?: number | null;
   supplierId?: number | null;
+  /** How we paid, from GET /payment-methods. Optional. */
+  paymentMethodId?: number | null;
   /** Optional; the dialog no longer asks for these, an edit sends back what was saved. */
-  method?: PaymentMethod | null;
   reference?: string | null;
   invoiceNumber?: string | null;
   /** Older single note; prefer `notes`. */

@@ -1363,7 +1363,8 @@
         "issues": "Issues",
         "technicians": "Technicians",
         "categories": "Categories",
-        "parts": "Parts"
+        "parts": "Parts",
+        "paymentMethods": "Payment methods"
       },
       "items": "items",
       "noItems": "No items found.",
@@ -5539,7 +5540,8 @@
       "photoKind": {
         "before": "Before",
         "after": "After"
-      }
+      },
+      "loading": "Loading…"
     },
     "names": {
       "duplicateTechnician": "There is already a technician called {name}.",
@@ -5587,7 +5589,19 @@
           "title": "Title"
         },
         "empty": "No tickets yet. When a store reports a problem it shows up here.",
-        "emptyFiltered": "No tickets match these filters. Clear them to see everything."
+        "emptyFiltered": "No tickets match these filters. Clear them to see everything.",
+        "range": {
+          "label": "Opened",
+          "any": "Any time",
+          "since": "Since {day}",
+          "until": "Until {day}",
+          "clear": "Clear",
+          "today": "Today",
+          "last7": "Last 7 days",
+          "last30": "Last 30 days",
+          "thisMonth": "This month",
+          "thisYear": "This year"
+        }
       },
       "create": {
         "impact": "How much does it hurt the store?",
@@ -5667,7 +5681,9 @@
         "workBooked": "{name} is booked for the work · {date}",
         "workNotBooked": "No work booked yet.",
         "seeDetails": "See all in {tab}",
-        "tabHasStep": "The current step's details are here"
+        "tabHasStep": "The current step's details are here",
+        "paymentMissing": "No payment or invoice is recorded yet. You can still add it.",
+        "recordPayment": "Record payment or invoice"
       },
       "history": {
         "noStore": "This ticket is not at one of our stores, so there is no store history to show.",
@@ -5790,7 +5806,8 @@
         "partsUsed": "Parts used",
         "noPartsUsed": "No parts from storage used yet.",
         "useParts": "Use parts from storage",
-        "from": "from {location}"
+        "from": "from {location}",
+        "fee": "Fee {amount}"
       },
       "costs": {
         "approvedHint": "Approved {amount}",
@@ -5886,7 +5903,16 @@
           "instructions": "Instructions for the technician",
           "instructionsHelp": "Shown on the technician's trip page.",
           "inspectionBooked": "Inspection booked",
-          "workBooked": "Work booked"
+          "workBooked": "Work booked",
+          "from": "From",
+          "to": "To",
+          "window": {
+            "start": "Pick when the window starts too.",
+            "order": "The end must be after the start."
+          },
+          "fee": "Inspection fee (optional)",
+          "feeHelp": "What this inspection costs, if you already know. It counts as the cost until a payment for it is recorded.",
+          "feeInvalid": "Enter an amount like 75 or 75.50."
         },
         "move": {
           "help": "The visit moves to the technician's trip on the new day.",
@@ -5956,7 +5982,11 @@
           "finalNote": "Final note",
           "learned": "What we learned",
           "learnedHelp": "Anything that would help next time this happens.",
-          "closed": "Issue closed"
+          "closed": "Issue closed",
+          "fixSummary": "What was wrong and how it was fixed",
+          "fixHelp": "Required. Write it so the next person who sees this problem knows what to do.",
+          "fixPlaceholder": "e.g. The fan motor was burnt out. Replaced it with a new one; cooler holds 38°F again.",
+          "fixRequired": "Explain what was wrong and how it was fixed (at least a sentence)."
         },
         "jump": {
           "help": "Move the issue straight to another status (it is {status} now). Use it only to fix a mistake.",
@@ -6853,6 +6883,22 @@
         "lineToggle": "Notes & attachments",
         "filesCount": "{count, plural, one {# file} other {# files}}",
         "notesCount": "{count, plural, one {# note} other {# notes}}"
+      },
+      "methods": {
+        "title": "Payment methods",
+        "help": "The list “How we paid” picks from. A method used by a payment can be renamed but not deleted.",
+        "notSaid": "Not said",
+        "new": "New payment method",
+        "newPlaceholder": "e.g. Company card",
+        "add": "Add",
+        "added": "Payment method added",
+        "renamed": "Payment method renamed",
+        "rename": "Rename",
+        "delete": "Delete {name}",
+        "deleted": "Payment method deleted",
+        "used": "{count, plural, one {# payment} other {# payments}}",
+        "inUse": "Used by payments — rename it instead",
+        "empty": "No payment methods yet."
       }
     },
     "stock": {
@@ -7001,7 +7047,9 @@
       "legendOne": "One technician — gap",
       "legendTwo": "Two",
       "legendMore": "Four or more",
-      "legendThree": "Three"
+      "legendThree": "Three",
+      "allTechnicians": "All technicians",
+      "techniciansPicked": "{count, plural, one {Showing # technician.} other {Showing # technicians together.}}"
     },
     "storage": {
       "page": {
@@ -7124,7 +7172,9 @@
           "sameLocation": "Pick a different location to move it to.",
           "serialsNeeded": "Pick or type the serial number of each piece.",
           "serialRepeated": "The same serial number is there twice."
-        }
+        },
+        "whoDidIt": "Who did it",
+        "nobody": "Nobody / not said"
       },
       "movements": {
         "type": "What happened",

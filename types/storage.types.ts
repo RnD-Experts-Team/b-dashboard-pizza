@@ -460,6 +460,8 @@ export interface CreateStockMovementPayload {
   type: PostableStockMovementType;
   /** `used` from the ticket page or the storage page. */
   ticket_issue_id?: number;
+  /** The technician who did it. Optional. */
+  technician_id?: number | null;
   /** Contiguous from 0 — a hole is silently dropped upstream. */
   lines: CreateStockMovementLinePayload[];
   notes?: { body: string; type?: string; files?: File[] }[];

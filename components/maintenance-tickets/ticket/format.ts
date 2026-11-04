@@ -18,10 +18,11 @@ export function formatDay(day: string | null | undefined, empty = "—"): string
   return Number.isFinite(d.getTime()) ? format(d, DAY_PATTERN) : day;
 }
 
-/** "Tue, Apr 22, 2026 · 9:15" when a time is known. */
-export function formatDayTime(day: string | null | undefined, time: string | null | undefined): string {
+/** "Tue, Apr 22, 2026 · 9:15", or "· 9:00–11:00" for a window, when a time is known. */
+export function formatDayTime(day: string | null | undefined, time: string | null | undefined, timeTo?: string | null): string {
   const base = formatDay(day);
-  return time ? `${base} · ${time}` : base;
+  if (!time) return base;
+  return timeTo ? `${base} · ${time}–${timeTo}` : `${base} · ${time}`;
 }
 
 /** Now, as the DateTimePicker's local `YYYY-MM-DDTHH:mm`. */

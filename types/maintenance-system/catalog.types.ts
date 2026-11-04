@@ -86,6 +86,8 @@ export interface TechnicianFilters {
   emergency?: boolean;
   /** Store number: only those who cover it (and ranks the list). */
   store?: string;
+  /** Several store numbers: those who cover ANY of them (not ranked). */
+  stores?: string[];
   /** Catalog issue: only those who cover it (and ranks the list). */
   issueId?: number;
   /** Ranks emergency-available technicians higher. */

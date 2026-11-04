@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PaymentMethodsManager } from "@/components/maintenance-payments/payment-methods";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -621,11 +622,12 @@ export function CatalogManagementDialog({ open, onClose, onReloadCatalog, storeI
         </DialogHeader>
 
         <Tabs defaultValue="issues" className="flex flex-col flex-1 min-h-0">
-          <TabsList className="grid w-full grid-cols-4 shrink-0">
+          <TabsList className="grid w-full grid-cols-5 shrink-0">
             <TabsTrigger value="issues" className="text-xs">{t("catalog.tabs.issues")}</TabsTrigger>
             <TabsTrigger value="technicians" className="text-xs">{t("catalog.tabs.technicians")}</TabsTrigger>
             <TabsTrigger value="categories" className="text-xs">{t("catalog.tabs.categories")}</TabsTrigger>
             <TabsTrigger value="parts" className="text-xs">{t("catalog.tabs.parts")}</TabsTrigger>
+            <TabsTrigger value="payment-methods" className="text-xs">{t("catalog.tabs.paymentMethods")}</TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-y-auto min-h-0 mt-4">
@@ -640,6 +642,9 @@ export function CatalogManagementDialog({ open, onClose, onReloadCatalog, storeI
             </TabsContent>
             <TabsContent value="parts" className="mt-0">
               <PartsTab onReloadCatalog={onReloadCatalog} />
+            </TabsContent>
+            <TabsContent value="payment-methods" className="mt-0">
+              <PaymentMethodsManager />
             </TabsContent>
           </div>
         </Tabs>

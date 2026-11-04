@@ -17,6 +17,7 @@ import type { Technician, TechnicianFilters } from "@/types/maintenance-system";
 import { StarValue } from "./star-rating";
 import { useCatalogIssues } from "./use-catalog-issues";
 import { useQueryParams } from "./use-query-params";
+import { FilterMulti } from "@/components/maintenance-tickets/list/filter-multi";
 import { useStoreNumberOptions } from "./use-store-options";
 
 const ALL = "all";
@@ -27,6 +28,8 @@ const SEARCH_DEBOUNCE_MS = 300;
 const SKELETON_ROWS = 6;
 
 /** The query keys this tab owns. */
+const STORE_SEPARATOR = ",";
+
 export const TECHNICIAN_QUERY_KEYS = ["q", "category", "store", "issue", "emergency", "deleted"] as const;
 
 export const EMERGENCY_BADGE =
@@ -49,7 +52,9 @@ export function TechniciansTab({ locale, onAdd, canAdd }: { locale: string; onAd
 
   const q = get("q");
   const category = get("category") || ALL;
-  const store = get("store") || ALL;
+  // ?store=03795-00001,03795-00002 — a checklist; one store also ranks the list.
+  const storeParam = get("store");
+  const pickedStores = useMemo(() => (storeParam ? storeParam.split(STORE_SEPARATOR).filter(Boolean) : []), [storeParam]);
   const issue = get("issue") || ALL;
   const emergency = get("emergency") === "1";
   /** Deleted technicians listed too, so one can be opened and restored. */
@@ -72,17 +77,18 @@ export function TechniciansTab({ locale, onAdd, canAdd }: { locale: string; onAd
     () => ({
       search: q || undefined,
       categoryId: category === ALL ? undefined : Number(category),
-      store: store === ALL ? undefined : store,
+      ...(pickedStores.length === 1 ? { store: pickedStores[0] } : {}),
+      ...(pickedStores.length > 1 ? { stores: pickedStores } : {}),
       issueId: issue === ALL ? undefined : Number(issue),
       emergency: emergency || undefined,
       ...(showDeleted ? { withTrashed: true } : {}),
       perPage: LIST_PAGE_SIZE,
     }),
-    [q, category, store, issue, emergency, showDeleted],
+    [q, category, pickedStores, issue, emergency, showDeleted],
   );
   const { technicians, isLoading, isRefreshing, error, refresh } = useTechnicians(filters);
 
-  const anyFilter = Boolean(q || category !== ALL || store !== ALL || issue !== ALL || emergency || showDeleted);
+  const anyFilter = Boolean(q || category !== ALL || pickedStores.length || issue !== ALL || emergency || showDeleted);
   const clearAll = () => set(Object.fromEntries(TECHNICIAN_QUERY_KEYS.map((k) => [k, null])));
   const open = (tech: Technician) => router.push(`/${locale}/dashboard/maintenance-technicians/${tech.id}`);
   // The list row carries what was paid to him this calendar month (mistakes left out).
@@ -109,13 +115,14 @@ export function TechniciansTab({ locale, onAdd, canAdd }: { locale: string; onAd
             {categories.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select value={store} onValueChange={(v) => set({ store: v === ALL ? null : v })}>
-          <SelectTrigger className="w-44" aria-label={t("technicians.storeCovered")}><SelectValue /></SelectTrigger>
-          <SelectContent position="popper" className="max-h-72">
-            <SelectItem value={ALL}>{t("technicians.anyStore")}</SelectItem>
-            {storeOptions.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <FilterMulti<string>
+          label={t("technicians.storeCovered")}
+          allLabel={t("technicians.anyStore")}
+          options={storeOptions}
+          value={pickedStores}
+          onChange={(v) => set({ store: v.length ? v.join(STORE_SEPARATOR) : null })}
+          deferred
+        />
         <Select value={issue} onValueChange={(v) => set({ issue: v === ALL ? null : v })}>
           <SelectTrigger className="w-44" aria-label={t("technicians.issueCovered")}><SelectValue /></SelectTrigger>
           <SelectContent position="popper" className="max-h-72">
@@ -139,7 +146,7 @@ export function TechniciansTab({ locale, onAdd, canAdd }: { locale: string; onAd
         )}
       </div>
 
-      {(store !== ALL || issue !== ALL) && !error && (
+      {(pickedStores.length === 1 || issue !== ALL) && !error && (
         <p className="text-xs text-muted-foreground">{t("technicians.rankedNote")}</p>
       )}
 

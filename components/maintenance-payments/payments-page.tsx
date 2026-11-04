@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { format } from "date-fns";
-import { AlertCircle, ChevronLeft, ChevronRight, Plus, Wallet } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, ListChecks, Plus, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,6 +29,7 @@ import { PaymentsFilters } from "./payments-filters";
 import { PaymentsTable } from "./payments-table";
 import { UnpaidWorkPanel } from "./unpaid-work-panel";
 import { useStoreOptions } from "./use-payment-lookups";
+import { PaymentMethodsDialog } from "./payment-methods";
 
 const PER_PAGE = 25;
 const CATALOG_PAGE = 200;
@@ -86,6 +87,7 @@ export function PaymentsPage() {
   /* ── Dialog ───────────────────────────────────────────────────────── */
 
   const [dialog, setDialog] = useState<DialogState>({ open: false });
+  const [methodsOpen, setMethodsOpen] = useState(false);
   /** Bumped after a save so the open detail sheet reads the payment again. */
   const [version, setVersion] = useState(0);
 
@@ -104,11 +106,16 @@ export function PaymentsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title={t("pages.payments")} description={t("payments.pageDescription")}>
+        <Button variant="outline" onClick={() => setMethodsOpen(true)} className="gap-1.5">
+          <ListChecks className="size-4" aria-hidden="true" />
+          {t("payments.methods.title")}
+        </Button>
         <Button onClick={() => setDialog({ open: true })} className="gap-1.5">
           <Plus className="size-4" />
           {t("payments.recordPayment")}
         </Button>
       </PageHeader>
+      <PaymentMethodsDialog open={methodsOpen} onOpenChange={setMethodsOpen} />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="min-w-0 space-y-4">

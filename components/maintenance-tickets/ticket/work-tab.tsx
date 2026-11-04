@@ -110,8 +110,11 @@ export function WorkTab({
               <span className={cn(PILL, INSPECTION_TONE[i.status] ?? INSPECTION_TONE.cancelled)}>
                 {vocabText(t, vocabEntry(INSPECTION_STATUSES, i.status))}
               </span>
-              <span className="text-xs text-muted-foreground">{formatDayTime(i.scheduledDate, i.scheduledTime)}</span>
-              {i.estimatedCost != null ? (
+              <span className="text-xs text-muted-foreground">{formatDayTime(i.scheduledDate, i.scheduledTime, i.scheduledTimeTo)}</span>
+              {i.inspectionFee != null ? (
+              <span className="text-xs tabular-nums text-muted-foreground">{t("tickets.work.fee", { amount: formatMoney(i.inspectionFee) })}</span>
+            ) : null}
+            {i.estimatedCost != null ? (
                 <span className="ms-auto text-sm font-semibold tabular-nums">{t("tickets.work.quote", { amount: formatMoney(i.estimatedCost) })}</span>
               ) : null}
             </div>
@@ -150,7 +153,7 @@ export function WorkTab({
           <div key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border p-3 text-sm">
             <span className={cn(PILL, "bg-muted text-foreground")}>{t(`tickets.work.kind.${b.kind}`)}</span>
             <span className="font-medium">{b.technician?.name ?? "—"}</span>
-            <span className="tabular-nums text-muted-foreground">{formatDayTime(b.date, b.time)}</span>
+            <span className="tabular-nums text-muted-foreground">{formatDayTime(b.date, b.time, b.timeTo)}</span>
             {b.expectedCompletionDate ? (
               <span className="text-xs text-muted-foreground">
                 {t("tickets.work.expectedBy", { date: formatDay(b.expectedCompletionDate) })}

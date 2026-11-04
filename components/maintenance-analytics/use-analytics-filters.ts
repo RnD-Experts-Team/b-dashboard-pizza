@@ -21,10 +21,10 @@ const STORE_SEPARATOR = ",";
 
 /**
  * The analytics page's shared filters, all in the URL (rule 9):
- *   ?tab=finances&from=2026-10-01&to=2026-10-31&stores=03795-00001,03795-00002&category=3
+ *   ?tab=finances&from=2026-10-01&to=2026-10-31&stores=03795-00001,03795-00002&category=3&technicians=4,9
  * No `stores` = every store. Each tab reads what it needs:
  *   overview  — the days (as the viewer's local midnights) and the stores (the API requires a list)
- *   finances  — the days as dates, stores (none = all), category
+ *   finances  — the days as dates, stores (none = all), category, technicians (none = all)
  *   coverage  — stores, category (not dates: coverage is as of now)
  */
 export function useAnalyticsFilters() {
@@ -42,6 +42,11 @@ export function useAnalyticsFilters() {
   const storesParam = get("stores");
   const stores = useMemo(() => (storesParam ? storesParam.split(STORE_SEPARATOR).filter(Boolean) : []), [storesParam]);
   const categoryId = Number(get("category")) || null;
+  const techniciansParam = get("technicians");
+  const technicianIds = useMemo(
+    () => (techniciansParam ? techniciansParam.split(STORE_SEPARATOR).map(Number).filter((n) => Number.isInteger(n) && n > 0) : []),
+    [techniciansParam],
+  );
 
   return {
     tab,
@@ -50,11 +55,14 @@ export function useAnalyticsFilters() {
     /** Store numbers; empty = all stores. */
     stores,
     categoryId,
+    /** Technician ids checked together; empty = everyone. */
+    technicianIds,
     storeOptions,
     setTab: (next: AnalyticsTab) => set({ tab: next === "overview" ? null : next }, { push: true }),
     setRange: (start: string, end: string) => set({ from: start, to: end }),
     setStores: (next: string[] | "all") => set({ stores: next === "all" ? null : next.join(STORE_SEPARATOR) }),
     setCategory: (id: number | null) => set({ category: id ? String(id) : null }),
+    setTechnicians: (ids: number[]) => set({ technicians: ids.length ? ids.join(STORE_SEPARATOR) : null }),
     get,
     set,
   };

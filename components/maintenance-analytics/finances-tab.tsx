@@ -77,8 +77,9 @@ export function FinancesTab({ locale, filters }: { locale: string; filters: Anal
             to: filters.to,
             stores: filters.stores.length ? filters.stores : undefined,
             categoryId: filters.categoryId ?? undefined,
+            technicianIds: filters.technicianIds.length ? filters.technicianIds : undefined,
           },
-    [filters.from, filters.to, filters.stores, filters.categoryId, tooLong],
+    [filters.from, filters.to, filters.stores, filters.categoryId, filters.technicianIds, tooLong],
   );
   const { finances, isLoading, isRefreshing, error, refresh } = useMaintenanceFinances(params);
 

@@ -130,21 +130,26 @@ export function ChecklistView({ items, resolution }: { items: readonly CloseChec
   );
 }
 
+/** The server's minimum for "what was wrong and how it was fixed" (IssueCloseRequest). */
+const FIX_SUMMARY_MIN = 10;
+
 export function CloseDialog({ open, onOpenChange, issue, run }: StepDialogProps) {
   const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
   const [resolution, setResolution] = useState<CloseResolution | "">("");
-  const [finalNote, setFinalNote] = useState("");
+  // Seeded with the work performed, so the MOS edits it into the full story.
+  const [finalNote, setFinalNote] = useState(issue.workPerformed ?? "");
   const [learned, setLearned] = useState("");
   const [override, setOverride] = useState("");
   const checklist = issue.workflow?.checklist ?? [];
   const open_ = openChecklistItems(checklist, resolution || null);
   const needsReason = Boolean(resolution) && open_.length > 0;
-  const dirty = Boolean(resolution || finalNote.trim() || learned.trim() || override.trim());
+  const dirty = Boolean(resolution || finalNote.trim() !== (issue.workPerformed ?? "").trim() || learned.trim() || override.trim());
 
   async function onSubmit() {
     const missing: Record<string, string> = {};
     if (!resolution) missing.resolution = t("tickets.dialogs.close.resolutionRequired");
+    if (finalNote.trim().length < FIX_SUMMARY_MIN) missing.final_note = t("tickets.dialogs.close.fixRequired");
     if (needsReason && !override.trim()) missing.override_reason = t("tickets.dialogs.close.reasonRequired");
     if (Object.keys(missing).length) return form.setFieldErrors(missing);
     const ok = await form.submit(
@@ -152,7 +157,7 @@ export function CloseDialog({ open, onOpenChange, issue, run }: StepDialogProps)
         run((key) =>
           maintenanceWorkflowService.close(key, {
             resolution: resolution as CloseResolution,
-            finalNote: finalNote.trim() || null,
+            finalNote: finalNote.trim(),
             whatWeLearned: learned.trim() || null,
             overrideReason: needsReason ? override.trim() : null,
           }),
@@ -187,6 +192,16 @@ export function CloseDialog({ open, onOpenChange, issue, run }: StepDialogProps)
           </SelectContent>
         </Select>
       </Field>
+      <Field id="close-final" label={t("tickets.dialogs.close.fixSummary")} required help={t("tickets.dialogs.close.fixHelp")} error={form.fieldError("final_note")}>
+        <Textarea
+          id="close-final"
+          value={finalNote}
+          onChange={(e) => setFinalNote(e.target.value)}
+          className="min-h-24"
+          placeholder={t("tickets.dialogs.close.fixPlaceholder")}
+          aria-invalid={Boolean(form.fieldError("final_note")) || undefined}
+        />
+      </Field>
       {checklist.length ? (
         <div className="space-y-2 rounded-md border p-3">
           <p className="text-sm font-medium">{t("tickets.overview.closeChecklist")}</p>
@@ -205,9 +220,6 @@ export function CloseDialog({ open, onOpenChange, issue, run }: StepDialogProps)
         </Field>
       ) : null}
       <MoreDetails>
-        <Field id="close-final" label={t("tickets.dialogs.close.finalNote")} error={form.fieldError("final_note")}>
-          <Textarea id="close-final" value={finalNote} onChange={(e) => setFinalNote(e.target.value)} className="min-h-16" />
-        </Field>
         <Field id="close-learned" label={t("tickets.dialogs.close.learned")} help={t("tickets.dialogs.close.learnedHelp")} error={form.fieldError("what_we_learned")}>
           <Textarea id="close-learned" value={learned} onChange={(e) => setLearned(e.target.value)} className="min-h-16" />
         </Field>

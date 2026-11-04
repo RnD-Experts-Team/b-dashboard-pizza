@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight, CalendarClock, CircleCheck, Hourglass, MessageCircleQuestion, MessageSquareReply, ScanSearch, Stamp } from "lucide-react";
+import { ArrowRight, CalendarClock, CircleCheck, FileText, Hourglass, MessageCircleQuestion, MessageSquareReply, ScanSearch, Stamp, Wallet } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,11 @@ import type { RunStep } from "./dialogs/types";
 import { formatDayTime } from "./format";
 import { useActionLabel } from "./ticket-footer";
 import { visitedStatuses } from "./ticket-top";
+
+/** The typed note the close step writes "what was wrong and how it was fixed" into. */
+const FIX_NOTE_TYPE = "final_notes";
+/** Checklist items a late invoice / payment fills in after closing. */
+const PAYMENT_CHECKS = new Set(["cost_recorded", "invoice_attached"]);
 
 /** The tabs the Now panel can point at. */
 export type DetailTab = "work" | "costs";
@@ -159,7 +164,7 @@ function StepFacts({ issue, isMos, canAnswer, canConfirm, run }: { issue: Ticket
     facts.push(
       <Fact key="inspection" icon={ScanSearch}>
         <p>
-          {t("tickets.now.inspectionBy", { name: inspection.technician?.name ?? "—", date: formatDayTime(inspection.scheduledDate, inspection.scheduledTime) })}
+          {t("tickets.now.inspectionBy", { name: inspection.technician?.name ?? "—", date: formatDayTime(inspection.scheduledDate, inspection.scheduledTime, inspection.scheduledTimeTo) })}
         </p>
         {inspection.status === "done" ? (
           <>
@@ -209,7 +214,7 @@ function StepFacts({ issue, isMos, canAnswer, canConfirm, run }: { issue: Ticket
       <Fact key="booking" icon={CalendarClock}>
         <p>
           {booking
-            ? t("tickets.now.workBooked", { name: booking.technician?.name ?? "—", date: formatDayTime(booking.date, booking.time) })
+            ? t("tickets.now.workBooked", { name: booking.technician?.name ?? "—", date: formatDayTime(booking.date, booking.time, booking.timeTo) })
             : t("tickets.now.workNotBooked")}
         </p>
       </Fact>,
@@ -240,6 +245,17 @@ function StepFacts({ issue, isMos, canAnswer, canConfirm, run }: { issue: Ticket
     facts.push(
       <Fact key="resolution" icon={CircleCheck}>
         <p>{t("tickets.overview.closedAs", { resolution: vocabText(t, vocabEntry(RESOLUTIONS, issue.resolution.value, issue.resolution.label)) })}</p>
+      </Fact>,
+    );
+  }
+
+  // What was wrong and how it was fixed, written when it was closed.
+  const fixSummary = status === "closed" ? [...issue.notes].reverse().find((n) => n.type === FIX_NOTE_TYPE) ?? null : null;
+  if (fixSummary) {
+    facts.push(
+      <Fact key="fix" icon={FileText}>
+        <p className="text-xs text-muted-foreground">{t("tickets.dialogs.close.fixSummary")}</p>
+        <p className="whitespace-pre-wrap">{fixSummary.body}</p>
       </Fact>,
     );
   }
@@ -284,6 +300,7 @@ export function NextStepPanel({
   actionsRef,
   onAction,
   onShowTab,
+  onRecordPayment,
 }: {
   issue: TicketIssueDetail;
   /** The steps this viewer may run now (already filtered by permission). */
@@ -296,6 +313,8 @@ export function NextStepPanel({
   actionsRef: (node: HTMLDivElement | null) => void;
   onAction: (action: WorkflowNextAction) => void;
   onShowTab: (tab: DetailTab) => void;
+  /** Present when the viewer may record payments: shown on a finished issue still missing its cost or invoice. */
+  onRecordPayment?: () => void;
 }) {
   const t = useTranslations("maintenanceSystem");
   const label = useActionLabel();
@@ -314,6 +333,9 @@ export function NextStepPanel({
   const turn = whoseTurn(status);
   const finished = status === "closed" || status === "cancelled";
   const detailTab = STEP_TAB[phase];
+  // Closed or cancelled, the invoice can still come in late.
+  const paymentMissing = finished && (issue.workflow?.checklist ?? []).some((c) => PAYMENT_CHECKS.has(c.key) && !c.done);
+  const latePayment = Boolean(onRecordPayment) && finished;
 
   return (
     <section aria-labelledby="ticket-now-title" className="space-y-4 rounded-xl border border-primary/30 bg-primary/[0.03] p-4 shadow-sm dark:bg-primary/[0.06] sm:p-5">
@@ -345,7 +367,9 @@ export function NextStepPanel({
 
       <StepFacts issue={issue} isMos={isMos} canAnswer={canAnswer} canConfirm={canConfirm} run={run} />
 
-      {primary || detailTab ? (
+      {latePayment && paymentMissing ? <p className="text-sm text-amber-700 dark:text-amber-300">{t("tickets.now.paymentMissing")}</p> : null}
+
+      {primary || detailTab || latePayment ? (
         <div ref={actionsRef} className="flex flex-wrap items-center gap-2">
           {primary ? (
             <Button
@@ -370,6 +394,12 @@ export function NextStepPanel({
               <span className="truncate">{label(a, status)}</span>
             </Button>
           ))}
+          {latePayment ? (
+            <Button variant={paymentMissing ? "default" : "outline"} onClick={onRecordPayment} disabled={disabled} className="min-w-0 max-sm:w-full">
+              <Wallet className="h-4 w-4" aria-hidden="true" />
+              <span className="truncate">{t("tickets.now.recordPayment")}</span>
+            </Button>
+          ) : null}
           {detailTab ? (
             <Button variant="link" className="h-auto px-1 text-sm" onClick={() => onShowTab(detailTab)}>
               {t("tickets.now.seeDetails", { tab: t(`workflow.tabs.${detailTab}`) })}

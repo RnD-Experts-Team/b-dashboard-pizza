@@ -9,7 +9,6 @@ import {
   RefreshCw,
   Shuffle,
   Store,
-  Trash2,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
@@ -18,7 +17,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { TicketHeaderInfo } from "@/lib/api/services/maintenance-workflow.service";
@@ -42,7 +40,6 @@ export function effectivePriority(issue: TicketIssueDetail) {
 export interface TicketMenuPermissions {
   canJump: boolean;
   canCancel: boolean;
-  canDelete: boolean;
 }
 
 export function TicketHeader({
@@ -56,7 +53,6 @@ export function TicketHeader({
   onJump,
   onCancelIssue,
   onCancelTicket,
-  onDelete,
 }: {
   ticket: TicketHeaderInfo;
   issue: TicketIssueDetail;
@@ -68,13 +64,12 @@ export function TicketHeader({
   onJump: () => void;
   onCancelIssue: () => void;
   onCancelTicket: () => void;
-  onDelete: () => void;
 }) {
   const t = useTranslations("maintenanceSystem");
   const priority = effectivePriority(issue);
   const store = ticket.storeNumber ?? ticket.otherStore ?? "—";
   const terminal = issue.status.value === "closed" || issue.status.value === "cancelled";
-  const hasMenu = permissions.canJump || permissions.canCancel || permissions.canDelete;
+  const hasMenu = permissions.canJump || permissions.canCancel;
 
   return (
     <header className="space-y-3">
@@ -114,15 +109,6 @@ export function TicketHeader({
                     <CircleSlash className="me-2 h-4 w-4" aria-hidden="true" />
                     {t("tickets.page.cancelTicket")}
                   </DropdownMenuItem>
-                ) : null}
-                {permissions.canDelete ? (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onSelect={onDelete} className="text-destructive focus:text-destructive">
-                      <Trash2 className="me-2 h-4 w-4" aria-hidden="true" />
-                      {t("tickets.page.deleteTicket")}
-                    </DropdownMenuItem>
-                  </>
                 ) : null}
               </DropdownMenuContent>
             </DropdownMenu>

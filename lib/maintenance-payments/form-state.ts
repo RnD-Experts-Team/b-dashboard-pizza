@@ -37,7 +37,6 @@ import type {
   PaymentInput,
   PaymentLineInput,
   PaymentLineType,
-  PaymentMethod,
   PlaceAddressLine,
   UnpaidWork,
 } from "@/types/maintenance-system";
@@ -93,11 +92,8 @@ export interface PaidToChoice {
 export interface PaymentDraft {
   paidTo: PaidToChoice | null;
   paidAt: string;
-  /**
-   * Not shown any more (the owner: they made it look like they were
-   * needed). Kept so an edit sends back what an older payment saved.
-   */
-  method: PaymentMethod | null;
+  /** How we paid, from the editable list (optional). */
+  paymentMethodId: number | null;
   reference: string;
   invoiceNumber: string;
   /** The payment's notes and attachments. */
@@ -157,7 +153,7 @@ export function emptyPaymentDraft(today: string): PaymentDraft {
   return {
     paidTo: null,
     paidAt: today,
-    method: null,
+    paymentMethodId: null,
     reference: "",
     invoiceNumber: "",
     extras: emptyExtras(),
@@ -382,7 +378,7 @@ export function draftFromPayment(payment: Payment): PaymentDraft {
   return {
     paidTo: { type: payment.paidTo.type, id: payment.paidTo.id, name: payment.paidTo.name },
     paidAt: payment.paidAt,
-    method: payment.method,
+    paymentMethodId: payment.paymentMethod?.id ?? null,
     reference: payment.reference ?? "",
     invoiceNumber: payment.invoiceNumber ?? "",
     extras: extrasFromSaved(payment.notes, payment.attachments),
@@ -473,8 +469,8 @@ function toInput(draft: PaymentDraft, editing: boolean): PaymentInput {
     paidAt: draft.paidAt,
     technicianId: draft.paidTo?.type === "technician" ? draft.paidTo.id : undefined,
     supplierId: draft.paidTo?.type === "supplier" ? draft.paidTo.id : undefined,
+    paymentMethodId: draft.paymentMethodId,
     // Not asked for any more; an edit sends back what an older payment saved (the edit replaces them).
-    method: draft.method ?? undefined,
     reference: orNull(draft.reference) ?? undefined,
     invoiceNumber: orNull(draft.invoiceNumber) ?? undefined,
     ...extras,
@@ -548,13 +544,14 @@ export function validateDraft(draft: PaymentDraft, serialsNeeded: (partId: numbe
 
 /**
  * Root keys that have a control, in form order (for focusing the first
- * invalid one). method / reference / invoice_number have no field any more:
+ * invalid one). reference / invoice_number have no field any more:
  * an error on them falls into the banner at the top.
  */
 export const PAYMENT_ROOT_FIELDS = [
   "technician_id",
   "supplier_id",
   "paid_at",
+  "payment_method_id",
   "lines",
   "files",
   "notes",

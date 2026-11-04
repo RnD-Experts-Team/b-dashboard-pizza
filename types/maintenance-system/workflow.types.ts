@@ -123,6 +123,10 @@ export interface Inspection {
   status: InspectionStatus;
   scheduledDate: IsoDate | null;
   scheduledTime: ClockTime | null;
+  /** End of the booked window, when one was given. */
+  scheduledTimeTo?: ClockTime | null;
+  /** What the inspection itself costs, typed when booked; counts until a payment covers it. */
+  inspectionFee?: Money | null;
   doneAt: IsoDateTime | null;
   findings: string | null;
   recommendedRepair: string | null;
@@ -164,6 +168,8 @@ export interface IssueSchedule {
   technician: IdName | null;
   date: IsoDate;
   time: ClockTime | null;
+  /** End of the booked window, when one was given. */
+  timeTo?: ClockTime | null;
   expectedCompletionDate: IsoDate | null;
   tripId: number | null;
   mistaken: boolean;
@@ -391,6 +397,8 @@ export interface BookInspectionPayload {
   technicianId: number;
   scheduledDate: IsoDate;
   scheduledTime?: ClockTime | null;
+  scheduledTimeTo?: ClockTime | null;
+  inspectionFee?: Money | null;
   instructions?: string | null;
 }
 
@@ -418,6 +426,7 @@ export interface ScheduleWorkPayload {
   technicianId: number;
   date: IsoDate;
   time?: ClockTime | null;
+  timeTo?: ClockTime | null;
   expectedCompletionDate?: IsoDate | null;
   instructions?: string | null;
 }
@@ -425,6 +434,7 @@ export interface ScheduleWorkPayload {
 export interface MoveSchedulePayload {
   date: IsoDate;
   time?: ClockTime | null;
+  timeTo?: ClockTime | null;
   reason: string;
 }
 

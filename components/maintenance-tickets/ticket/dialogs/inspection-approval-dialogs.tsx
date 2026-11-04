@@ -32,7 +32,7 @@ export function quotedInspection(issue: TicketIssueDetail): Inspection | null {
   );
 }
 
-function AmountInput({ id, value, onChange, invalid }: { id: string; value: string; onChange: (v: string) => void; invalid?: boolean }) {
+export function AmountInput({ id, value, onChange, invalid }: { id: string; value: string; onChange: (v: string) => void; invalid?: boolean }) {
   return (
     <div className="relative">
       <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-sm text-muted-foreground">$</span>
