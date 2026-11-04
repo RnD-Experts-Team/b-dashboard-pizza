@@ -1,14 +1,20 @@
 import {
   Award,
+  BellRing,
   Cake,
+  ClipboardList,
   Clock,
+  ListChecks,
   Megaphone,
+  Package,
+  Pizza,
   Shapes,
   SprayCan,
+  TrendingUp,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
-import type { CategoryKey } from "./types";
+import { CATEGORY_KEYS, type CategoryKey } from "./types";
 
 /**
  * The event-category taxonomy — same idea as `components/dashboard-v1/category.ts`:
@@ -27,19 +33,30 @@ export interface CalendarCategory {
   dot: string;
 }
 
-export const CALENDAR_CATEGORIES: readonly CalendarCategory[] = [
-  { key: "birthday", icon: Cake, dot: "bg-pink-500" },
-  { key: "cleaning", icon: SprayCan, dot: "bg-cyan-500" },
-  { key: "shift", icon: Clock, dot: "bg-blue-500" },
-  { key: "milestone", icon: Award, dot: "bg-amber-500" },
-  { key: "maintenance", icon: Wrench, dot: "bg-orange-500" },
-  { key: "meeting", icon: Megaphone, dot: "bg-violet-500" },
-  // Neutral on purpose: "other" shouldn't compete with the named types.
-  { key: "other", icon: Shapes, dot: "bg-zinc-400 dark:bg-zinc-500" },
-];
+const BY_KEY = new Map<CategoryKey, CalendarCategory>(
+  (
+    [
+      { key: "maintenance", icon: Wrench, dot: "bg-orange-500" },
+      { key: "shift", icon: Clock, dot: "bg-blue-500" },
+      { key: "cleaning", icon: SprayCan, dot: "bg-cyan-500" },
+      { key: "dough", icon: Pizza, dot: "bg-yellow-500" },
+      { key: "data", icon: ClipboardList, dot: "bg-indigo-500" },
+      { key: "inventory", icon: Package, dot: "bg-teal-500" },
+      { key: "tasks", icon: ListChecks, dot: "bg-lime-500" },
+      { key: "reminders", icon: BellRing, dot: "bg-fuchsia-500" },
+      { key: "sales", icon: TrendingUp, dot: "bg-emerald-500" },
+      { key: "birthday", icon: Cake, dot: "bg-pink-500" },
+      { key: "milestone", icon: Award, dot: "bg-amber-500" },
+      { key: "meeting", icon: Megaphone, dot: "bg-violet-500" },
+      // Neutral on purpose: "other" shouldn't compete with the named types.
+      { key: "other", icon: Shapes, dot: "bg-zinc-400 dark:bg-zinc-500" },
+    ] satisfies CalendarCategory[]
+  ).map((c) => [c.key, c]),
+);
 
-const BY_KEY = new Map(CALENDAR_CATEGORIES.map((c) => [c.key, c]));
+/** In `CATEGORY_KEYS` order (tabs, filter list). */
+export const CALENDAR_CATEGORIES: readonly CalendarCategory[] = CATEGORY_KEYS.map((k) => BY_KEY.get(k)!);
 
 export function categoryOf(key: CategoryKey): CalendarCategory {
-  return BY_KEY.get(key) ?? CALENDAR_CATEGORIES[0];
+  return BY_KEY.get(key) ?? BY_KEY.get("other")!;
 }

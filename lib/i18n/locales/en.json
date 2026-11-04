@@ -2877,7 +2877,7 @@
   "doughSauce": {
     "page": {
       "title": "Dough & Sauce",
-      "description": "Plan tomorrow's dough and sauce from sales, confirm it, and score each store's week against what was counted."
+      "description": "Confirm each day's dough and sauce plan from that day's sales, and score each store's week against what was counted."
     },
     "tabs": {
       "daily": "Daily plan",
@@ -2930,11 +2930,10 @@
       "baseForbidden": "You don't have access to the sales data, so a new plan can't be calculated.",
       "baseUnavailable": "{system} is unavailable, so a new plan can't be calculated ({message}). Confirm is disabled.",
       "planTitle": "{store} · {date}",
-      "sourceSummary": "Average of the last {lookback} {weekday}s · {found} with sales",
+      "sourceSummary": "Base = that day's own sales · reference: average of the last {lookback} {weekday}s, {found} with sales",
       "confirmedBy": "Confirmed by {name}",
       "confirmedBadge": "Confirmed",
       "notConfirmedBadge": "Not confirmed",
-      "fewerDays": "Only {found} of {lookback} source days had sales — the average is over fewer days.",
       "colIngredient": "Ingredient",
       "colAverage": "Average",
       "colBase": "Base",
@@ -2967,10 +2966,10 @@
       "colMakeUp": "Make-up",
       "colTotal": "Total to make",
       "groupCheck": "Day-before check",
-      "groupSources": "Last {lookback} {weekday}s · amount used",
+      "groupSources": "Last {lookback} {weekday}s · reference",
       "groupPlan": "How the plan is made",
-      "hintAverage": "of the days shown",
-      "hintBase": "average, before the buffer",
+      "hintAverage": "of the days shown — reference only",
+      "hintBase": "this day's own sales, before the buffer",
       "hintBuffer": "extra, in %",
       "hintPlanned": "base + buffer",
       "hintMakeUp": "short of the base",
@@ -3028,7 +3027,25 @@
       "tileTotal": "Total to make",
       "calcLine": "{base} base + {buffer}% buffer = {planned}",
       "viewOnly": "You can view this plan but not confirm it.",
-      "confirmHint": "Review the buffers, then confirm. Once confirmed, the numbers are frozen."
+      "confirmHint": "Review the buffers, then confirm. Once confirmed, the numbers are frozen.",
+      "relYesterday": "Yesterday",
+      "quickYesterdayHint": "Its sales are built — you can plan it",
+      "quickTodayHint": "Sales are built tomorrow after 10:30 — view only",
+      "baseNotReady": "Sales for {date} aren't built yet. They are built the next day, {next}, after 10:30 (and again at 13:30). Refresh then — until then nothing can be confirmed.",
+      "baseNotReadyFuture": "{date} hasn't happened yet, so there are no sales to build a base from.",
+      "baseNotReadyChip": "Base available {next} after 10:30",
+      "baseReadyChip": "Base ready",
+      "notBuiltYet": "Not built yet — available {next} after 10:30",
+      "confirmWaiting": "Confirm opens when this day's sales are built ({next}, after 10:30).",
+      "baseCellTitle": "{raw} sold ÷ {divisor} = {result} {unit}",
+      "sourceSummaryNoHistory": "Base = that day's own sales · the earlier {weekday}s couldn't be loaded",
+      "explainBase": "Base = what this store sold on {date}, turned into dough balls and sauce containers by the recipes. It is built on {next} after 10:30. Planned = base + buffer.",
+      "explainBaseMore": "When is it ready, and what can change it?",
+      "explainStepSales": "{date}: the store sells.",
+      "explainStepBuilt": "{next}, 10:30 (and 13:30): that day's sales are built — the base appears.",
+      "explainStepPlan": "From then the buffers can be reviewed and the plan confirmed.",
+      "explainCorrections": "A sales correction within 7 days changes the base of an unconfirmed day. A confirmed plan never changes.",
+      "explainReference": "The earlier {weekday}s and their average are only a reference to spot an odd day — they are not used in the plan."
     },
     "stores": {
       "searchPlaceholder": "Search store…",
@@ -3062,22 +3079,21 @@
     },
     "entryCompare": {
       "title": "Plan vs counted",
-      "subtitle": "Plan confirmed for {date}",
+      "subtitle": "This count is judged against the base for {date} (before the buffer), as on the Daily plan",
       "colItem": "Item",
-      "colPlanned": "Planned",
+      "colBase": "Base",
       "colCounted": "Counted",
       "colDifference": "Difference",
-      "baseBuffer": "{base} base + {buffer} buffer",
-      "statusUnder": "Under plan",
-      "statusMet": "Met plan",
-      "statusOver": "Over plan",
+      "converted": "{raw} ÷ {divisor}",
+      "statusShort": "Short by {by}",
+      "statusMet": "Met the base",
+      "statusOver": "Over by {by}",
       "notInEntry": "Not counted in this entry",
-      "summaryUnder": "{n, plural, one {1 item was counted under plan.} other {# items were counted under plan.}}",
-      "summaryOk": "Every item met or beat the plan.",
-      "footnote": "Difference = counted − planned. A negative number means less was counted than planned.",
-      "noPlan": "No plan was confirmed for {date}, so there is nothing to compare against.",
-      "notConfirmed": "The plan for {date} was never confirmed, so there is nothing to compare against.",
-      "loadFailed": "Couldn't load the plan: {message}",
+      "summaryUnder": "{n, plural, one {1 item was counted below the base.} other {# items were counted below the base.}}",
+      "summaryOk": "Every item met the base.",
+      "footnote": "Difference = counted − base, in whole steps rounded down (½ for the 10 OZ dough). A shortfall under one step counts as met.",
+      "noBase": "The base for {date} isn't built yet — a day's sales are built the next day after 10:30 — so there is nothing to compare against for now.",
+      "loadFailed": "Couldn't load the base: {message}",
       "retry": "Try again"
     },
     "report": {
@@ -3589,24 +3605,32 @@
       "title": "Event types",
       "showAll": "Show all",
       "hideAll": "Hide all",
-      "only": "Only",
-      "scopeTitle": "Stores",
-      "scopeStore": "Only {store}",
-      "scopeStoreHint": "Turn off to see events from every store."
+      "only": "Only"
     },
     "categories": {
       "birthday": "Birthdays",
       "cleaning": "Cleaning",
-      "shift": "Shifts",
-      "milestone": "Anniversaries",
+      "shift": "Staff",
+      "milestone": "Team",
       "maintenance": "Maintenance",
-      "meeting": "Meetings",
-      "other": "Other"
+      "meeting": "Company",
+      "other": "Other",
+      "dough": "Dough",
+      "data": "Data entry",
+      "inventory": "Inventory",
+      "tasks": "Tasks",
+      "reminders": "My reminders",
+      "sales": "Sales"
     },
     "status": {
       "done": "Done",
       "pending": "Pending",
-      "overdue": "Overdue"
+      "overdue": "Overdue",
+      "scheduled": "Scheduled",
+      "in_progress": "In progress",
+      "missed": "Missed",
+      "cancelled": "Cancelled",
+      "info": "Info"
     },
     "ev": {
       "birthday": "{name}'s birthday",
@@ -3614,6 +3638,18 @@
     },
     "allDay": "All day",
     "more": "+{n} more",
+    "group": {
+      "stores": "{n, plural, one {# store} other {# stores}}",
+      "events": "{n, plural, one {# event} other {# events}}",
+      "more": "more",
+      "moreEvents": "{n, plural, one {# more event} other {# more events}}",
+      "mixed": "Mixed events",
+      "needsAction": "{n} overdue or missed",
+      "listLabel": "Events in this group",
+      "expand": "Show all all-day events",
+      "collapse": "Show fewer all-day events",
+      "backToList": "Back to list"
+    },
     "eventCount": "{n, plural, =0 {No events} one {1 event} other {# events}}",
     "noEvents": "No events",
     "noEventsHint": "Nothing is scheduled for this day, or it is hidden by a filter.",
@@ -3707,7 +3743,189 @@
       "confirmTitle": "Delete this event?",
       "confirmDescription": "\"{title}\" on {date} will be removed from the calendar.",
       "confirmDelete": "Delete event"
-    }
+    },
+    "feed": {
+      "unavailable": "Couldn't load {names}.",
+      "retry": "Retry",
+      "truncated": "Some events are hidden — this range has too many. Pick a shorter range.",
+      "yearNoFeed": "For now the year view shows only the events you created.",
+      "open": "Open",
+      "movedFrom": "Moved from {when}",
+      "companyWide": "Company-wide",
+      "employees": "{n, plural, one {# employee} other {# employees}}",
+      "managers": "{n, plural, one {# manager} other {# managers}}",
+      "total": "{n} total",
+      "sources": {
+        "maintenance": "Maintenance",
+        "operations": "Scheduling",
+        "auditapp": "Cleaning & dough",
+        "data": "Data",
+        "inventory": "Inventory",
+        "hiring": "Hiring",
+        "notifications": "Announcements",
+        "toolbox": "Toolbox"
+      },
+      "manyStores": "{n} stores make a heavy month. The week view loads much faster.",
+      "switchToWeek": "Switch to week",
+      "onlyYou": "Only you"
+    },
+    "stores": {
+      "title": "Stores",
+      "all": "All stores",
+      "count": "{n, plural, one {# store} other {# stores}}",
+      "selectedOf": "{n} of {total} selected",
+      "search": "Search by name or number",
+      "searchLabel": "Search stores",
+      "selectAll": "Select all",
+      "clearAll": "Clear all",
+      "none": "No stores match your search.",
+      "pickOne": "Pick at least one store.",
+      "apply": "Apply",
+      "applyN": "{n, plural, one {Apply (# store)} other {Apply (# stores)}}"
+    },
+    "new": {
+      "heading": "Add to the calendar",
+      "kindLabel": "What are you adding",
+      "hint": {
+        "event": "Something happening at one or more stores.",
+        "task": "Work for stores to do and report back on.",
+        "reminder": "A nudge just for you. It rings your bell at the time."
+      },
+      "kinds": {
+        "event": "Event",
+        "task": "Task",
+        "reminder": "Reminder"
+      },
+      "titlePlaceholder": {
+        "event": "e.g. Health inspection",
+        "task": "e.g. Deep-clean the walk-in",
+        "reminder": "e.g. Call the technician"
+      },
+      "steps": {
+        "what": "What",
+        "when": "When",
+        "remind": "When to remind you",
+        "task": "How it works"
+      },
+      "fields": {
+        "stores": "Stores",
+        "category": "Type",
+        "categoryPlaceholder": "e.g. Inspection",
+        "priority": "Priority",
+        "date": "Date",
+        "time": "Time",
+        "deadline": "Deadline time",
+        "dueTime": "Due at",
+        "endOfDay": "Due at the end of the day.",
+        "proof": "Proof when done",
+        "requiresReview": "I approve it first",
+        "requiresReviewHint": "Off: it counts as done as soon as the store submits it.",
+        "remindIn": "Remind me"
+      },
+      "priorities": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "urgent": "Urgent"
+      },
+      "proof": {
+        "none": "None",
+        "note": "A note"
+      },
+      "remindIn": {
+        "10": "In 10 min",
+        "30": "In 30 min",
+        "60": "In 1 hour",
+        "180": "In 3 hours",
+        "at": "At a time…"
+      },
+      "errors": {
+        "title": "Give it a title.",
+        "stores": "Pick at least one store.",
+        "storesMax": "Pick at most {n} stores.",
+        "date": "Pick a valid date.",
+        "endTime": "The end must be after the start.",
+        "taskPast": "A task can't be due in the past.",
+        "remindPast": "Pick a time in the future.",
+        "remindFar": "Reminders can be at most a year ahead."
+      },
+      "created": {
+        "event": "Event created",
+        "task": "Task created",
+        "reminder": "Reminder set"
+      },
+      "saveFailed": {
+        "auth": "Your session expired. Sign in again.",
+        "forbidden": "You can't add this for the selected stores.",
+        "notFound": "Something it refers to no longer exists.",
+        "invalid": "Check the form and try again.",
+        "network": "Couldn't reach the server. Try again.",
+        "other": "Couldn't save. Try again."
+      },
+      "submit": {
+        "event": "Create event",
+        "task": "Create task",
+        "reminder": "Set reminder"
+      }
+    },
+    "actions": {
+      "task": {
+        "start": "Start",
+        "submit": "Submit",
+        "approve": "Approve",
+        "return": "Return"
+      },
+      "done": {
+        "start": "Task started",
+        "submit": "Task submitted",
+        "approve": "Task approved",
+        "return": "Task returned",
+        "cancelEvent": "Cancelled",
+        "remind": "Reminder set",
+        "snooze": "Snoozed",
+        "reminderDone": "Reminder done",
+        "reminderCancel": "Reminder removed"
+      },
+      "awaitingReview": "Waiting for review by the person who created it.",
+      "noteLabel": "Note for the reviewer",
+      "notePlaceholder": "What was done?",
+      "noteRequired": "Add a note: this task asks for one.",
+      "reasonLabel": "Why is it going back?",
+      "reasonPlaceholder": "What needs to change?",
+      "reasonRequired": "Say why you are returning it.",
+      "confirm": "Confirm",
+      "back": "Back",
+      "remindMe": "Remind me",
+      "remindIn": "Remind me in",
+      "snooze": "Snooze",
+      "snoozeFor": "Snooze for",
+      "reminderDone": "Done",
+      "reminderCancel": "Remove",
+      "presets": {
+        "10": "10 min",
+        "60": "1 hour",
+        "180": "3 hours",
+        "1440": "1 day",
+        "tomorrow": "Tomorrow 09:00"
+      },
+      "cancelEvent": "Cancel event",
+      "cancelTask": "Cancel task",
+      "cancelAsk": "Cancel this? Everyone who sees it will see it as cancelled.",
+      "cancelYes": "Yes, cancel it",
+      "keep": "Keep it",
+      "errors": {
+        "auth": "Your session expired. Sign in again.",
+        "forbidden": "You're not allowed to do this.",
+        "forbiddenReview": "Only the person who created this task can approve or return it.",
+        "forbiddenCancel": "Only the person who created this can cancel it.",
+        "notFound": "This no longer exists.",
+        "invalid": "Check the details and try again.",
+        "network": "Couldn't reach the server. Try again.",
+        "other": "Something went wrong. Try again."
+      },
+      "reminderSetFor": "Reminder set for {when}"
+    },
+    "reminderLabel": "Reminder"
   },
   "bottomNav": {
     "editTrigger": "Customize quick links",

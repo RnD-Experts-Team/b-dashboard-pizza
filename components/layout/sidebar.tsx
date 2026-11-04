@@ -393,11 +393,13 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     icon: Coffee,
   };
 
-  // Store calendar (birthdays, cleaning, shifts, maintenance, meetings). Reads
-  // the selected store and serves mock data for now, so there is no gate.
-  // Hidden for now: the page at /dashboard/calendar still exists. To bring it
-  // back, uncomment this, the item in `toolboxGroup`, and the matching entry in
-  // lib/nav/bottom-nav-items.ts (the two lists must stay 1:1).
+  // Store calendar: the 8 calendar feeds for the selected store. No gate here —
+  // pizzasys decides each layer per feed (a layer the user can't see answers
+  // 403 and is hidden).
+  // Hidden for now (not part of this release): the page at /dashboard/calendar
+  // still exists. To bring it back, uncomment this, the item in `toolboxGroup`,
+  // the Calendar button in topbar.tsx, and the matching entry in
+  // lib/nav/bottom-nav-items.ts (the two nav lists must stay 1:1).
   // const calendarItem: NavItem = {
   //   title: t("calendar"),
   //   href: `/${locale}/dashboard/calendar`,

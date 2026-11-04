@@ -42,11 +42,17 @@ export function durationMinutes(ev: CalendarEvent): number {
   return Math.round((+ev.end - +ev.start) / MINUTE);
 }
 
-/** All-day first (longest span first), then timed by start, then longer first. */
+/**
+ * All-day first (longest span first), then timed by start, then longer first.
+ * Ties go by store, so with several stores shown each store's events stay
+ * together instead of interleaving.
+ */
 export function compareEvents(a: CalendarEvent, b: CalendarEvent): number {
   if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
-  if (a.allDay) return +b.end - +b.start - (+a.end - +a.start) || +a.start - +b.start;
-  return +a.start - +b.start || +b.end - +b.start - (+a.end - +a.start);
+  const byTime = a.allDay
+    ? +b.end - +b.start - (+a.end - +a.start) || +a.start - +b.start
+    : +a.start - +b.start || +b.end - +b.start - (+a.end - +a.start);
+  return byTime || a.store.code.localeCompare(b.store.code);
 }
 
 /** Group by "YYYY-MM-DD"; multi-day events appear on every day they cover. */
@@ -215,40 +221,129 @@ export interface OverlapItem {
   cols: number;
 }
 
+/** Several events folded into one "+N" block (a crowded overlap cluster). */
+export interface OverlapStack {
+  /** In start order. Always 2 or more. */
+  events: CalendarEvent[];
+  start: Date;
+  end: Date;
+  col: number;
+  cols: number;
+}
+
+export interface OverlapResult {
+  items: OverlapItem[];
+  stacks: OverlapStack[];
+}
+
 /** Shortest visual block in the hour grid. */
 export const MIN_BLOCK_MINUTES = 20;
 
-/** Overlap clusters → a column index per event and a column count per cluster. */
-export function overlapLayout(events: readonly CalendarEvent[]): OverlapItem[] {
+/**
+ * How much an event deserves a card of its own when a crowd has to be folded:
+ * my own reminders first (they are the point of a reminder), then what someone
+ * made in Toolbox (tasks, events), then what needs action (overdue, missed,
+ * maintenance), then everything else; daily routines last.
+ */
+export function eventPriority(ev: CalendarEvent): number {
+  if (ev.feedType === "reminder" || ev.layer === "mine") return 4;
+  if (ev.origin === "toolbox" || ev.source === "user") return 3;
+  if (ev.category === "maintenance" || ev.status === "overdue" || ev.status === "missed") return 2;
+  return ev.routine ? 0 : 1;
+}
+
+/**
+ * Overlap clusters → a column index per event and a column count per cluster.
+ *
+ * `maxCols` caps how many side-by-side columns a cluster may use (a day column
+ * holds ~3 readable cards; 20 people clocking in at once would be 20 slivers).
+ * A cluster that needs more keeps `maxCols - 1` events as cards — the most
+ * important first (`eventPriority`), then the earliest — and folds everything
+ * else into the last column as "+N" stacks: one per run of events that overlap
+ * in time, so a stack never spans a quiet gap. A run of one is just drawn as
+ * itself. With `maxCols` 1 a crowded cluster is only stacks.
+ */
+export function overlapLayout(events: readonly CalendarEvent[], maxCols = Infinity): OverlapResult {
+  const cap = Math.max(1, Math.floor(maxCols));
   const sorted = [...events].sort(
     (a, b) => +a.start - +b.start || +b.end - +b.start - (+a.end - +a.start),
   );
-  const out: OverlapItem[] = [];
+  const items: OverlapItem[] = [];
+  const stacks: OverlapStack[] = [];
   let cluster: OverlapItem[] = [];
   let columns: number[] = [];
   let clusterEnd = -Infinity;
+
+  const visualEnd = (ev: CalendarEvent) => Math.max(+ev.end, +ev.start + MIN_BLOCK_MINUTES * MINUTE);
+
   const flush = () => {
-    for (const it of cluster) it.cols = columns.length;
+    if (columns.length <= cap) {
+      for (const it of cluster) it.cols = columns.length;
+      items.push(...cluster);
+    } else {
+      const keep = cap - 1;
+      let run: OverlapItem[] = [];
+      let runEnd = -Infinity;
+      const closeRun = () => {
+        if (run.length === 1) {
+          run[0].col = keep;
+          run[0].cols = cap;
+          items.push(run[0]);
+        } else if (run.length > 1) {
+          stacks.push({
+            events: run.map((r) => r.ev),
+            start: run[0].ev.start,
+            end: new Date(runEnd),
+            col: keep,
+            cols: cap,
+          });
+        }
+        run = [];
+        runEnd = -Infinity;
+      };
+      // The cards: most important first, then earliest. They are packed into the
+      // first `keep` columns again (at most `keep` of them, so each fits).
+      const kept = [...cluster]
+        .sort((a, b) => eventPriority(b.ev) - eventPriority(a.ev) || +a.ev.start - +b.ev.start)
+        .slice(0, keep);
+      const ends: number[] = [];
+      for (const it of [...kept].sort((a, b) => +a.ev.start - +b.ev.start)) {
+        let c = ends.findIndex((end) => end <= +it.ev.start);
+        if (c === -1) c = ends.push(0) - 1;
+        ends[c] = visualEnd(it.ev);
+        it.col = c;
+        it.cols = cap;
+        items.push(it);
+      }
+      // Everything else folds, in start order (`cluster` already is).
+      const cards = new Set(kept);
+      for (const it of cluster) {
+        if (cards.has(it)) continue;
+        if (run.length && +it.ev.start >= runEnd) closeRun();
+        run.push(it);
+        runEnd = Math.max(runEnd, visualEnd(it.ev));
+      }
+      closeRun();
+    }
     cluster = [];
     columns = [];
     clusterEnd = -Infinity;
   };
+
   for (const ev of sorted) {
     const s = +ev.start;
-    const e = Math.max(+ev.end, s + MIN_BLOCK_MINUTES * MINUTE);
+    const e = visualEnd(ev);
     if (s >= clusterEnd) flush();
     let c = columns.findIndex((end) => end <= s);
     if (c === -1) {
       c = columns.length;
       columns.push(e);
     } else columns[c] = e;
-    const it: OverlapItem = { ev, col: c, cols: 1 };
-    cluster.push(it);
-    out.push(it);
+    cluster.push({ ev, col: c, cols: 1 });
     clusterEnd = Math.max(clusterEnd, e);
   }
   flush();
-  return out;
+  return { items, stacks };
 }
 
 /** Unique people across events, in first-seen order. */

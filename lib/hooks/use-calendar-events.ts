@@ -1,10 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { calendarService } from "@/lib/api/services/calendar.service";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { calendarService, type CalendarEventsPage, type CalendarNotice } from "@/lib/api/services/calendar.service";
+import { calendarToolboxService } from "@/lib/api/services/calendar-toolbox.service";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import { useCalendarStore } from "@/lib/store/calendar.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { addDays, dayKey, startOfDay } from "@/lib/calendar/dates";
+import { isStoreCode, type FeedSource } from "@/lib/calendar/feed-types";
 import type { CalendarEvent, CalendarEventInput, CalendarStoreRef, DateRange } from "@/lib/calendar/types";
 
 /** Show the skeleton only when data is slower than this (no flash on fast loads). */
@@ -19,13 +22,50 @@ export function useCalendarStoreRef(): CalendarStoreRef | null {
   );
 }
 
-/** "This store" scope keeps only the selected store's events (no store selected → everything). */
-function useScoped(events: CalendarEvent[], store: CalendarStoreRef | null): CalendarEvent[] {
-  const scope = useCalendarStore((s) => s.scope);
+/**
+ * The stores the user can pick in the Calendar: the same list as the sidebar's
+ * store picker (active stores, in its order), in the calendar's shape. Stores
+ * without a readable store number are left out — the feeds only know numbers.
+ */
+export function useCalendarStoreOptions(): CalendarStoreRef[] {
+  const overview = useAuthStore((s) => s.overviewStores);
   return useMemo(
-    () => (scope === "store" && store ? events.filter((e) => e.store.code === store.code) : events),
-    [events, scope, store],
+    () =>
+      (overview ?? [])
+        .filter((s) => s.isActive !== false && isStoreCode(s.storeId))
+        .map((s) => ({ code: s.storeId!, name: s.name })),
+    [overview],
   );
+}
+
+/**
+ * The stores the Calendar page shows: the ones the user picked (kept only while
+ * they are still stores the user can pick), otherwise just the dashboard's
+ * selected store, following it as it changes.
+ */
+export function useCalendarStores(): CalendarStoreRef[] {
+  const dashboard = useCalendarStoreRef();
+  const options = useCalendarStoreOptions();
+  const codes = useCalendarStore((s) => s.storeCodes);
+  return useMemo(() => {
+    if (codes?.length) {
+      const picked = options.filter((o) => codes.includes(o.code));
+      if (picked.length) return picked;
+    }
+    return dashboard ? [dashboard] : [];
+  }, [codes, options, dashboard]);
+}
+
+/**
+ * Keeps only the events of `stores` (none given → everything). Company-wide
+ * events (announcements) belong to every store.
+ */
+function useScoped(events: CalendarEvent[], stores: readonly CalendarStoreRef[]): CalendarEvent[] {
+  return useMemo(() => {
+    if (!stores.length) return events;
+    const codes = new Set(stores.map((s) => s.code));
+    return events.filter((e) => e.companyWide || codes.has(e.store.code));
+  }, [events, stores]);
 }
 
 /**
@@ -51,43 +91,71 @@ interface CalendarEventsResult {
   loading: boolean;
   /** True only after SKELETON_DELAY_MS of waiting. */
   showSkeleton: boolean;
+  /** Nothing could be loaded at all (every feed failed). */
   error: boolean;
   retry: () => void;
+  /** Feeds that failed while others loaded — the page names them. */
+  failed: FeedSource[];
+  /** Some feed hit its event cap. */
+  truncated: boolean;
+  notice?: CalendarNotice;
 }
 
-const EMPTY: CalendarEvent[] = [];
+const EMPTY_PAGE: CalendarEventsPage = { events: [], failed: [], truncated: false };
 
 /**
- * Events overlapping a range, scoped to the selected store unless the user
- * picked "All stores". Stale responses (the user paged on) are dropped, and a
- * failure surfaces as `error` with a `retry()` — never a silently empty view.
+ * Events overlapping a range, for the stores the Calendar shows
+ * (`useCalendarStores`) — or, with `source: "dashboard"`, only the dashboard's
+ * selected store (the topbar's Today panel: it must stay cheap on every page,
+ * however many stores were picked in the Calendar). Stale responses (the user
+ * paged on) are dropped. If no feed loads at all it surfaces as `error` with a
+ * `retry()` — never a silently empty view; if only some fail, they are listed
+ * in `failed`.
  *
  * Results are keyed by the request they answer, so a range change never shows
  * the previous range's events (or a false "nothing scheduled") in between.
  */
-export function useCalendarEvents(range: DateRange): CalendarEventsResult {
-  const store = useCalendarStoreRef();
-  const [loaded, setLoaded] = useState<{ key: string; events: CalendarEvent[] } | null>(null);
+export function useCalendarEvents(
+  range: DateRange,
+  { enabled = true, source = "selection" }: { enabled?: boolean; source?: "selection" | "dashboard" } = {},
+): CalendarEventsResult {
+  const dashboard = useCalendarStoreRef();
+  const picked = useCalendarStores();
+  const stores = useMemo(() => (source === "dashboard" ? (dashboard ? [dashboard] : []) : picked), [source, dashboard, picked]);
+  const [loaded, setLoaded] = useState<{ key: string; baseKey: string; page: CalendarEventsPage } | null>(null);
   const [failedKey, setFailedKey] = useState<string | null>(null);
   const [slowKey, setSlowKey] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  /** Retry must skip the 60 s feed cache; ordinary refetches use it. */
+  const forceNext = useRef(false);
   const revision = useCalendarStore((s) => s.revision);
 
   const fromMs = +range.from;
   const toMs = +range.to;
-  const key = `${fromMs}|${toMs}|${store?.code ?? ""}|${attempt}|${revision}`;
+  const storesKey = stores.map((s) => s.code).join(",");
+  // `baseKey` is the request without `revision`: a write bumps only the revision,
+  // and the view keeps showing what it has while that one feed reloads.
+  const baseKey = `${fromMs}|${toMs}|${storesKey}|${attempt}`;
+  const key = `${baseKey}|${revision}`;
 
   useEffect(() => {
+    if (!enabled) return;
     let live = true;
     const controller = new AbortController();
     const slow = setTimeout(() => {
       if (live) setSlowKey(key);
     }, SKELETON_DELAY_MS);
+    const force = forceNext.current;
+    forceNext.current = false;
+    // Same request as the one on screen, only `revision` moved (a write): reuse every
+    // cached feed however old — the write already dropped the one it touched, so just
+    // that one is asked again (FRONTEND_CALENDAR_REQUESTS.md §4).
+    const reuse = !force && loaded?.baseKey === baseKey;
 
     calendarService
-      .getEvents({ from: new Date(fromMs), to: new Date(toMs) }, store, controller.signal)
-      .then((list) => {
-        if (live) setLoaded({ key, events: list });
+      .getEvents({ from: new Date(fromMs), to: new Date(toMs) }, stores, { signal: controller.signal, force, reuse })
+      .then((page) => {
+        if (live) setLoaded({ key, baseKey, page });
       })
       .catch(() => {
         if (live && !controller.signal.aborted) setFailedKey(key);
@@ -99,24 +167,37 @@ export function useCalendarEvents(range: DateRange): CalendarEventsResult {
       clearTimeout(slow);
       controller.abort();
     };
-  }, [key, fromMs, toMs, store]);
+    // `stores` is captured through `storesKey` (part of `key`).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, fromMs, toMs, enabled]);
 
-  const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  const retry = useCallback(() => {
+    forceNext.current = true;
+    setAttempt((n) => n + 1);
+  }, []);
   const fresh = loaded?.key === key;
+  // Same request, older revision (a write just happened): show it while the refresh runs.
+  const stale = !fresh && loaded?.baseKey === baseKey;
   const error = failedKey === key;
-  const loading = !fresh && !error;
+  const loading = !fresh && !stale && !error;
+  const page = (fresh || stale) && loaded ? loaded.page : EMPTY_PAGE;
   return {
-    events: useScoped(fresh ? loaded.events : EMPTY, store),
+    events: useScoped(page.events, stores),
     loading,
     showSkeleton: loading && slowKey === key,
     error,
     retry,
+    failed: page.failed,
+    truncated: page.truncated,
+    notice: page.notice,
   };
 }
 
 /**
- * ALL of today's events (category filters and search ignored — they drive the
- * topbar badge and the Today panel). Reloads when the date rolls over.
+ * ALL of today's events in the dashboard's selected store (category filters,
+ * search and the Calendar page's store picks ignored — they drive the topbar
+ * badge and the Today panel, which belong to the store you are working in).
+ * Reloads when the date rolls over.
  */
 export function useTodayEvents(): { events: CalendarEvent[]; todayKey: string | null; now: number | null } {
   const now = useCalendarNow();
@@ -127,7 +208,8 @@ export function useTodayEvents(): { events: CalendarEvent[]; todayKey: string | 
     // `now` ticks every minute; the range only changes with the day.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todayKey]);
-  const { events } = useCalendarEvents(range);
+  // Nothing to ask until the clock is known (the placeholder range is 1970).
+  const { events } = useCalendarEvents(range, { enabled: todayKey != null, source: "dashboard" });
   return { events: todayKey ? events : [], todayKey, now };
 }
 
@@ -135,12 +217,45 @@ export function useTodayEvents(): { events: CalendarEvent[]; todayKey: string | 
 const NO_STORE: CalendarStoreRef = { code: "03795-00001", name: "Downtown" };
 
 /**
+ * The store a new event is saved under: the first store the Calendar shows, so
+ * it never lands in a store the page is hiding. (Becomes the event's store list
+ * when the Toolbox calendar endpoints are wired.)
+ */
+export function useCalendarWriteStore(): CalendarStoreRef | null {
+  return useCalendarStores()[0] ?? null;
+}
+
+/**
+ * Writes to Toolbox: create an event, task or reminder; cancel; move a task
+ * along; snooze, finish or drop a reminder. Each one bumps `revision` so the
+ * views refetch (the service already dropped the Toolbox feed's cache), and
+ * re-throws a `CalendarWriteError` for the caller to show.
+ */
+export function useCalendarToolbox() {
+  const bump = useCalendarStore((s) => s.bumpRevision);
+  return useMemo(() => {
+    const then = <A extends unknown[]>(fn: (...args: A) => Promise<void>) => {
+      return async (...args: A) => {
+        await fn(...args);
+        bump();
+      };
+    };
+    return {
+      create: then(calendarToolboxService.createItem),
+      cancel: then(calendarToolboxService.cancelEvent),
+      taskAction: then(calendarToolboxService.taskAction),
+      reminderAction: then(calendarToolboxService.reminderAction),
+    };
+  }, [bump]);
+}
+
+/**
  * Create / update / delete / restore for the events people make here. Each
  * write bumps `revision`, so every mounted calendar view refetches. Errors are
  * re-thrown for the caller to show.
  */
 export function useCalendarMutations() {
-  const store = useCalendarStoreRef();
+  const store = useCalendarWriteStore();
   const bump = useCalendarStore((s) => s.bumpRevision);
   return useMemo(
     () => ({

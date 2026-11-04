@@ -10,7 +10,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useAllStoresDaily, useIngredients } from "@/lib/hooks/use-dough-sauce";
-import { tomorrowIso } from "@/lib/dough-sauce/dates";
+import { todayIso, yesterdayIso } from "@/lib/dough-sauce/dates";
 import { INGREDIENT_KEYS } from "@/types/dough-sauce.types";
 import {
   DsErrorState,
@@ -30,10 +30,11 @@ type Filter = "all" | "pending" | "confirmed";
 export function StorePlansView({ onOpenStore }: { onOpenStore?: (store: string, date: string) => void }) {
   const t = useTranslations("doughSauce.stores");
   const tc = useTranslations("doughSauce.common");
+  const td = useTranslations("doughSauce.daily");
   const day = useDayFormatter();
   const dateTime = useDateTimeFormatter();
   const storeNames = useStoreNames();
-  const [date, setDate] = useState(tomorrowIso());
+  const [date, setDate] = useState(yesterdayIso());
   const [filter, setFilter] = useState<Filter>("pending");
   const [query, setQuery] = useState("");
   const { data, error, loading, reload } = useAllStoresDaily(date);
@@ -69,6 +70,26 @@ export function StorePlansView({ onOpenStore }: { onOpenStore?: (store: string, 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         <DatePicker value={date} onChange={(v) => v && setDate(v)} className="w-full sm:w-40" />
+        {/* A plan can only be built once the day's sales are: yesterday is the day to work on, today is view only. */}
+        <div className="flex gap-1 rounded-lg border bg-muted/40 p-1">
+          {[
+            { iso: yesterdayIso(), label: td("relYesterday"), hint: td("quickYesterdayHint") },
+            { iso: todayIso(), label: td("relToday"), hint: td("quickTodayHint") },
+          ].map((q) => (
+            <button
+              key={q.iso}
+              type="button"
+              title={q.hint}
+              onClick={() => setDate(q.iso)}
+              className={cn(
+                "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                date === q.iso ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {q.label}
+            </button>
+          ))}
+        </div>
         <div className="relative w-full sm:w-56">
           <Search className="pointer-events-none absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("searchPlaceholder")} className="ps-8" />

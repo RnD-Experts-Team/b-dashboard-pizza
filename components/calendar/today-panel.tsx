@@ -84,8 +84,12 @@ export function TodayPanel({
     };
   }, [events, now]);
 
-  // The store only earns space on a row when the list actually mixes stores.
-  const mixedStores = useMemo(() => new Set(events.map((e) => e.store.code)).size > 1, [events]);
+  // The store only earns space on a row when the list actually mixes stores
+  // (company-wide events have no store and don't count).
+  const mixedStores = useMemo(
+    () => new Set(events.filter((e) => !e.companyWide).map((e) => e.store.code)).size > 1,
+    [events],
+  );
 
   const { ref: listRef, edges } = useVerticalEdges([events.length, showEarlier]);
   const fade = 20;
@@ -117,9 +121,9 @@ export function TodayPanel({
           </span>
           {mixedStores && <span className="block truncate text-[11px] text-muted-foreground">{ev.store.name}</span>}
         </span>
-        {ev.status === "overdue" && (
+        {(ev.status === "overdue" || ev.status === "missed") && (
           <span className="shrink-0 rounded-full bg-destructive/10 px-1.5 py-px text-[10px] font-semibold text-destructive dark:bg-destructive/20">
-            {t("topbar.overdue")}
+            {ev.status === "missed" ? t("status.missed") : t("topbar.overdue")}
           </span>
         )}
         {ev.status === "done" && <Check className="size-3.5 shrink-0 text-muted-foreground" aria-label={t("status.done")} />}

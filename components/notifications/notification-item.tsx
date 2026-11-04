@@ -18,6 +18,7 @@ import {
   TrendingUp,
   UserMinus,
   SprayCan,
+  CalendarClock,
   Coffee,
   MessageSquareWarning,
   Wrench,
@@ -171,6 +172,18 @@ function maintenanceTicketHref(locale: string, notification: Notification): stri
 }
 
 /**
+ * A calendar reminder's `action_url` is the page of the event it reminds about
+ * (`/dashboard/...`, set when the reminder was made from that event's card), or
+ * nothing. Only an in-app dashboard path is followed; anything else lands on the
+ * Calendar itself, never on a URL taken from the notification.
+ */
+function calendarReminderHref(locale: string, notification: Notification): string {
+  const url = notification.action_url ?? "";
+  if (/^\/dashboard(\/[\w%.~-]*)*(\?[^#\s]*)?$/.test(url)) return `/${locale}${url}`;
+  return `/${locale}/dashboard/calendar`;
+}
+
+/**
  * Derive icon & color from the API notification type string.
  * Common types: "announcement.created", "announcement.updated", etc.
  */
@@ -189,6 +202,9 @@ function getTypeVisuals(type: string) {
   }
   if (type.startsWith("announcement")) {
     return { Icon: Megaphone, bg: "bg-purple-500/10 text-purple-600 dark:text-purple-400" };
+  }
+  if (type.startsWith("calendar_")) {
+    return { Icon: CalendarClock, bg: "bg-violet-500/10 text-violet-600 dark:text-violet-400" };
   }
   if (type.startsWith("hiring_request")) {
     return { Icon: Briefcase, bg: "bg-blue-500/10 text-blue-600 dark:text-blue-400" };
@@ -283,10 +299,12 @@ export function NotificationItem({
   const isBreakType = notification.type.startsWith("break_");
   const isTicketType = notification.type.startsWith("ticket_");
   const isMaintenanceType = notification.type.startsWith("maintenance_");
+  const isCalendarType = notification.type.startsWith("calendar_");
   // Only these explicitly-coded type families are clickable — an uncoded
   // type must never guess a navigation target, it just displays safely.
   const isClickable =
     isDebriefType ||
+    isCalendarType ||
     isAnnouncementType ||
     isHiringType ||
     isEmployeeType ||
@@ -302,6 +320,11 @@ export function NotificationItem({
 
     if (isAnnouncementType) {
       router.push(`/${locale}/dashboard/announcements`);
+      return;
+    }
+
+    if (isCalendarType) {
+      router.push(calendarReminderHref(locale, notification));
       return;
     }
 

@@ -36,5 +36,7 @@ export function getNotificationPageSegment(notification: Notification): string |
   if (type.startsWith("ticket_")) return "tickets";
   // maintenance_ticket_created / _updated open the maintenance ticket.
   if (type.startsWith("maintenance_")) return "maintenance-tickets";
+  // calendar_reminder (a Calendar reminder coming due) belongs to the Calendar page.
+  if (type.startsWith("calendar_")) return "calendar";
   return null;
 }
