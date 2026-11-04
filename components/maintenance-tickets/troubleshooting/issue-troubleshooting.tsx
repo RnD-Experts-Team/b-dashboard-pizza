@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, CircleHelp, ExternalLink, Loader2, Pencil, Plus, RotateCcw, Wrench, XCircle } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,10 +21,6 @@ export interface TroubleshootingResult {
   guide: TroubleshootingGuide | null;
 }
 
-function times(n: number): string {
-  return n === 1 ? "once" : `${n} times`;
-}
-
 /** One guide: the problem, its steps (each with its own files), then the guide's link and files. */
 function GuideCard({
   guide,
@@ -39,6 +36,8 @@ function GuideCard({
   onSelect?: () => void;
   onEdit?: () => void;
 }) {
+  const t = useTranslations("maintenanceSystem.troubleshooting");
+  const tc = useTranslations("maintenanceSystem.common");
   return (
     <section
       aria-labelledby={`guide-${guide.id}-title`}
@@ -49,21 +48,23 @@ function GuideCard({
     >
       <header className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Problem {index + 1}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t("problemNumber", { number: index + 1 })}</p>
           <h3 id={`guide-${guide.id}-title`} className="font-heading text-base font-semibold leading-tight">{guide.title}</h3>
           {(guide.fixedCount > 0 || guide.notFixedCount > 0) && (
             <p className="mt-1 text-xs text-muted-foreground">
               {[
-                guide.fixedCount > 0 ? `Fixed it ${times(guide.fixedCount)}` : null,
-                guide.notFixedCount > 0 ? `didn't fix it ${times(guide.notFixedCount)}` : null,
-              ].filter(Boolean).join(" · ").replace(/^d/, "D")}
+                guide.fixedCount > 0 ? t("fixedCount", { count: guide.fixedCount }) : null,
+                guide.notFixedCount > 0
+                  ? t(guide.fixedCount > 0 ? "notFixedCountAfter" : "notFixedCount", { count: guide.notFixedCount })
+                  : null,
+              ].filter(Boolean).join(" · ")}
             </p>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {onEdit && (
             <Button type="button" variant="ghost" size="sm" onClick={onEdit}>
-              <Pencil className="me-1.5 h-3.5 w-3.5" aria-hidden="true" /> Edit
+              <Pencil className="me-1.5 h-3.5 w-3.5" aria-hidden="true" /> {tc("edit")}
             </Button>
           )}
           {onSelect && (
@@ -75,7 +76,7 @@ function GuideCard({
               aria-pressed={selected}
             >
               {selected ? <CheckCircle2 className="me-1.5 h-3.5 w-3.5" aria-hidden="true" /> : null}
-              {selected ? "My problem" : "This is my problem"}
+              {selected ? t("myProblem") : t("thisIsMyProblem")}
             </Button>
           )}
         </div>
@@ -105,7 +106,7 @@ function GuideCard({
               className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
             >
               <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-              Open the guide (video / manual)
+              {t("openGuide")}
             </a>
           )}
           <AttachmentGallery attachments={guide.attachments} />
@@ -146,6 +147,7 @@ export function IssueTroubleshooting({
   /** Called after "fixed" is logged, or with "tried" / "none_match". */
   onResult?: (result: TroubleshootingResult) => void;
 }) {
+  const t = useTranslations("maintenanceSystem.troubleshooting");
   const [data, setData] = useState<IssueTroubleshootingData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(initialGuideId);
@@ -158,9 +160,9 @@ export function IssueTroubleshooting({
       setData(await maintenanceTicketsService.getIssueTroubleshooting(issueId, signal, storeCode));
     } catch (err) {
       if (signal?.aborted) return;
-      setError(err instanceof MaintenanceTicketsError ? err.message : "Could not load the troubleshooting.");
+      setError(err instanceof MaintenanceTicketsError ? err.message : t("loadFailed"));
     }
-  }, [issueId, storeCode]);
+  }, [issueId, storeCode, t]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -179,13 +181,13 @@ export function IssueTroubleshooting({
     try {
       await maintenanceTicketsService.logTroubleshootingFix(storeCode, issueId, selected?.id ?? null);
       if (mode === "browse") {
-        toast.success("Logged as fixed by troubleshooting. Glad it works again.");
+        toast.success(t("fixedToast"));
         setSelectedId(null);
         void load();
       }
       onResult?.({ outcome: "fixed", guide: selected });
     } catch (err) {
-      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Could not log the fix. Try again.");
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : t("fixFailed"));
     } finally {
       setLogging(false);
     }
@@ -206,7 +208,7 @@ export function IssueTroubleshooting({
         <AlertCircle className="h-6 w-6 text-destructive" aria-hidden="true" />
         <p className="text-sm text-muted-foreground">{error}</p>
         <Button type="button" variant="outline" size="sm" onClick={() => void load()}>
-          <RotateCcw className="me-1.5 h-3.5 w-3.5" aria-hidden="true" /> Try again
+          <RotateCcw className="me-1.5 h-3.5 w-3.5" aria-hidden="true" /> {t("tryAgain")}
         </Button>
       </div>
     );
@@ -214,7 +216,7 @@ export function IssueTroubleshooting({
 
   if (!data) {
     return (
-      <div className="space-y-3" aria-busy="true" aria-label="Loading the troubleshooting">
+      <div className="space-y-3" aria-busy="true" aria-label={t("loading")}>
         <Skeleton className="h-6 w-48" />
         <Skeleton className="h-40 w-full rounded-xl" />
         <Skeleton className="h-40 w-full rounded-xl" />
@@ -232,18 +234,18 @@ export function IssueTroubleshooting({
           <h2 className="font-heading text-lg font-semibold leading-tight">
             {data.title}
             <span className="ms-2 align-middle text-sm font-normal text-muted-foreground">
-              {guides.length === 1 ? "1 guide" : `${guides.length} guides`}
+              {t("guidesCount", { count: guides.length })}
             </span>
           </h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {mode === "ticket"
-              ? "Before opening a ticket, try the steps for your problem. Picking the problem that matches is optional."
-              : data.description || "What to try before opening a ticket for this issue."}
+              ? t("ticketIntro")
+              : data.description || t("browseIntro")}
           </p>
         </div>
         {canEdit && editing === null && (
           <Button type="button" variant="outline" size="sm" onClick={() => setEditing("new")}>
-            <Plus className="me-1.5 h-3.5 w-3.5" aria-hidden="true" /> Add a guide
+            <Plus className="me-1.5 h-3.5 w-3.5" aria-hidden="true" /> {t("addGuide")}
           </Button>
         )}
       </div>
@@ -262,7 +264,7 @@ export function IssueTroubleshooting({
         <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed py-10 text-center">
           <CircleHelp className="h-6 w-6 text-muted-foreground/70" aria-hidden="true" />
           <p className="max-w-sm text-sm text-muted-foreground">
-            {canEdit ? "No guides for this issue yet. Add one for each problem stores run into." : "There are no troubleshooting steps for this issue."}
+            {canEdit ? t("noGuidesEditor") : t("noGuides")}
           </p>
         </div>
       )}
@@ -297,7 +299,7 @@ export function IssueTroubleshooting({
       {mode === "ticket" && (
         <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
           <p className="text-sm font-medium">
-            {selected ? <>How did the &ldquo;{selected.title}&rdquo; steps go?</> : "How did it go?"}
+            {selected ? t("howDidStepsGo", { title: selected.title }) : t("howDidItGo")}
           </p>
           <div className="grid gap-2 sm:grid-cols-3">
             <Button
@@ -307,7 +309,7 @@ export function IssueTroubleshooting({
               disabled={logging || !storeCode}
             >
               {logging ? <Loader2 className="me-1.5 h-4 w-4 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="me-1.5 h-4 w-4" aria-hidden="true" />}
-              This fixed it
+              {t("thisFixedIt")}
             </Button>
             <Button
               type="button"
@@ -317,7 +319,7 @@ export function IssueTroubleshooting({
               disabled={logging}
             >
               <XCircle className="me-1.5 h-4 w-4" aria-hidden="true" />
-              I tried these steps — still broken
+              {t("triedStillBroken")}
             </Button>
             <Button
               type="button"
@@ -327,11 +329,11 @@ export function IssueTroubleshooting({
               disabled={logging}
             >
               <CircleHelp className="me-1.5 h-4 w-4" aria-hidden="true" />
-              None of these describe my problem
+              {t("noneMatch")}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            &ldquo;This fixed it&rdquo; is logged and no ticket is opened for this issue. The other two take you back to the ticket.
+            {t("ticketNote")}
           </p>
         </div>
       )}
@@ -340,8 +342,8 @@ export function IssueTroubleshooting({
         <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-muted/30 p-4">
           <p className="min-w-0 flex-1 text-sm">
             {storeCode
-              ? <>Did a guide fix it at {storeCode}? Log it, so we know the steps work{selected ? <> (&ldquo;{selected.title}&rdquo;)</> : null}.</>
-              : "Select a store at the top of the page to log a problem these steps fixed."}
+              ? t("browseLogPrompt", { store: storeCode, hasGuide: selected ? "yes" : "no", guide: selected?.title ?? "" })
+              : t("browseSelectStore")}
           </p>
           <Button
             type="button"
@@ -350,7 +352,7 @@ export function IssueTroubleshooting({
             disabled={logging || !storeCode}
           >
             {logging ? <Loader2 className="me-1.5 h-4 w-4 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="me-1.5 h-4 w-4" aria-hidden="true" />}
-            This fixed it
+            {t("thisFixedIt")}
           </Button>
         </div>
       )}

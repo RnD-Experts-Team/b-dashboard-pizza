@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Loader2, Lock, LockOpen, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatTimestamp } from "@/lib/utils/date-display";
@@ -34,6 +35,7 @@ export function NotesList({
   privacy?: NotePrivacy;
   className?: string;
 }) {
+  const t = useTranslations("maintenanceSystem.tickets.notes");
   if (!notes || notes.length === 0) return null;
   return (
     <div className={cn("space-y-1.5", className)}>
@@ -49,10 +51,10 @@ export function NotesList({
             {note.isPrivate && (
               <span
                 className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-px text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
-                title={note.locker ? `Locked by ${note.locker.name}` : undefined}
+                title={note.locker ? t("lockedBy", { name: note.locker.name }) : undefined}
               >
                 <Lock className="h-2.5 w-2.5" aria-hidden="true" />
-                Private · MOS only
+                {t("privateBadge")}
               </span>
             )}
             {note.typeLabel && (
@@ -82,6 +84,7 @@ export function NotesList({
  * note's audience is logged on the ticket.
  */
 function LockToggle({ note, privacy }: { note: TicketNote; privacy: NotePrivacy }) {
+  const t = useTranslations("maintenanceSystem.tickets.notes");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const Icon = note.isPrivate ? LockOpen : Lock;
@@ -93,7 +96,7 @@ function LockToggle({ note, privacy }: { note: TicketNote; privacy: NotePrivacy 
       await maintenanceTicketsService.setNotePrivacy(privacy.storeNumber, privacy.ticketId, note.id, !note.isPrivate);
       privacy.onChanged();
     } catch (err) {
-      setError(err instanceof MaintenanceTicketsError ? err.message : "Could not change who can see this note.");
+      setError(err instanceof MaintenanceTicketsError ? err.message : t("privacyFailed"));
     } finally {
       setBusy(false);
     }
@@ -107,10 +110,10 @@ function LockToggle({ note, privacy }: { note: TicketNote; privacy: NotePrivacy 
         onClick={() => void toggle()}
         disabled={busy}
         className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
-        title={note.isPrivate ? "Make this note visible to everyone on the ticket" : "Hide this note (and its files) from everyone but the MOS"}
+        title={note.isPrivate ? t("unlockHint") : t("lockHint")}
       >
         {busy ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : <Icon className="h-3 w-3" aria-hidden="true" />}
-        {note.isPrivate ? "Unlock" : "Lock"}
+        {note.isPrivate ? t("unlock") : t("lock")}
       </button>
     </span>
   );

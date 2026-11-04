@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Check, Loader2, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { useTranslations } from "next-intl";
 
 export interface ComboItem {
   id: number;
@@ -32,10 +33,11 @@ export function SearchCreateCombobox({
   selectedId,
   onSelect,
   onCreate,
-  placeholder = "Search or create…",
+  placeholder,
   disabled = false,
   loading = false,
 }: SearchCreateComboboxProps) {
+  const t = useTranslations("maintenanceSystem.tickets.combobox");
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -95,7 +97,7 @@ export function SearchCreateCombobox({
       // Blur explicitly so Radix's Sheet focus trap doesn't grab the sheet container
       inputRef.current?.blur();
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : "Failed to create.");
+      setCreateError(err instanceof Error ? err.message : t("createFailed"));
     } finally {
       setIsCreating(false);
     }
@@ -114,7 +116,7 @@ export function SearchCreateCombobox({
   }, []);
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative" data-combobox-open={open ? "true" : undefined}>
       {/* Input */}
       <div className="relative">
         <Input
@@ -127,7 +129,7 @@ export function SearchCreateCombobox({
             if (e.key === "Enter" && showCreate && !isCreating) { e.preventDefault(); handleCreate(); }
             if (e.key === "ArrowDown" && !open) setOpen(true);
           }}
-          placeholder={loading ? "Loading…" : placeholder}
+          placeholder={loading ? t("loading") : (placeholder ?? t("placeholder"))}
           disabled={disabled || loading}
           className="h-8 text-sm pe-7"
           autoComplete="off"
@@ -138,7 +140,7 @@ export function SearchCreateCombobox({
             tabIndex={-1}
             onClick={handleClear}
             className="absolute end-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Clear selection"
+            aria-label={t("clear")}
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -151,9 +153,7 @@ export function SearchCreateCombobox({
           <div className="max-h-44 overflow-y-auto">
             {filtered.length === 0 && !showCreate && (
               <p className="px-3 py-2 text-xs text-muted-foreground">
-                {query.trim()
-                  ? (onCreate ? "No results — type to create a new one" : "No matching issues found")
-                  : "No items in catalog"}
+                {query.trim() ? (onCreate ? t("noResultsCreate") : t("noResults")) : t("empty")}
               </p>
             )}
             {filtered.map((item) => (
@@ -161,7 +161,7 @@ export function SearchCreateCombobox({
                 key={item.id}
                 type="button"
                 className={cn(
-                  "w-full text-left px-3 py-1.5 text-sm transition-colors flex items-center gap-2",
+                  "w-full text-start px-3 py-1.5 text-sm transition-colors flex items-center gap-2",
                   "hover:bg-accent hover:text-accent-foreground",
                   item.id === selectedId && "bg-accent/50"
                 )}
@@ -181,7 +181,7 @@ export function SearchCreateCombobox({
             <div className="border-t">
               <button
                 type="button"
-                className="w-full text-left px-3 py-1.5 text-sm transition-colors flex items-center gap-2 text-primary hover:bg-accent hover:text-accent-foreground"
+                className="w-full text-start px-3 py-1.5 text-sm transition-colors flex items-center gap-2 text-primary hover:bg-accent hover:text-accent-foreground"
                 onPointerDown={(e) => e.preventDefault()}
                 onClick={handleCreate}
                 disabled={isCreating}
@@ -190,7 +190,7 @@ export function SearchCreateCombobox({
                   ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
                   : <Plus className="h-3.5 w-3.5 shrink-0" />}
                 <span className="truncate">
-                  {isCreating ? "Creating…" : `Create "${query.trim()}"`}
+                  {isCreating ? t("creating") : t("create", { name: query.trim() })}
                 </span>
               </button>
             </div>

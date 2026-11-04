@@ -9,6 +9,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { AnnouncementOnLoadPopup } from "@/components/announcements/announcement-onload-popup";
 import { PizzaLoader } from "@/components/shared/pizza-loader";
 import { ReportProblemRoot } from "@/components/report-problem";
+import { DocumentScrollGuard } from "@/components/shared/document-scroll-guard";
 
 export default function DashboardLayout({
   children,
@@ -42,6 +43,7 @@ export default function DashboardLayout({
       {/* <AnnouncementPopup /> */}
       <AnnouncementOnLoadPopup />
       <ReportProblemRoot />
+      <DocumentScrollGuard />
       {/* Chat widget (rdexperts). Remove this <Script> + CHAT_WIDGET_ORIGIN in next.config.ts to drop it. */}
       {/* <Script
         src="https://chat.rdexperts.tech/w/wk_xyg50sd4c3kv4h25lnkg.js"

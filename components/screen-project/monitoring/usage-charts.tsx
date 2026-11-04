@@ -16,32 +16,85 @@ const ReactApexChart = dynamic(() => import("react-apexcharts"), {
   loading: () => <Skeleton className="h-64 w-full" />,
 });
 
-/** Present + away stack to "on Screen Project"; talking is a line on the same hours axis. */
-export function DailyPresenceChart({ days }: { days: UsageDayRow[] }) {
+/** What the charts' shares are out of: the stores' open hours (the headline) or the time connected. */
+export type ChartBasis = "open" | "connected";
+
+/** A small two-or-more-way switch, the look the heatmap's present/away switch set. */
+export function SegmentedToggle<T extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: T;
+  onChange: (value: T) => void;
+  options: { value: T; label: string }[];
+}) {
+  return (
+    <div role="group" aria-label={label} className="inline-flex rounded-lg border bg-muted/50 p-0.5">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          aria-pressed={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={cn(
+            "cursor-pointer rounded-md px-3 py-1 text-sm font-medium transition-colors",
+            value === o.value ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const HOUR_S = 3600;
+
+/**
+ * Present + away stack to "on Screen Project"; talking is a line on the same hours axis.
+ * With `openByDay` (seconds open per day) the stack runs up to the open hours: the rest is "not
+ * connected", and every share in the tooltip is of that day's open hours instead of its connected time.
+ */
+export function DailyPresenceChart({ days, openByDay }: { days: UsageDayRow[]; openByDay: Record<string, number> | null }) {
   const t = useTranslations("screenMonitoring");
 
   const { series, options } = useMemo(() => {
     const categories = days.map((d) => formatDateOnly(d.date, days.length > 14 ? "MMM d" : "EEE d"));
+    const base = (i: number) => (openByDay ? (openByDay[days[i].date] ?? 0) : days[i].on_screen);
+    const gap = openByDay
+      ? [{ name: t("legend.notConnected"), type: "bar", data: days.map((d) => toHours(Math.max(0, (openByDay[d.date] ?? 0) - d.on_screen))) }]
+      : [];
     const opts: ApexOptions = {
       chart: { type: "bar", stacked: true, toolbar: { show: false }, fontFamily: "inherit", animations: { enabled: false } },
-      colors: [USAGE_COLORS.good, USAGE_COLORS.attention, USAGE_COLORS.info],
+      colors: [USAGE_COLORS.good, USAGE_COLORS.attention, ...(openByDay ? [USAGE_COLORS.gap] : []), USAGE_COLORS.info],
       plotOptions: { bar: { columnWidth: days.length > 20 ? "70%" : "45%", borderRadius: 3, borderRadiusApplication: "end" } },
-      stroke: { width: [0, 0, 2], curve: "smooth" },
+      stroke: { width: [0, 0, ...gap.map(() => 0), 2], curve: "smooth" },
       markers: { size: days.length > 20 ? 0 : 4, strokeWidth: 2 },
       dataLabels: { enabled: false },
       xaxis: { categories, labels: { rotate: -45, hideOverlappingLabels: true }, axisBorder: { show: false }, axisTicks: { show: false } },
       yaxis: { labels: { formatter: (v: number) => `${v}h` }, min: 0, forceNiceScale: true },
       grid: { strokeDashArray: 0, xaxis: { lines: { show: false } } },
       legend: { position: "top", horizontalAlign: "left", fontSize: "12px", markers: { size: 6 } },
-      tooltip: { shared: true, intersect: false, y: { formatter: (v: number) => formatDuration((v ?? 0) * 3600) } },
+      tooltip: {
+        shared: true,
+        intersect: false,
+        y: {
+          formatter: (v: number, { dataPointIndex }: { dataPointIndex: number }) =>
+            `${formatDuration((v ?? 0) * HOUR_S)} · ${percent((v ?? 0) * HOUR_S, base(dataPointIndex))}`,
+        },
+      },
     };
     const s = [
       { name: t("legend.present"), type: "bar", data: days.map((d) => toHours(d.present)) },
       { name: t("legend.away"), type: "bar", data: days.map((d) => toHours(Math.max(0, d.on_screen - d.present))) },
+      ...gap,
       { name: t("legend.talking"), type: "line", data: days.map((d) => toHours(d.talking)) },
     ];
     return { series: s, options: opts };
-  }, [days, t]);
+  }, [days, openByDay, t]);
 
   return (
     <figure className={CHART_INK}>
@@ -99,22 +152,12 @@ export function HoursHeatmap({ present, away }: { present: number[][]; away: num
 
   return (
     <div className="space-y-3">
-      <div role="group" aria-label={t("charts.heatmapMode")} className="inline-flex rounded-lg border bg-muted/50 p-0.5">
-        {(["present", "away"] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            aria-pressed={mode === m}
-            onClick={() => setMode(m)}
-            className={cn(
-              "cursor-pointer rounded-md px-3 py-1 text-sm font-medium transition-colors",
-              mode === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t(`legend.${m}`)}
-          </button>
-        ))}
-      </div>
+      <SegmentedToggle
+        label={t("charts.heatmapMode")}
+        value={mode}
+        onChange={setMode}
+        options={(["present", "away"] as const).map((m) => ({ value: m, label: t(`legend.${m}`) }))}
+      />
       <figure className={CHART_INK}>
         <ReactApexChart type="heatmap" height={260} series={series} options={options} />
         <figcaption className="sr-only">{t("charts.heatmapCaption")}</figcaption>

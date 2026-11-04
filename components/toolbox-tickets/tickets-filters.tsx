@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { MultiSelectOption } from "@/components/daily-pay/multi-select";
+import type { MultiSelectOption } from "@/components/shared/multi-select";
 import { activeFilterCount } from "@/lib/toolbox-tickets/filters-url";
 import { useDebouncedValue } from "@/lib/hooks/use-toolbox-tickets-poll";
 import { AllMultiSelect } from "./filter-multi-select";

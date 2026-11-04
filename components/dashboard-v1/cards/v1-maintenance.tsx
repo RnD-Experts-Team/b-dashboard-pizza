@@ -3,68 +3,41 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ClipboardList, ExternalLink, Loader2, Plus } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { ClipboardList, ExternalLink, Loader2, Plus, RefreshCw } from "lucide-react";
 
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import {
   maintenanceTicketsService,
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
-import type { Ticket, CatalogIssue, CatalogTechnician } from "@/types/maintenance-tickets.types";
+import type { Ticket, CatalogIssue } from "@/types/maintenance-tickets.types";
 
-import { V1Card } from "@/components/dashboard-v1/v1-card";
-import {
-  V1Empty,
-  V1_TBL,
-  V1_TH,
-  V1_TD,
-  V1_NUM,
-} from "@/components/dashboard-v1/v1-ui";
-import { fmtDate, WbrCardSkeleton } from "@/components/dspr/wbr-format";
-import { Badge } from "@/components/ui/badge";
+import { V1Card, type V1CardProps } from "@/components/dashboard-v1/v1-card";
+import { V1Empty } from "@/components/dashboard-v1/v1-ui";
+import { WbrCardSkeleton } from "@/components/dspr/wbr-format";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { CreateTicketDialog } from "@/components/maintenance-tickets/create-ticket-dialog";
-import { TicketDetailSheet } from "@/components/maintenance-tickets/ticket-detail-sheet";
+import { TicketMiniList } from "@/components/maintenance-tickets/ticket-mini-list";
+import { TicketPeekSheet } from "@/components/maintenance-tickets/ticket-peek-sheet";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  V1MaintenanceCard — Dashboard V1, category "quality", period "D".
+ *
+ *  The card shell carries the category colour (cyan); the rows carry the
+ *  ticket's own status and priority badges — the very ones the tickets list
+ *  and the ticket page use (components/maintenance-tickets/status-accent.ts),
+ *  so "Waiting on store" is the same amber pill everywhere.
  * ────────────────────────────────────────────────────────────────────────── */
-
-const STATUS_STYLES: Record<string, string> = {
-  open: "bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/30",
-  in_progress:
-    "bg-yellow-100 text-yellow-800 hover:bg-yellow-100 dark:bg-yellow-900/30 dark:text-yellow-400 dark:hover:bg-yellow-900/30",
-  waiting:
-    "bg-purple-100 text-purple-800 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400 dark:hover:bg-purple-900/30",
-  complete:
-    "bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/30",
-  deferred:
-    "bg-orange-100 text-orange-800 hover:bg-orange-100 dark:bg-orange-900/30 dark:text-orange-400 dark:hover:bg-orange-900/30",
-  cancelled:
-    "bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/30",
-};
-
-function StatusBadge({ label, value }: { label: string; value: string }) {
-  return (
-    <Badge
-      className={cn(
-        "whitespace-nowrap px-1.5 py-0 text-[9px] font-medium",
-        STATUS_STYLES[value] ?? "bg-muted text-muted-foreground hover:bg-muted",
-      )}
-    >
-      {label}
-    </Badge>
-  );
-}
 
 export function V1MaintenanceCard({
   span = 1,
   className,
 }: {
-  span?: 1 | 2 | 3;
+  span?: V1CardProps["span"];
   className?: string;
 }) {
+  const t = useTranslations("maintenanceSystem");
   const params = useParams();
   const locale = (params?.locale as string) || "en";
 
@@ -76,13 +49,8 @@ export function V1MaintenanceCard({
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Sheet state
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
-  const [technicians, setTechnicians] = useState<CatalogTechnician[]>([]);
-  const techLoadedRef = useRef(false);
+  const [peekTicket, setPeekTicket] = useState<Ticket | null>(null);
 
-  // Create dialog state
   const [createOpen, setCreateOpen] = useState(false);
   const [catalogIssues, setCatalogIssues] = useState<CatalogIssue[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -100,39 +68,19 @@ export function V1MaintenanceCard({
         {} as Parameters<typeof maintenanceTicketsService.getTickets>[1],
         ctrl.signal,
       );
-      if (!ctrl.signal.aborted) {
-        setTickets(res.data);
-      }
+      if (!ctrl.signal.aborted) setTickets(res.data);
     } catch (err) {
       if (ctrl.signal.aborted) return;
-      setError(
-        err instanceof MaintenanceTicketsError
-          ? err.message
-          : "Failed to load tickets.",
-      );
+      setError(err instanceof MaintenanceTicketsError ? err.message : t("common.loadError"));
     } finally {
       if (!ctrl.signal.aborted) setIsLoading(false);
     }
-  }, [storeId]);
+  }, [storeId, t]);
 
   useEffect(() => {
     fetchTickets();
     return () => abortRef.current?.abort();
   }, [fetchTickets]);
-
-  async function handleRowClick(ticket: Ticket) {
-    setSelectedTicketId(ticket.id);
-    setSheetOpen(true);
-    if (!techLoadedRef.current) {
-      techLoadedRef.current = true;
-      try {
-        const techs = await maintenanceTicketsService.getCatalogTechnicians();
-        setTechnicians(techs);
-      } catch {
-        // Sheet works without technicians for read-only viewing
-      }
-    }
-  }
 
   // Load issues before opening so the combobox is already populated.
   async function handleOpenCreate() {
@@ -150,13 +98,7 @@ export function V1MaintenanceCard({
     setCreateOpen(true);
   }
 
-  const pageLink = (
-    <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" asChild>
-      <Link href={`/${locale}/dashboard/maintenance-tickets`}>
-        <ExternalLink className="h-3 w-3" />
-      </Link>
-    </Button>
-  );
+  const title = t("tickets.card.title");
 
   const headerActions = (
     <div className="flex items-center gap-1">
@@ -166,125 +108,77 @@ export function V1MaintenanceCard({
         className="h-5 gap-0.5 px-1.5 text-[9px]"
         onClick={handleOpenCreate}
         disabled={catalogLoading}
-        aria-label="Create ticket"
+        aria-label={t("tickets.newTicket")}
       >
-        {catalogLoading ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Plus className="h-2.5 w-2.5" />}
-        New
+        {catalogLoading ? <Loader2 className="h-2.5 w-2.5 animate-spin" aria-hidden="true" /> : <Plus className="h-2.5 w-2.5" aria-hidden="true" />}
+        {t("tickets.card.new")}
       </Button>
-      {pageLink}
+      <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" asChild>
+        <Link href={`/${locale}/dashboard/maintenance-tickets`} aria-label={t("tickets.card.openAll")}>
+          <ExternalLink className="h-3 w-3" aria-hidden="true" />
+        </Link>
+      </Button>
     </div>
   );
 
-  // Loading
+  const createDialog = storeId ? (
+    <CreateTicketDialog
+      open={createOpen}
+      storeId={storeId}
+      catalogIssues={catalogIssues}
+      onClose={() => setCreateOpen(false)}
+      onSuccess={() => {
+        setCreateOpen(false);
+        fetchTickets();
+      }}
+    />
+  ) : null;
+
   if (isLoading && tickets.length === 0) {
     return <WbrCardSkeleton className={className} />;
   }
 
-  // No store selected
   if (!storeId) {
     return (
-      <V1Card title="Recent Tickets" category="quality" period="D" span={span} className={className}>
-        <V1Empty>No store selected.</V1Empty>
+      <V1Card title={title} category="quality" period="D" span={span} className={className}>
+        <V1Empty icon={ClipboardList}>{t("tickets.card.noStore")}</V1Empty>
       </V1Card>
     );
   }
 
-  // Error or empty
-  if ((error && tickets.length === 0) || (!isLoading && tickets.length === 0)) {
+  if (tickets.length === 0) {
     return (
       <>
-        <V1Card title="Recent Tickets" category="quality" period="D" span={span} className={className} headerControl={headerActions}>
-          <V1Empty icon={ClipboardList}>
-            {error ? error : "No recent tickets"}
-          </V1Empty>
+        <V1Card title={title} category="quality" period="D" span={span} className={className} headerControl={headerActions}>
+          {error ? (
+            <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+              <p className="text-[11px] text-muted-foreground">{error}</p>
+              <Button variant="outline" size="sm" className="h-6 gap-1 px-2 text-[10px]" onClick={fetchTickets}>
+                <RefreshCw className="h-3 w-3" aria-hidden="true" />
+                {t("common.retry")}
+              </Button>
+            </div>
+          ) : (
+            <V1Empty icon={ClipboardList}>{t("tickets.card.empty")}</V1Empty>
+          )}
         </V1Card>
-        <CreateTicketDialog
-          open={createOpen}
-          storeId={storeId}
-          catalogIssues={catalogIssues}
-          onClose={() => setCreateOpen(false)}
-          onSuccess={() => { setCreateOpen(false); fetchTickets(); }}
-        />
+        {createDialog}
       </>
     );
   }
 
-  // Data → compact clickable list
   return (
     <>
-      <V1Card
-        title="Recent Tickets"
-        category="quality"
-        period="D"
-        span={span}
-        className={className}
-        headerControl={headerActions}
-      >
-        <table className={V1_TBL}>
-          <thead>
-            <tr>
-              <th className={V1_TH}>#</th>
-              <th className={V1_TH}>Status</th>
-              <th className={cn(V1_TH, "text-center")}>Issues</th>
-              <th className={cn(V1_TH, "text-right")}>Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tickets.map((ticket) => (
-              <tr
-                key={ticket.id}
-                className="cursor-pointer hover:bg-muted/40 transition-colors"
-                onClick={() => handleRowClick(ticket)}
-              >
-                <td className={cn(V1_TD, "font-mono text-muted-foreground")}>
-                  {ticket.id}
-                </td>
-                <td className={V1_TD}>
-                  <StatusBadge label={ticket.status.label} value={ticket.status.value} />
-                </td>
-                <td className={cn(V1_TD, "text-center tabular-nums")}>
-                  {ticket.issueCount}
-                </td>
-                <td className={cn(V1_TD, V1_NUM, "whitespace-nowrap text-muted-foreground")}>
-                  {fmtDate(ticket.createdAt)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <V1Card title={title} category="quality" period="D" span={span} className={className} headerControl={headerActions}>
+        <TicketMiniList tickets={tickets} onOpen={setPeekTicket} dimmed={isLoading} className="-mx-2" />
       </V1Card>
 
       {/*
-        Detail sheet — opens when a row is clicked. READ-ONLY here, unlike the
-        maintenance tickets page.
-
-        A ticket on a dashboard is a quick showcase: you glance to see whether
-        something needs you, and go back. Acting on one belongs on the tickets
-        page — offering half the controls here as well would only split one
-        habit across two screens.
+        A ticket on a dashboard is a quick look: the peek sheet is READ-ONLY,
+        acting on a ticket belongs on the ticket page.
       */}
-      {sheetOpen && storeId && (
-        <TicketDetailSheet
-          readOnly
-          open={sheetOpen}
-          ticketId={selectedTicketId}
-          storeId={storeId}
-          tickets={tickets}
-          technicians={technicians}
-          onClose={() => {
-            setSheetOpen(false);
-            setSelectedTicketId(null);
-          }}
-        />
-      )}
-
-      <CreateTicketDialog
-        open={createOpen}
-        storeId={storeId}
-        catalogIssues={catalogIssues}
-        onClose={() => setCreateOpen(false)}
-        onSuccess={() => { setCreateOpen(false); fetchTickets(); }}
-      />
+      <TicketPeekSheet ticket={peekTicket} locale={locale} onClose={() => setPeekTicket(null)} />
+      {createDialog}
     </>
   );
 }

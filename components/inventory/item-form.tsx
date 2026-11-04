@@ -17,7 +17,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { SearchableSelect } from "@/components/shared/searchable-select";
-import { MultiSelect } from "@/components/daily-pay/multi-select";
+import { MultiSelect } from "@/components/shared/multi-select";
 import { TagPicker } from "@/components/inventory/tag-picker";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { ChevronDown, ChevronRight, Loader2, Lock, MessageSquarePlus, Paperclip, Plus, ClipboardPaste } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
@@ -63,6 +64,7 @@ export function EntityNotesAttachments({
   privacy,
   className,
 }: EntityNotesAttachmentsProps) {
+  const t = useTranslations("maintenanceSystem.tickets.notes");
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<null | "note" | "attachment">(null);
   /** Files staged for upload — accumulates across multiple pastes and file-input picks */
@@ -125,14 +127,14 @@ export function EntityNotesAttachments({
         // Slim, non-clickable header — content always visible below.
         <div className="flex w-full items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground">
           <MessageSquarePlus className="h-3 w-3" />
-          <span>Notes &amp; files</span>
+          <span>{t("notesAndFiles")}</span>
           {total > 0 && (
             <span className="rounded-full bg-muted px-1.5 py-px text-[9px] font-medium">{total}</span>
           )}
           {canAdd && (
             <span className="ms-auto text-[9px] text-muted-foreground/50 flex items-center gap-0.5">
               <ClipboardPaste className="h-2.5 w-2.5" />
-              Paste
+              {t("paste")}
             </span>
           )}
         </div>
@@ -141,18 +143,18 @@ export function EntityNotesAttachments({
           type="button"
           onClick={() => setOpen((v) => !v)}
           className="flex w-full items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          title={canAdd ? "Ctrl+V to paste an attachment" : undefined}
+          title={canAdd ? t("pasteHint") : undefined}
         >
           {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
           <MessageSquarePlus className="h-3 w-3" />
-          <span>Notes &amp; files</span>
+          <span>{t("notesAndFiles")}</span>
           {total > 0 && (
             <span className="rounded-full bg-muted px-1.5 py-px text-[9px] font-medium">{total}</span>
           )}
           {canAdd && (
             <span className="ms-auto text-[9px] text-muted-foreground/50 flex items-center gap-0.5">
               <ClipboardPaste className="h-2.5 w-2.5" />
-              Paste
+              {t("paste")}
             </span>
           )}
         </button>
@@ -163,7 +165,7 @@ export function EntityNotesAttachments({
           <NotesList notes={notes} privacy={privacy} />
           {attachments.length > 0 && (
             <div className="space-y-1">
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Files</p>
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("files")}</p>
               <AttachmentGallery attachments={attachments} className="mt-0" />
             </div>
           )}
@@ -171,10 +173,10 @@ export function EntityNotesAttachments({
           {mode === null && canAdd && (
             <div className="flex gap-1.5">
               <Button variant="outline" size="sm" className="h-6 px-2 text-[11px]" onClick={() => setMode("note")}>
-                <MessageSquarePlus className="me-1 h-3 w-3" /> Add Note
+                <MessageSquarePlus className="me-1 h-3 w-3" /> {t("addNote")}
               </Button>
               <Button variant="outline" size="sm" className="h-6 px-2 text-[11px]" onClick={() => setMode("attachment")}>
-                <Paperclip className="me-1 h-3 w-3" /> Add File
+                <Paperclip className="me-1 h-3 w-3" /> {t("addFile")}
               </Button>
             </div>
           )}
@@ -217,6 +219,7 @@ function AddNoteForm({
   onClose: () => void;
   onCreated: (note: TicketNote) => void;
 }) {
+  const t = useTranslations("maintenanceSystem.tickets.notes");
   const [body, setBody] = useState("");
   const [type, setType] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
@@ -225,7 +228,7 @@ function AddNoteForm({
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit() {
-    if (!body.trim()) { setError("Note text is required."); return; }
+    if (!body.trim()) { setError(t("noteRequired")); return; }
     setIsSubmitting(true);
     setError(null);
     try {
@@ -240,7 +243,7 @@ function AddNoteForm({
       );
       onCreated(note);
     } catch (err) {
-      setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to add note.");
+      setError(err instanceof MaintenanceTicketsError ? err.message : t("addNoteFailed"));
     } finally {
       setIsSubmitting(false);
     }
@@ -250,14 +253,14 @@ function AddNoteForm({
     <div className="rounded-md border bg-background p-2 space-y-2">
       <Textarea
         className="text-sm resize-none min-h-16"
-        placeholder="Write a note…"
+        placeholder={t("notePlaceholder")}
         value={body}
         onChange={(e) => setBody(e.target.value)}
       />
       {allowNoteType && (
         <div className="space-y-1">
-          <Label className="text-[10px] text-muted-foreground">Tag (optional)</Label>
-          <Input className="h-7 text-xs" placeholder="e.g. vendor" value={type} onChange={(e) => setType(e.target.value)} />
+          <Label className="text-[10px] text-muted-foreground">{t("tagLabel")}</Label>
+          <Input className="h-7 text-xs" placeholder={t("tagPlaceholder")} value={type} onChange={(e) => setType(e.target.value)} />
         </div>
       )}
       <Input type="file" multiple className="h-7 text-xs" onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
@@ -266,17 +269,17 @@ function AddNoteForm({
           <Checkbox checked={isPrivate} onCheckedChange={(v) => setIsPrivate(v === true)} className="mt-px" />
           <span>
             <span className="inline-flex items-center gap-1 font-medium text-foreground">
-              <Lock className="h-3 w-3" aria-hidden="true" /> Private (MOS only)
+              <Lock className="h-3 w-3" aria-hidden="true" /> {t("privateLabel")}
             </span>
-            <span className="block">Only people with the private-notes permission will see this note and its files.</span>
+            <span className="block">{t("privateHelp")}</span>
           </span>
         </label>
       )}
       {error && <p className="text-[11px] text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
+        <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={onClose} disabled={isSubmitting}>{t("cancel")}</Button>
         <Button size="sm" className="h-6 px-2 text-[11px]" onClick={handleSubmit} disabled={isSubmitting || !body.trim()}>
-          {isSubmitting && <Loader2 className="me-1 h-3 w-3 animate-spin" />}Save
+          {isSubmitting && <Loader2 className="me-1 h-3 w-3 animate-spin" />}{t("save")}
         </Button>
       </div>
     </div>
@@ -297,19 +300,20 @@ function AddAttachmentForm({
   onClose: () => void;
   onCreated: (attachments: TicketAttachment[]) => void;
 }) {
+  const t = useTranslations("maintenanceSystem.tickets.notes");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleSubmit() {
-    if (files.length === 0) { setError("Select at least one file."); return; }
+    if (files.length === 0) { setError(t("selectFile")); return; }
     setIsSubmitting(true);
     setError(null);
     try {
       const created = await maintenanceTicketsService.addAttachments(entityPath, files);
       onCreated(created);
     } catch (err) {
-      setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to upload files.");
+      setError(err instanceof MaintenanceTicketsError ? err.message : t("uploadFailed"));
     } finally {
       setIsSubmitting(false);
     }
@@ -334,7 +338,7 @@ function AddAttachmentForm({
       {files.length > 0 && (
         <div className="space-y-1">
           <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
-            {files.length} file{files.length > 1 ? "s" : ""} queued
+            {t("filesQueued", { count: files.length })}
           </p>
           <ul className="space-y-0.5">
             {files.map((f, i) => (
@@ -344,7 +348,7 @@ function AddAttachmentForm({
                   type="button"
                   onClick={() => removeFile(i)}
                   className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
-                  title="Remove"
+                  title={t("remove")}
                 >
                   ×
                 </button>
@@ -365,7 +369,7 @@ function AddAttachmentForm({
         className="flex items-center gap-1.5 cursor-pointer text-[11px] text-muted-foreground hover:text-foreground transition-colors"
       >
         <Paperclip className="h-3 w-3 shrink-0" />
-        <span>Add more files…</span>
+        <span>{t("addMoreFiles")}</span>
       </button>
       <input
         ref={fileInputRef}
@@ -376,11 +380,11 @@ function AddAttachmentForm({
       />
       {error && <p className="text-[11px] text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
+        <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={onClose} disabled={isSubmitting}>{t("cancel")}</Button>
         <Button size="sm" className="h-6 px-2 text-[11px]" onClick={handleSubmit} disabled={isSubmitting || files.length === 0}>
           {isSubmitting && <Loader2 className="me-1 h-3 w-3 animate-spin" />}
           <Plus className="me-1 h-3 w-3" />
-          Upload {files.length > 0 ? `(${files.length})` : ""}
+          {files.length > 0 ? t("uploadCount", { count: files.length }) : t("upload")}
         </Button>
       </div>
     </div>

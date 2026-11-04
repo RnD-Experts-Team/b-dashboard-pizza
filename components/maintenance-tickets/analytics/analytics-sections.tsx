@@ -4,11 +4,13 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import { AlertCircle, ChevronLeft, ChevronRight, Loader2, MessageSquare, Paperclip, Repeat } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { LocalTimestamp } from "@/components/maintenance-tickets/local-timestamp";
 import { IssueHistoryPanel } from "@/components/maintenance-tickets/issue-history-panel";
+import { PriorityBadge, StatusBadge } from "@/components/maintenance-tickets/ticket-chips";
 import type {
   AnalyticsActivityTicket,
   AnalyticsCreatedTicket,
@@ -39,63 +41,13 @@ function TicketLink({ locale, id, store }: { locale: string; id: number; store: 
   );
 }
 
-/** Tinted pill with a solid bar: the colour says it at a glance, the word says it for sure. */
-const TONES = {
-  yellow: "bg-yellow-500/10 text-yellow-800 dark:text-yellow-300",
-  blue: "bg-blue-500/10 text-blue-800 dark:text-blue-300",
-  indigo: "bg-indigo-500/10 text-indigo-800 dark:text-indigo-300",
-  purple: "bg-purple-500/10 text-purple-800 dark:text-purple-300",
-  green: "bg-green-500/10 text-green-800 dark:text-green-300",
-  orange: "bg-orange-500/10 text-orange-800 dark:text-orange-300",
-  red: "bg-red-500/10 text-red-700 dark:text-red-300",
-  gray: "bg-muted text-muted-foreground",
-} as const;
-
-const BAR = {
-  yellow: "bg-yellow-500",
-  blue: "bg-blue-500",
-  indigo: "bg-indigo-500",
-  purple: "bg-purple-500",
-  green: "bg-green-500",
-  orange: "bg-orange-500",
-  red: "bg-red-500",
-  gray: "bg-zinc-400",
-} as const;
-
-type Tone = keyof typeof TONES;
-
-const STATUS_TONE: Record<string, Tone> = {
-  pending: "yellow",
-  assigned: "blue",
-  in_progress: "indigo",
-  waiting: "purple",
-  complete: "green",
-  deferred: "orange",
-  cancelled: "red",
-};
-
-const PRIORITY_TONE: Record<string, Tone> = {
-  urgent: "red",
-  high: "orange",
-  medium: "yellow",
-  low: "gray",
-};
-
-function Pill({ tone, children }: { tone: Tone; children: ReactNode }) {
-  return (
-    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide", TONES[tone])}>
-      <span className={cn("h-3 w-1 rounded-full", BAR[tone])} aria-hidden="true" />
-      {children}
-    </span>
-  );
-}
-
+/** The shared ticket badges (status-accent.ts): the same colour and word as on the list and the ticket page. */
 export function StatusPill({ value, label }: { value: string; label: string }) {
-  return <Pill tone={STATUS_TONE[value] ?? "gray"}>{label}</Pill>;
+  return <StatusBadge status={value} label={label} size="sm" />;
 }
 
 function PriorityPill({ value, label }: { value: string; label: string }) {
-  return <Pill tone={PRIORITY_TONE[value] ?? "gray"}>{label}</Pill>;
+  return <PriorityBadge priority={value} label={label} size="sm" />;
 }
 
 /** "2 hours ago", from an ISO instant. */
@@ -246,13 +198,14 @@ export function NewTickets({
   recurringDays: number;
   error?: string;
 }) {
+  const tr = useTranslations("maintenanceSystem.tickets.analyticsTables");
   const pager = usePaged(tickets);
   return (
     <ReportTable id="new-tickets" title={title} count={error ? undefined : tickets.length}>
       {error ? (
         <SectionError message={error} />
       ) : tickets.length === 0 ? (
-        <Empty>No tickets were opened in this range.</Empty>
+        <Empty>{tr("noneOpened")}</Empty>
       ) : (
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/40">
@@ -284,7 +237,7 @@ export function NewTickets({
                           title={`${i.title} came up on ${i.recurring_count} tickets at this store in ${recurringDays} days`}
                         >
                           <Repeat className="h-3 w-3" aria-hidden="true" />
-                          {i.recurring_count}× in {recurringDays} days
+                          {tr("recurringBadge", { count: i.recurring_count, days: recurringDays })}
                         </span>
                       )}
                     </Line>
@@ -326,18 +279,19 @@ export function Untouched({
   error?: string;
 }) {
   const span = days === 1 ? "24+ Hours" : `${days}+ Days`;
+  const tr = useTranslations("maintenanceSystem.tickets.analyticsTables");
   const pager = usePaged(tickets);
   return (
     <ReportTable
       id="untouched"
       title={`Open Tickets With No Update for ${span}`}
       count={error ? undefined : tickets.length}
-      description="Open tickets only, right now. If never updated, the time counts from when it was opened."
+      description={tr("untouchedDescription")}
     >
       {error ? (
         <SectionError message={error} />
       ) : tickets.length === 0 ? (
-        <Empty>Every open ticket has been updated recently.</Empty>
+        <Empty>{tr("untouchedNone")}</Empty>
       ) : (
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/40">
@@ -397,6 +351,7 @@ export function WhatChanged({
   onLoadMore: () => void;
   error?: string;
 }) {
+  const tr = useTranslations("maintenanceSystem.tickets.analyticsTables");
   const pager = usePaged(tickets, total);
   const goTo = (page: number) => {
     if ((page + 1) * PAGE_SIZE > tickets.length && hasMore) onLoadMore();
@@ -407,12 +362,12 @@ export function WhatChanged({
       id="what-changed"
       title="Tickets Updated in This Range"
       count={error ? undefined : total}
-      description="What was done on each ticket, most recent first."
+      description={tr("changedDescription")}
     >
       {error ? (
         <SectionError message={error} />
       ) : tickets.length === 0 ? (
-        <Empty>No ticket was updated in this range.</Empty>
+        <Empty>{tr("changedNone")}</Empty>
       ) : (
         <>
           <table className="w-full text-sm">
@@ -462,7 +417,7 @@ export function WhatChanged({
                           </li>
                         )}
                         {!opened && moves.length === 0 && notes === 0 && files === 0 && (
-                          <li className="text-muted-foreground">Visit, booking or part logged</li>
+                          <li className="text-muted-foreground">{tr("otherWork")}</li>
                         )}
                       </ul>
                     </td>
@@ -476,7 +431,7 @@ export function WhatChanged({
           </table>
           {pager.rows.length === 0 && isLoadingMore && (
             <p className="flex items-center justify-center gap-2 px-5 py-6 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading…
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> {tr("loading")}
             </p>
           )}
           <Pager {...pager} onPage={goTo} loading={isLoadingMore} />
@@ -501,6 +456,7 @@ export function Recurring({
   days: number;
   error?: string;
 }) {
+  const tr = useTranslations("maintenanceSystem.tickets.analyticsTables");
   const [history, setHistory] = useState<AnalyticsRecurring | null>(null);
   const pager = usePaged(items);
 
@@ -515,7 +471,7 @@ export function Recurring({
       {error ? (
         <SectionError message={error} />
       ) : items.length === 0 ? (
-        <Empty>Nothing keeps coming back.</Empty>
+        <Empty>{tr("recurringNone")}</Empty>
       ) : (
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/40">
@@ -559,7 +515,7 @@ export function Recurring({
                   {history.title} at {history.store_number}
                 </SheetTitle>
                 <SheetDescription>
-                  {history.count} tickets in the last {days} days, newest first.
+                  {tr("recurringHistory", { count: history.count, days })}
                 </SheetDescription>
               </SheetHeader>
               <div className="px-4 pb-6">
@@ -592,6 +548,7 @@ export function TroubleshootingFixes({
   rangeLabel: string;
   error?: string;
 }) {
+  const tr = useTranslations("maintenanceSystem.tickets.analyticsTables");
   const pager = usePaged(fixes);
   return (
     <ReportTable
@@ -599,12 +556,12 @@ export function TroubleshootingFixes({
       title={`Fixed by Troubleshooting · ${rangeLabel}`}
       count={error ? undefined : fixes.length}
       unit="problems"
-      description="The store tried the troubleshooting steps and they fixed it, so no ticket was opened."
+      description={tr("fixesDescription")}
     >
       {error ? (
         <SectionError message={error} />
       ) : fixes.length === 0 ? (
-        <Empty>No problems were fixed by troubleshooting in this range.</Empty>
+        <Empty>{tr("fixesNone")}</Empty>
       ) : (
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/40">
@@ -642,32 +599,38 @@ export function TroubleshootingFixes({
   );
 }
 
+/** Tighter side padding on a phone: four columns at the full gutter are wider than a 375px card. */
+const BY_STORE_TH = "whitespace-nowrap px-3 py-3 text-start text-sm font-medium text-muted-foreground sm:px-5";
+const BY_STORE_TD = "px-3 py-3.5 align-middle sm:px-5";
+
 export function ByStore({ rows }: { rows: AnalyticsSummary["by_store"] }) {
   // Busiest first: the stores with the most open work lead.
   const sorted = [...rows].sort((x, y) => y.open - x.open || y.created - x.created);
   const pager = usePaged(sorted);
   return (
     <>
+    <div className="overflow-x-auto">
     <table className="w-full text-sm">
       <thead className="border-b bg-muted/40">
         <tr>
-          <th scope="col" className={TH}>Store</th>
-          <th scope="col" className={cn(TH, "text-end")}>Opened</th>
-          <th scope="col" className={cn(TH, "text-end")}>Completed</th>
-          <th scope="col" className={cn(TH, "text-end")}>Open now</th>
+          <th scope="col" className={BY_STORE_TH}>Store</th>
+          <th scope="col" className={cn(BY_STORE_TH, "text-end")}>Opened</th>
+          <th scope="col" className={cn(BY_STORE_TH, "text-end")}>Closed</th>
+          <th scope="col" className={cn(BY_STORE_TH, "text-end")}>Open now</th>
         </tr>
       </thead>
       <tbody className="divide-y">
         {pager.rows.map((r) => (
           <tr key={r.store_number} className="transition-colors hover:bg-muted/30">
-            <td className={cn(TD, "font-medium")}>{r.store_number}</td>
-            <td className={cn(TD, "text-end tabular-nums")}>{r.created}</td>
-            <td className={cn(TD, "text-end tabular-nums")}>{r.completed}</td>
-            <td className={cn(TD, "text-end tabular-nums")}>{r.open}</td>
+            <td className={cn(BY_STORE_TD, "font-medium")}>{r.store_number}</td>
+            <td className={cn(BY_STORE_TD, "text-end tabular-nums")}>{r.created}</td>
+            <td className={cn(BY_STORE_TD, "text-end tabular-nums")}>{r.completed}</td>
+            <td className={cn(BY_STORE_TD, "text-end tabular-nums")}>{r.open}</td>
           </tr>
         ))}
       </tbody>
     </table>
+    </div>
     <Pager {...pager} onPage={pager.setPage} />
     </>
   );
