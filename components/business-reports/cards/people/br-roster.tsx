@@ -16,6 +16,7 @@ import { PagedTable, type PagedColumn } from "@/components/business-reports/page
 import { useReport } from "@/components/business-reports/report-context";
 import type { LaborReport, LaborRosterRow } from "@/types/business-reports.types";
 import { StoreTag, safeDay } from "./br-people-kit";
+import { compareText } from "../../report-format";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  Employee Roster — everyone on the loaded stores' rosters over the range,
@@ -144,7 +145,7 @@ export function BrRoster({ data }: { data: LaborReport }) {
     () =>
       [...new Set(roster.map((r) => r.store))]
         .map((s) => ({ value: s, label: storeName(s) }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
+        .sort((a, b) => compareText(a.label, b.label)),
     [roster, storeName],
   );
   const hasPerformance = useMemo(() => roster.some((r) => metricAvg(r, "performance_score") !== null), [roster]);

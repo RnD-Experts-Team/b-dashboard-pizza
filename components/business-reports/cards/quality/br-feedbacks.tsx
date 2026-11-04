@@ -10,6 +10,7 @@ import { fmtDate, fmtNumD } from "@/components/business-reports/report-format";
 import type { WbrBulkFeedback, WbrBulkResponse } from "@/types/business-reports.types";
 import { CARD_LIST_LIMIT, NO_VALUE, meanOf } from "@/components/business-reports/cards/operations/br-shared";
 import { RecordsDialog, useWbrRecords } from "./br-records";
+import { compareText } from "../../report-format";
 
 const RATING_MAX = 5;
 
@@ -59,7 +60,7 @@ export function BrFeedbacksCard({ data }: { data: WbrBulkResponse }) {
   const records = useWbrRecords(data, "feedbacks");
   const [open, setOpen] = useState(false);
   const latest = useMemo(
-    () => [...records].sort((a, b) => b.submitted_at.localeCompare(a.submitted_at)),
+    () => [...records].sort((a, b) => compareText(b.submitted_at, a.submitted_at)),
     [records],
   );
   const averages = useMemo(

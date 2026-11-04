@@ -10,6 +10,7 @@ import { fmtDate } from "@/components/business-reports/report-format";
 import type { WbrBulkComplaint, WbrBulkResponse } from "@/types/business-reports.types";
 import { CARD_LIST_LIMIT, plural } from "@/components/business-reports/cards/operations/br-shared";
 import { RecordsDialog, useWbrRecords } from "./br-records";
+import { compareText } from "../../report-format";
 
 const fullName = (c: WbrBulkComplaint) => `${c.first_name} ${c.last_name}`.trim();
 
@@ -44,7 +45,7 @@ export function BrComplaintsCard({ data }: { data: WbrBulkResponse }) {
   const records = useWbrRecords(data, "complaints");
   const [open, setOpen] = useState(false);
   const latest = useMemo(
-    () => [...records].sort((a, b) => b.complaint_date.localeCompare(a.complaint_date)),
+    () => [...records].sort((a, b) => compareText(b.complaint_date, a.complaint_date)),
     [records],
   );
   const stores = useMemo(() => new Set(records.map((c) => c.store_label)).size, [records]);

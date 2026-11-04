@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useReport } from "@/components/business-reports/report-context";
 import { fmt$2, fmtNum } from "@/components/business-reports/report-format";
 import type { MenuSection, TopItem } from "@/types/business-reports.types";
+import { compareText } from "../../report-format";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  BrTopItemsCard — V1 "Top Menu Items" over the range: the combined top 10
@@ -113,7 +114,7 @@ function ItemsTable({ items }: { items: TopItem[] }) {
 function TopItemsDetail({ data }: { data: MenuSection }) {
   const { storeName } = useReport();
   const stores = useMemo(
-    () => Object.keys(data.top_items.by_store).sort((a, b) => storeName(a).localeCompare(storeName(b))),
+    () => Object.keys(data.top_items.by_store).sort((a, b) => compareText(storeName(a), storeName(b))),
     [data.top_items.by_store, storeName],
   );
   const [store, setStore] = useState<string>(() => stores[0] ?? "");

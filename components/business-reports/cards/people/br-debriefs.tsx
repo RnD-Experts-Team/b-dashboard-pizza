@@ -13,6 +13,7 @@ import { PagedTable, type PagedColumn } from "@/components/business-reports/page
 import { useReport } from "@/components/business-reports/report-context";
 import type { DebriefTypeCount, DebriefsSection } from "@/types/business-reports.types";
 import { ROW_CARD_HEIGHT, TWO_DP, employeeName, peopleLineOptions, safeDay } from "./br-people-kit";
+import { compareText } from "../../report-format";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  Debriefs — the Employee report's debrief summary over the range for every
@@ -47,7 +48,7 @@ function typeMix(byType: DebriefTypeCount[]): string {
 function DebriefTables({ data }: { data: DebriefsSection }) {
   const { storeName } = useReport();
 
-  const events = useMemo(() => [...data.events].sort((a, b) => b.date.localeCompare(a.date)), [data.events]);
+  const events = useMemo(() => [...data.events].sort((a, b) => compareText(b.date, a.date)), [data.events]);
   const stores = useMemo<StoreRow[]>(
     () => Object.entries(data.by_store).map(([store, s]) => ({ store, ...s })),
     [data.by_store],

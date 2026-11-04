@@ -28,6 +28,7 @@ import {
   type Granularity,
 } from "@/components/business-reports/report-format";
 import type { SalesDay, SalesSection, SalesWeek } from "@/types/business-reports.types";
+import { compareText } from "../../report-format";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  BrSalesTrendCard — V1 "Weekly Sales" for a whole range: sales columns per
@@ -80,7 +81,7 @@ const compactNum = new Intl.NumberFormat("en-US", { notation: "compact", maximum
 
 function dayPoints(days: SalesDay[]): TrendPoint[] {
   return [...days]
-    .sort((a, b) => a.date.localeCompare(b.date))
+    .sort((a, b) => compareText(a.date, b.date))
     .map((d) => ({
       key: d.date,
       label: fmtDay(d.date),
@@ -122,7 +123,7 @@ export function BrSalesTrendCard({ data }: { data: SalesSection }) {
   const [line, setLine] = useState<LineMetric>("guests");
 
   const pointsBy = useMemo<Record<Granularity, TrendPoint[]>>(() => {
-    const weeks = [...data.by_week].sort((a, b) => a.week_start.localeCompare(b.week_start));
+    const weeks = [...data.by_week].sort((a, b) => compareText(a.week_start, b.week_start));
     return {
       day: dayPoints(data.by_date),
       week: weekPoints(weeks, "week"),

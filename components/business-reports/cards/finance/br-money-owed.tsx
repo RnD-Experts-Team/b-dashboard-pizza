@@ -12,6 +12,7 @@ import { fmt$2, fmtDate } from "@/components/business-reports/report-format";
 import type { WbrBulkMoneyOwed, WbrBulkResponse } from "@/types/business-reports.types";
 import { CARD_LIST_LIMIT, NO_VALUE, plural } from "@/components/business-reports/cards/operations/br-shared";
 import { RecordsDialog, useWbrRecords } from "@/components/business-reports/cards/quality/br-records";
+import { compareText } from "../../report-format";
 
 const amountOf = (m: WbrBulkMoneyOwed): number => parseFloat(m.expenses_amount) || 0;
 
@@ -74,7 +75,7 @@ export function BrMoneyOwedCard({ data }: { data: WbrBulkResponse }) {
   const records = useWbrRecords(data, "money_owed");
   const [open, setOpen] = useState(false);
   const latest = useMemo(
-    () => [...records].sort((a, b) => b.expense_date.localeCompare(a.expense_date)),
+    () => [...records].sort((a, b) => compareText(b.expense_date, a.expense_date)),
     [records],
   );
   const total = useMemo(() => records.reduce((s, m) => s + amountOf(m), 0), [records]);

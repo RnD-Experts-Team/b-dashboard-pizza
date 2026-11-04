@@ -11,6 +11,7 @@ import { useReport } from "@/components/business-reports/report-context";
 import { cn } from "@/lib/utils";
 import type { LaborBlock, LaborReport } from "@/types/business-reports.types";
 import { ROW_CARD_HEIGHT, SeeAll, safeDay } from "./br-people-kit";
+import { compareText } from "../../report-format";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  Birthdays — V1's birthday card for every birthday inside the range, with
@@ -36,7 +37,7 @@ export function BrBirthdays({ data }: { data: LaborReport }) {
   const { storeName } = useReport();
   const [open, setOpen] = useState(false);
   const birthdays = useMemo(
-    () => [...(data.combined.birthdays ?? [])].sort((a, b) => a.date.localeCompare(b.date)),
+    () => [...(data.combined.birthdays ?? [])].sort((a, b) => compareText(a.date, b.date)),
     [data.combined.birthdays],
   );
   const preview = birthdays.slice(0, CARD_PREVIEW);

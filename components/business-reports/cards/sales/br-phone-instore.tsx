@@ -6,6 +6,7 @@ import { V1Card, type V1Span } from "@/components/dashboard-v1/v1-card";
 import { V1Metric, V1MetricGrid, V1Empty, V1_TBL, V1_TH, V1_TD, V1_NUM } from "@/components/dashboard-v1/v1-ui";
 import { Delta, fmt$, fmtPct, pctChangeOrNull, share, weekLabel } from "@/components/business-reports/report-format";
 import type { SalesSection, SalesWeek } from "@/types/business-reports.types";
+import { compareText } from "../../report-format";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  BrPhoneInStoreCard — V1 "Phone & In-Store" over the range: Phone and In
@@ -31,7 +32,7 @@ export function BrPhoneInStoreCard({ data }: { data: SalesSection }) {
   const t = data.totals;
 
   const rows = useMemo<WeekRow[]>(() => {
-    const asc = [...data.by_week].sort((a, b) => a.week_start.localeCompare(b.week_start));
+    const asc = [...data.by_week].sort((a, b) => compareText(a.week_start, b.week_start));
     return asc.map((week, i) => ({ week, prev: i > 0 ? asc[i - 1] : null })).reverse();
   }, [data.by_week]);
 

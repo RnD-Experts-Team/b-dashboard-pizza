@@ -10,6 +10,7 @@ import { useReport } from "@/components/business-reports/report-context";
 import { fmt$2, fmtDate, fmtNum } from "@/components/business-reports/report-format";
 import type { OperationsSection, TransferRow } from "@/types/business-reports.types";
 import { CARD_LIST_LIMIT, plural } from "@/components/business-reports/cards/operations/br-shared";
+import { compareText } from "../../report-format";
 
 /** In = into a loaded store from outside; out = the reverse; between = both ends loaded. */
 type Direction = "in" | "out" | "between";
@@ -75,7 +76,7 @@ export function BrTransfersCard({ data }: { data: OperationsSection }) {
         fromLabel: storeName(r.from_store_number),
         toLabel: storeName(r.to_store_number),
       }))
-      .sort((a, b) => b.date.localeCompare(a.date));
+      .sort((a, b) => compareText(b.date, a.date));
   }, [data.transfers, params.stores, storeName]);
   const empty = rows.length === 0;
 

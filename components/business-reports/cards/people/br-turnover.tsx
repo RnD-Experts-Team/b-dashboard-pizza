@@ -21,6 +21,7 @@ import { useReport } from "@/components/business-reports/report-context";
 import { cn } from "@/lib/utils";
 import type { LaborReport, LaborTurnoverEvent } from "@/types/business-reports.types";
 import { PREVIEW_ROWS, ROW_CARD_HEIGHT, SeeAll, StoreTag, TWO_DP, employeeName, safeDay } from "./br-people-kit";
+import { compareText } from "../../report-format";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  Turnover — separations over the range (all loaded stores): counts, rate,
@@ -120,7 +121,7 @@ export function BrTurnover({ data }: { data: LaborReport }) {
   const [selected, setSelected] = useState<LaborTurnoverEvent | null>(null);
 
   const events = useMemo(
-    () => [...(t.events ?? [])].sort((a, b) => b.effective_date.localeCompare(a.effective_date)),
+    () => [...(t.events ?? [])].sort((a, b) => compareText(b.effective_date, a.effective_date)),
     [t.events],
   );
 

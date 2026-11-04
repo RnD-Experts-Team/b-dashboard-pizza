@@ -9,6 +9,7 @@ import { PagedTable, type PagedColumn } from "@/components/business-reports/page
 import { useReport } from "@/components/business-reports/report-context";
 import { fmt$, fmtNum, fmtPct, ppDelta, weekLabel } from "@/components/business-reports/report-format";
 import type { OperationsMetrics, OperationsSection, ReportWeek } from "@/types/business-reports.types";
+import { compareText } from "../../report-format";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  BrOrdersVsSalesCard — V1 "Orders vs Sales" over the range: sales, Blue Line
@@ -49,7 +50,7 @@ export function BrOrdersVsSalesCard({ data }: { data: OperationsSection }) {
   const t = data.totals;
 
   const rows = useMemo<WeekRow[]>(() => {
-    const asc = [...data.by_week].sort((a, b) => a.week_start.localeCompare(b.week_start));
+    const asc = [...data.by_week].sort((a, b) => compareText(a.week_start, b.week_start));
     return asc
       .map((week, i) => {
         const prev = i > 0 ? asc[i - 1] : null;

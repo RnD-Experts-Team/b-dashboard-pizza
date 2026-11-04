@@ -1,4 +1,4 @@
-import { format, parseISO } from "date-fns";
+import { format, isValid, parseISO } from "date-fns";
 import type { ReportWeek } from "@/types/business-reports.types";
 
 /**
@@ -20,6 +20,15 @@ export {
 export { LABOR_ZONES, laborColor, laborLabel } from "@/components/dashboard-v1/cards/v1-labor";
 
 const PERCENT = 100;
+
+/**
+ * Null-safe text compare for sorts. Upstream rows (hooks forms, HR events,
+ * metric labels) can carry null dates/labels; those sort as empty text
+ * instead of crashing the page.
+ */
+export function compareText(a: string | null | undefined, b: string | null | undefined): number {
+  return (a ?? "").localeCompare(b ?? "");
+}
 
 /** Per-store-day average, or 0 when nothing was recorded. */
 export function perStoreDay(value: number, storeDays: number): number {
@@ -59,8 +68,11 @@ export function defaultGranularity(days: number): Granularity {
   return "period";
 }
 
-export function fmtDay(iso: string): string {
-  return format(parseISO(iso), "MMM d");
+/** "Oct 21"; "—" for a missing or unreadable date (upstream rows can carry null). */
+export function fmtDay(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = parseISO(iso);
+  return isValid(d) ? format(d, "MMM d") : "—";
 }
 
 export function fmtRange(start: string, end: string): string {

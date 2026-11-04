@@ -17,6 +17,7 @@ import type {
 } from "@/types/business-reports.types";
 import { NO_VALUE, PpDelta, plural } from "./br-shared";
 import { HNR_SCOPE_OPTIONS, type HnrScope } from "./br-hnr";
+import { compareText } from "../../report-format";
 
 interface WeekRow {
   week: ReportWeek & OperationsMetrics;
@@ -31,7 +32,7 @@ function buildRows(ops: OperationsSection, orders: OrdersSection | null, scope: 
   const special = new Map((orders?.important_items_hnr.by_week ?? []).map((w) => [w.week_start, w]));
   const hnrOf = (w: ReportWeek & OperationsMetrics): HnrTotals | null =>
     scope === "special" ? (special.get(w.week_start) ?? null) : w;
-  const chronological = [...ops.by_week].sort((a, b) => a.week_start.localeCompare(b.week_start));
+  const chronological = [...ops.by_week].sort((a, b) => compareText(a.week_start, b.week_start));
   return chronological
     .map((week, i) => {
       const prev = i > 0 ? chronological[i - 1] : undefined;
