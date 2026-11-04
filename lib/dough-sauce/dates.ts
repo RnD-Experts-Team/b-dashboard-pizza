@@ -23,6 +23,15 @@ export function tomorrowIso(): string {
   return addDaysIso(todayIso(), 1);
 }
 
+export function yesterdayIso(): string {
+  return addDaysIso(todayIso(), -1);
+}
+
+/** The `count` same weekdays before `iso`, oldest first (a Wednesday → the 4 Wednesdays before it, one week apart). */
+export function sameWeekdayDates(iso: string, count = 4): string[] {
+  return Array.from({ length: count }, (_, i) => addDaysIso(iso, -7 * (count - i)));
+}
+
 /** Every calendar day from `from` to `to`, inclusive — for server-given week bounds. */
 export function daysBetween(from: string, to: string): string[] {
   const out: string[] = [];

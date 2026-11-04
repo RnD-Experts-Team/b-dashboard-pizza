@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { ArrowDown, ArrowUp, Loader2, Paperclip, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +46,7 @@ function FilesField({
   onAdd: (files: File[]) => Promise<void>;
   onRemove: (attachmentId: number) => Promise<void>;
 }) {
+  const t = useTranslations("maintenanceSystem.troubleshooting");
   const ref = useRef<HTMLInputElement | null>(null);
   return (
     <div className="space-y-1">
@@ -56,7 +58,7 @@ function FilesField({
                 <Paperclip className="h-3 w-3 shrink-0" aria-hidden="true" />
                 <span className="truncate">{a.fileName}</span>
               </a>
-              <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => void onRemove(a.id)} disabled={disabled} aria-label={`Remove ${a.fileName}`}>
+              <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => void onRemove(a.id)} disabled={disabled} aria-label={t("removeFile", { name: a.fileName })}>
                 <X className="h-3 w-3" />
               </Button>
             </li>
@@ -100,6 +102,8 @@ export function GuideEditor({
   onRemoved?: () => void;
   onCancel?: () => void;
 }) {
+  const t = useTranslations("maintenanceSystem.troubleshooting");
+  const tc = useTranslations("maintenanceSystem.common");
   const [title, setTitle] = useState(guide?.title ?? "");
   const [steps, setSteps] = useState<DraftStep[]>(() => draftOf(guide));
   const [linkUrl, setLinkUrl] = useState(guide?.linkUrl ?? "");
@@ -144,7 +148,7 @@ export function GuideEditor({
       setSteps(draftOf(saved));
       publish(saved);
     } catch (err) {
-      setError(errorMessage(err, "Could not save the guide."));
+      setError(errorMessage(err, t("saveFailed")));
     } finally {
       setBusy(null);
     }
@@ -152,14 +156,14 @@ export function GuideEditor({
 
   async function remove() {
     if (!current) return;
-    if (!window.confirm(`Remove the "${current.title}" guide for ${issueTitle}? Tickets already opened keep the steps they tried.`)) return;
+    if (!window.confirm(t("removeConfirm", { title: current.title, issue: issueTitle }))) return;
     setBusy("remove");
     setError(null);
     try {
       await maintenanceTicketsService.deleteTroubleshootingGuide(current.id);
       onRemoved?.();
     } catch (err) {
-      setError(errorMessage(err, "Could not remove the guide."));
+      setError(errorMessage(err, t("removeFailed")));
     } finally {
       setBusy(null);
     }
@@ -189,44 +193,46 @@ export function GuideEditor({
     files.length === 0 ? Promise.resolve() : fileChange(async () => {
       const added = await maintenanceTicketsService.addTroubleshootingStepFiles(stepId, files);
       return (g) => ({ ...g, steps: g.steps.map((s) => (s.id === stepId ? { ...s, attachments: [...s.attachments, ...added] } : s)) });
-    }, "Could not upload the files.");
+    }, t("uploadFailed"));
 
   const removeStepFile = (stepId: number, attachmentId: number) =>
     fileChange(async () => {
       await maintenanceTicketsService.removeTroubleshootingStepFile(stepId, attachmentId);
       return (g) => ({ ...g, steps: g.steps.map((s) => (s.id === stepId ? { ...s, attachments: s.attachments.filter((a) => a.id !== attachmentId) } : s)) });
-    }, "Could not remove the file.");
+    }, t("removeFileFailed"));
 
   const addGuideFiles = (files: File[]) =>
     files.length === 0 || !current ? Promise.resolve() : fileChange(async () => {
       const added = await maintenanceTicketsService.addTroubleshootingFiles(current.id, files);
       return (g) => ({ ...g, attachments: [...g.attachments, ...added] });
-    }, "Could not upload the files.");
+    }, t("uploadFailed"));
 
   const removeGuideFile = (attachmentId: number) =>
     !current ? Promise.resolve() : fileChange(async () => {
       await maintenanceTicketsService.removeTroubleshootingFile(current.id, attachmentId);
       return (g) => ({ ...g, attachments: g.attachments.filter((a) => a.id !== attachmentId) });
-    }, "Could not remove the file.");
+    }, t("removeFileFailed"));
 
   return (
     <div className="space-y-4 rounded-lg border bg-background p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-sm font-medium">{current ? `Edit a ${issueTitle} guide` : `New ${issueTitle} guide`}</p>
+        <p className="text-sm font-medium">{current ? t("editTitle", { issue: issueTitle }) : t("newTitle", { issue: issueTitle })}</p>
         {current && (
           <span className="text-xs text-muted-foreground">
-            Version {current.version}{current.editor ? ` · last saved by ${current.editor.name}` : ""}
+            {current.editor
+              ? t("versionBy", { version: current.version, name: current.editor.name })
+              : t("version", { version: current.version })}
           </span>
         )}
       </div>
 
       <div className="space-y-1">
-        <Label className="text-sm">The problem this guide is for</Label>
-        <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Won't heat up" className="text-sm" maxLength={255} />
+        <Label className="text-sm">{t("problemLabel")}</Label>
+        <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("problemPlaceholder")} className="text-sm" maxLength={255} />
       </div>
 
       <div className="space-y-2">
-        <Label className="text-sm">Steps to try, in order</Label>
+        <Label className="text-sm">{t("stepsLabel")}</Label>
         {steps.map((step, i) => (
           <div key={step.key} className="space-y-1.5 rounded-md border bg-muted/20 p-2">
             <div className="flex items-start gap-1.5">
@@ -234,14 +240,14 @@ export function GuideEditor({
               <Textarea
                 value={step.body}
                 onChange={(e) => setStep(step.key, e.target.value)}
-                placeholder={i === 0 ? "e.g. Check the oven's breaker in the back panel" : "Next step…"}
+                placeholder={i === 0 ? t("firstStepPlaceholder") : t("nextStepPlaceholder")}
                 className="min-h-10 flex-1 bg-background text-sm"
               />
               <div className="flex shrink-0 flex-col gap-0.5">
-                <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up">
+                <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => move(i, -1)} disabled={i === 0} aria-label={t("moveUp")}>
                   <ArrowUp className="h-3 w-3" />
                 </Button>
-                <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => move(i, 1)} disabled={i === steps.length - 1} aria-label="Move down">
+                <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => move(i, 1)} disabled={i === steps.length - 1} aria-label={t("moveDown")}>
                   <ArrowDown className="h-3 w-3" />
                 </Button>
               </div>
@@ -251,7 +257,7 @@ export function GuideEditor({
                 size="icon"
                 className="mt-1 h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
                 onClick={() => setSteps((prev) => (prev.length === 1 ? [newStep()] : prev.filter((s) => s.key !== step.key)))}
-                aria-label="Remove step"
+                aria-label={t("removeStep")}
               >
                 <X className="h-3.5 w-3.5" />
               </Button>
@@ -265,27 +271,27 @@ export function GuideEditor({
                   onRemove={(attachmentId) => removeStepFile(step.id!, attachmentId)}
                 />
               ) : (
-                <p className="text-xs text-muted-foreground">Save the guide, then add photos or videos for this step.</p>
+                <p className="text-xs text-muted-foreground">{t("stepFilesLater")}</p>
               )}
             </div>
           </div>
         ))}
         <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => setSteps((prev) => [...prev, newStep()])}>
-          <Plus className="me-1 h-3 w-3" /> Add a step
+          <Plus className="me-1 h-3 w-3" /> {t("addStep")}
         </Button>
       </div>
 
       <div className="space-y-1">
-        <Label className="text-sm">Link (optional) — a video, a manual, a vendor page</Label>
+        <Label className="text-sm">{t("linkLabel")}</Label>
         <Input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://…" inputMode="url" className="text-sm" />
       </div>
 
       <div className="space-y-1">
-        <Label className="text-sm">Files for the whole guide (optional)</Label>
+        <Label className="text-sm">{t("guideFilesLabel")}</Label>
         {current ? (
           <FilesField attachments={current.attachments} disabled={busy !== null} onAdd={addGuideFiles} onRemove={removeGuideFile} />
         ) : (
-          <p className="text-xs text-muted-foreground">Save the guide first, then add files.</p>
+          <p className="text-xs text-muted-foreground">{t("guideFilesLater")}</p>
         )}
       </div>
 
@@ -294,17 +300,17 @@ export function GuideEditor({
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" size="sm" onClick={() => void save()} disabled={busy !== null || realSteps.length === 0 || title.trim() === ""}>
           {busy === "save" && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
-          {current ? "Save as a new version" : "Save the guide"}
+          {current ? t("saveNewVersion") : t("saveGuide")}
         </Button>
         {onCancel && (
           <Button type="button" size="sm" variant="ghost" onClick={onCancel} disabled={busy !== null}>
-            {unsaved ? "Discard changes" : "Close"}
+            {unsaved ? t("discardChanges") : tc("close")}
           </Button>
         )}
         {current && onRemoved && (
           <Button type="button" size="sm" variant="ghost" className="ms-auto text-destructive hover:text-destructive" onClick={() => void remove()} disabled={busy !== null}>
             {busy === "remove" ? <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="me-1.5 h-3.5 w-3.5" />}
-            Remove this guide
+            {t("removeGuide")}
           </Button>
         )}
       </div>

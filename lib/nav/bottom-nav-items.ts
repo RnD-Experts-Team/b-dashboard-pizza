@@ -37,9 +37,12 @@ import {
   Award,
   Table2,
   HardHat,
+  Route,
+  FileSpreadsheet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { CanAccessParams } from "@/lib/auth/can-access";
+import type { FeatureId } from "@/lib/config/features.types";
 import { DS_ROUTES } from "@/lib/dough-sauce/access";
 
 /**
@@ -62,6 +65,8 @@ export interface BottomNavItem {
   /** Direct permission check via hasPermission(), when present. */
   requiredPermission?: string;
   exact?: boolean;
+  /** Shown only while this feature flag is on (mirrors a flag-gated sidebar item). */
+  feature?: FeatureId;
   /**
    * Matches one of BOTTOM_NAV_GROUPS' keys when this item belongs to a
    * collapsible sidebar group. Omitted for sidebar's flat (ungrouped) items
@@ -293,6 +298,18 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     ],
     groupKey: "dataManagement",
   },
+  {
+    id: "reportBuilder",
+    href: (locale) => `/${locale}/dashboard/report-builder`,
+    icon: FileSpreadsheet,
+    titleKey: "reportBuilder",
+    // Zero-arg: the templates path carries no store and its rule is unscoped.
+    requirements: () => [
+      { service: "Data", method: "GET", path: "/report-builder/templates" },
+    ],
+    feature: "reportBuilder",
+    groupKey: "dataManagement",
+  },
 
   // Maintenance
   {
@@ -305,13 +322,35 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     ],
     groupKey: "maintenance",
   },
+  // Trips and Payments are global: zero-arg probes, no storeId (like storage).
   {
-    id: "maintenanceTroubleshooting",
-    href: (locale) => `/${locale}/dashboard/maintenance-troubleshooting`,
-    icon: LifeBuoy,
-    titleKey: "maintenanceTroubleshooting",
-    requirements: (storeId) => [
-      { service: "Maintenance", method: "GET", path: "/troubleshooting-guides", storeId },
+    id: "maintenanceTrips",
+    href: (locale) => `/${locale}/dashboard/maintenance-trips`,
+    icon: Route,
+    titleKey: "maintenanceTrips",
+    requirements: () => [
+      { service: "Maintenance", method: "GET", path: "/trips" },
+    ],
+    groupKey: "maintenance",
+  },
+  {
+    id: "maintenancePayments",
+    href: (locale) => `/${locale}/dashboard/maintenance-payments`,
+    icon: Wallet,
+    titleKey: "maintenancePayments",
+    requirements: () => [
+      { service: "Maintenance", method: "GET", path: "/payments" },
+    ],
+    groupKey: "maintenance",
+  },
+  {
+    id: "storage",
+    href: (locale) => `/${locale}/dashboard/storage`,
+    icon: Warehouse,
+    titleKey: "storage",
+    // Zero-arg: storage is global, so no storeId is threaded through.
+    requirements: () => [
+      { service: "Maintenance", method: "GET", path: "/storage-locations" },
     ],
     groupKey: "maintenance",
   },
@@ -326,23 +365,12 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     groupKey: "maintenance",
   },
   {
-    id: "dailyPay",
-    href: (locale) => `/${locale}/dashboard/daily-pay`,
-    icon: Wallet,
-    titleKey: "dailyPay",
+    id: "maintenanceTroubleshooting",
+    href: (locale) => `/${locale}/dashboard/maintenance-troubleshooting`,
+    icon: LifeBuoy,
+    titleKey: "maintenanceTroubleshooting",
     requirements: (storeId) => [
-      { service: "Maintenance", method: "GET", path: "/daily-pay-entries", storeId },
-    ],
-    groupKey: "maintenance",
-  },
-  {
-    id: "storage",
-    href: (locale) => `/${locale}/dashboard/storage`,
-    icon: Warehouse,
-    titleKey: "storage",
-    // Zero-arg: storage is global, so no storeId is threaded through.
-    requirements: () => [
-      { service: "Maintenance", method: "GET", path: "/storage-locations" },
+      { service: "Maintenance", method: "GET", path: "/troubleshooting-guides", storeId },
     ],
     groupKey: "maintenance",
   },

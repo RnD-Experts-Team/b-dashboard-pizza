@@ -26,8 +26,8 @@ import { MetricDefinitions, MetricNote } from "./metric-definitions";
 const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 /** Below this, a manager's share of time is noise, not a finding. */
 const MIN_ON_SCREEN_FOR_RANKING = 30 * 60;
-/** Matches the bars the top-screens chart shows (its MAX_ROWS), so the two cards line up. */
-const STORES_PAGE_SIZE = 8;
+/** Same page size as the managers table above it. */
+const STORES_PAGE_SIZE = 10;
 
 /**
  * The monitoring report, laid out like the maintenance analytics page: the
@@ -321,21 +321,20 @@ export function MonitoringReport({
 
       <ManagersTable users={report.users} targetSeconds={managerTarget} onOpen={setOpenUser} />
 
-      <div className="grid gap-6 @4xl:grid-cols-2">
-        <AnalyticsCard icon={MonitorPlay} title={t("sections.topScreens")} description={t("sections.topScreensHint")} center>
-          {report.screens.some((s) => s.main > 0) ? (
-            <AnalyticsBarChart
-              title={t("sections.topScreens")}
-              rows={report.screens.filter((s) => s.main > 0).map((s) => ({ label: `${s.name} · ${s.store ?? ""}`, value: toHours(s.main) }))}
-              valueLabel={t("units.hours")}
-              format={(v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 1 })}h`}
-            />
-          ) : (
-            <CardEmpty icon={MonitorOff}>{t("noScreenTime")}</CardEmpty>
-          )}
-        </AnalyticsCard>
-        <StoresCard report={report} openByStore={openByStore} openSoFar={openSoFar} />
-      </div>
+      <StoresCard report={report} openByStore={openByStore} openSoFar={openSoFar} />
+
+      <AnalyticsCard icon={MonitorPlay} title={t("sections.topScreens")} description={t("sections.topScreensHint")} center>
+        {report.screens.some((s) => s.main > 0) ? (
+          <AnalyticsBarChart
+            title={t("sections.topScreens")}
+            rows={report.screens.filter((s) => s.main > 0).map((s) => ({ label: `${s.name} · ${s.store ?? ""}`, value: toHours(s.main) }))}
+            valueLabel={t("units.hours")}
+            format={(v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 1 })}h`}
+          />
+        ) : (
+          <CardEmpty icon={MonitorOff}>{t("noScreenTime")}</CardEmpty>
+        )}
+      </AnalyticsCard>
 
       <ScreensTable report={report} />
 
@@ -429,7 +428,6 @@ function StoresCard({
     [report.stores, openByStore],
   );
   const { rows, head } = useSortable(withOpen, "present_open_share", STORE_TEXT_KEYS);
-  // Same page size as the top-screens chart beside it, so both show the same number of rows.
   const paged = usePaged(rows, rows.length, STORES_PAGE_SIZE);
 
   return (

@@ -1,0 +1,202 @@
+"use client";
+
+import Link from "next/link";
+import {
+  ArrowLeft,
+  CircleSlash,
+  Gauge,
+  MoreHorizontal,
+  RefreshCw,
+  Shuffle,
+  Store,
+} from "lucide-react";
+import { useTranslations } from "next-intl";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import type { TicketHeaderInfo } from "@/lib/api/services/maintenance-workflow.service";
+import { IMPACTS, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
+import type { IssueStatus, TicketIssueDetail } from "@/types/maintenance-system";
+import { LocalTimestamp } from "../local-timestamp";
+import { PriorityBadge, StatusBadge } from "../ticket-chips";
+
+const PILL = "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium leading-5";
+
+/** The badges live in ticket-chips.tsx (one source for every ticket surface); re-exported for older imports. */
+export { PriorityBadge, StatusBadge };
+
+/** The issue's effective priority: the office's when set, else the store's. */
+export function effectivePriority(issue: TicketIssueDetail) {
+  return issue.assignedPriority ?? issue.priority;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+
+export interface TicketMenuPermissions {
+  canJump: boolean;
+  canCancel: boolean;
+}
+
+export function TicketHeader({
+  ticket,
+  issue,
+  issueCount,
+  backHref,
+  isRefreshing,
+  onRefresh,
+  permissions,
+  onJump,
+  onCancelIssue,
+  onCancelTicket,
+}: {
+  ticket: TicketHeaderInfo;
+  issue: TicketIssueDetail;
+  issueCount: number;
+  backHref: string;
+  isRefreshing: boolean;
+  onRefresh: () => void;
+  permissions: TicketMenuPermissions;
+  onJump: () => void;
+  onCancelIssue: () => void;
+  onCancelTicket: () => void;
+}) {
+  const t = useTranslations("maintenanceSystem");
+  const priority = effectivePriority(issue);
+  const store = ticket.storeNumber ?? ticket.otherStore ?? "—";
+  const terminal = issue.status.value === "closed" || issue.status.value === "cancelled";
+  const hasMenu = permissions.canJump || permissions.canCancel;
+
+  return (
+    <header className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <Button asChild variant="ghost" size="sm" className="-ms-2 h-8">
+          <Link href={backHref}>
+            <ArrowLeft className="me-1.5 h-4 w-4 rtl:rotate-180" aria-hidden="true" />
+            {t("tickets.page.back")}
+          </Link>
+        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onRefresh} disabled={isRefreshing} aria-label={t("common.refresh")}>
+            <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} aria-hidden="true" />
+          </Button>
+          {hasMenu ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="h-8 w-8" aria-label={t("tickets.page.moreMenu")}>
+                  <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {permissions.canJump ? (
+                  <DropdownMenuItem onSelect={onJump}>
+                    <Shuffle className="me-2 h-4 w-4" aria-hidden="true" />
+                    {t("workflow.actions.jump")}
+                  </DropdownMenuItem>
+                ) : null}
+                {permissions.canCancel && !terminal ? (
+                  <DropdownMenuItem onSelect={onCancelIssue}>
+                    <CircleSlash className="me-2 h-4 w-4" aria-hidden="true" />
+                    {issueCount > 1 ? t("tickets.page.cancelIssue") : t("tickets.page.cancelTicket")}
+                  </DropdownMenuItem>
+                ) : null}
+                {permissions.canCancel && issueCount > 1 && ticket.status.value !== "cancelled" ? (
+                  <DropdownMenuItem onSelect={onCancelTicket}>
+                    <CircleSlash className="me-2 h-4 w-4" aria-hidden="true" />
+                    {t("tickets.page.cancelTicket")}
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-sm text-muted-foreground tabular-nums">{t("tickets.page.ticketNumber", { id: ticket.id })}</p>
+        <h1 className="font-heading text-2xl font-bold tracking-tight">{issue.title}</h1>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <StatusBadge status={issue.status.value} label={issue.status.label} />
+          <PriorityBadge priority={priority.value} label={priority.label} />
+          <span className={cn(PILL, "border bg-card text-foreground")}>
+            <Store className="h-3 w-3" aria-hidden="true" />
+            {ticket.storeNumber ? t("tickets.page.storeNumber", { store }) : store}
+          </span>
+          {issue.impact ? (
+            <span className={cn(PILL, "border bg-card text-foreground")}>
+              <Gauge className="h-3 w-3" aria-hidden="true" />
+              {vocabText(t, vocabEntry(IMPACTS, issue.impact.value, issue.impact.label))}
+            </span>
+          ) : null}
+        </div>
+        <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            {t("tickets.page.opened")} <LocalTimestamp iso={ticket.createdAt} showZone={false} />
+          </span>
+          {ticket.creator ? (
+            <>
+              <span aria-hidden="true">|</span>
+              <span>{t("tickets.page.submittedBy", { name: ticket.creator.name })}</span>
+            </>
+          ) : null}
+        </p>
+      </div>
+    </header>
+  );
+}
+
+/* ── Issue switcher ──────────────────────────────────────────────────────── */
+
+export function IssueSwitcher({
+  issues,
+  selectedId,
+  onSelect,
+}: {
+  issues: TicketIssueDetail[];
+  selectedId: number;
+  onSelect: (id: number) => void;
+}) {
+  const t = useTranslations("maintenanceSystem.tickets.page");
+  if (issues.length <= 1) return null;
+  return (
+    <div className="-mx-1 overflow-x-auto px-1">
+      <div role="tablist" aria-label={t("issueSwitcher")} className="inline-flex w-max gap-1 rounded-lg border bg-muted/40 p-1">
+        {issues.map((i, index) => {
+          const active = i.id === selectedId;
+          return (
+            <button
+              key={i.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => onSelect(i.id)}
+              className={cn(
+                "inline-flex max-w-56 items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                active ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <span className="tabular-nums text-xs text-muted-foreground">{index + 1}.</span>
+              <span className="truncate">{i.title}</span>
+              <StatusBadge status={i.status.value} label={i.status.label} size="xs" />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── Step history ────────────────────────────────────────────────────────── */
+
+/** Every status the issue has been in (the presenter sends `to_status` on each change). */
+export function visitedStatuses(issue: TicketIssueDetail): IssueStatus[] {
+  return issue.statusChanges.flatMap((c) => {
+    const raw = c as unknown as { toStatus?: string; status?: { value?: string } | null };
+    const value = raw.toStatus ?? raw.status?.value;
+    return value ? [value as IssueStatus] : [];
+  });
+}

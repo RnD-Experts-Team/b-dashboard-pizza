@@ -37,7 +37,8 @@ import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
  *   scrolls out of view
  */
 
-export type PeekTarget = { type: "event" | "day"; id: string };
+/** "group": a roll-up or "+N" stack; its id carries the members' ids (`groupPeekId`). */
+export type PeekTarget = { type: "event" | "day" | "group"; id: string };
 export type PeekSide = "block" | "inline";
 
 interface PeekOptions {
@@ -58,6 +59,8 @@ interface PeekAnchorProps {
 interface PeekApi {
   peekProps: (target: PeekTarget, opts?: PeekOptions) => PeekAnchorProps;
   close: () => void;
+  /** Keep the open card until dismissed (it was only hovered): for a card the user is typing into. */
+  pin: () => void;
 }
 
 const PeekContext = createContext<PeekApi | null>(null);
@@ -128,6 +131,15 @@ export function CalendarPeekProvider({
     warmUntil.current = performance.now() + WARM_MS;
     stateRef.current = null;
     setState(null);
+  }, []);
+
+  const pin = useCallback(() => {
+    const s = stateRef.current;
+    if (!s || s.pinned) return;
+    clearTimers();
+    const next = { ...s, pinned: true };
+    stateRef.current = next;
+    setState(next);
   }, []);
 
   const scheduleClose = useCallback(() => {
@@ -214,7 +226,7 @@ export function CalendarPeekProvider({
     [close, scheduleClose, show],
   );
 
-  const api = useMemo<PeekApi>(() => ({ peekProps, close }), [peekProps, close]);
+  const api = useMemo<PeekApi>(() => ({ peekProps, close, pin }), [peekProps, close, pin]);
   const content = state ? render(state.target, close) : null;
 
   const physicalSide =
@@ -237,7 +249,8 @@ export function CalendarPeekProvider({
           sideOffset={8}
           collisionPadding={8}
           hideWhenDetached
-          className="w-auto max-w-[calc(100vw-1rem)] p-0 data-[state=closed]:duration-100"
+          // Never taller than the room left on screen: a long card scrolls instead of running off the top or bottom.
+          className="max-h-(--radix-popover-content-available-height) w-auto max-w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain p-0 data-[state=closed]:duration-100"
           onPointerEnter={() => clearTimeout(closeTimer.current)}
           onPointerLeave={(e) => {
             if (e.pointerType === "mouse" && !stateRef.current?.pinned) scheduleClose();

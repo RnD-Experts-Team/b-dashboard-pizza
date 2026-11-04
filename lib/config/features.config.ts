@@ -362,6 +362,30 @@ export const featuresConfig: FeaturesConfig = {
     envOverride: "NEXT_PUBLIC_FEATURE_MOBILE_BOTTOM_NAV",
     runtimeToggle: false,
   },
+
+  /**
+   * Report Builder
+   *
+   * Cross-system report builder on LC_PIZZA_DATA `/report-builder/*`: pick
+   * datasets from every service, columns, formula columns, filters, period and
+   * stores; save as a template; run it and view / download the result.
+   * Off until the Data endpoints are live.
+   *
+   * Affects:
+   * - /dashboard/report-builder pages (templates, builder, run view)
+   * - "Report Builder" item in the sidebar's Data Management group and its
+   *   bottom-nav mirror
+   */
+  reportBuilder: {
+    id: "reportBuilder",
+    name: "Report Builder navigation",
+    description:
+      "Shows Report Builder in the sidebar and bottom nav. The pages work by URL either way.",
+    category: "experimental",
+    enabled: false,
+    envOverride: "NEXT_PUBLIC_FEATURE_REPORT_BUILDER",
+    runtimeToggle: false,
+  },
 };
 
 /**

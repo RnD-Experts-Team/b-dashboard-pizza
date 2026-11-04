@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ChevronDown,
   CircleDashed,
+  Clock,
   ImageDown,
   Info,
   Loader2,
@@ -32,11 +33,11 @@ import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
 import { doughSauceService, DoughSauceError } from "@/lib/api/services/dough-sauce.service";
-import { useIngredients, useStoreDailyPlan } from "@/lib/hooks/use-dough-sauce";
+import { useIngredients, useStoreDailyPlan, useWeekdayHistory, type WeekdayHistory } from "@/lib/hooks/use-dough-sauce";
 import { gapOf, plannedQty, targetQty, variance } from "@/lib/dough-sauce/formulas";
 import { COUNT_DIVIDED_KEYS, MORNING_DIVIDED_KEYS } from "@/lib/dough-sauce/ingredient-map";
 import { indexCounts } from "@/lib/dough-sauce/week-cells";
-import { addDaysIso, todayIso, tomorrowIso } from "@/lib/dough-sauce/dates";
+import { addDaysIso, todayIso, tomorrowIso, yesterdayIso } from "@/lib/dough-sauce/dates";
 import {
   INGREDIENT_KEYS,
   type BaseIngredient,
@@ -114,7 +115,7 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
   const { selectedStore } = useSelectedStoreStore();
 
   const [store, setStore] = useState<StoreOption | null>(null);
-  const [date, setDate] = useState<string>(tomorrowIso());
+  const [date, setDate] = useState<string>(yesterdayIso());
   const [buffers, setBuffers] = useState<Buffers>(EMPTY_BUFFERS);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -146,6 +147,9 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
     seenRevision.current = debriefRevision;
     reload();
   }, [debriefRevision, editing, reload]);
+
+  // The 4 same weekdays before this day and their average — a reference only; the base itself is this day's own sales.
+  const { history } = useWeekdayHistory(store?.code ?? null, date);
 
   // Default to the globally-selected store, else the first accessible one.
   useEffect(() => {
@@ -225,6 +229,12 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
     !loading &&
     !saving;
 
+  // Since 2026-11-03 the base is the day's OWN sales, built the next day (10:30 / 13:30). Until then the server answers with
+  // null bases (days_found 0): that is "not built yet", never "sold 0", and nothing can be confirmed on it.
+  const nextDay = addDaysIso(date, 1);
+  const baseWaiting =
+    !!base.data && !base.error && (base.data.days_found === 0 || !INGREDIENT_KEYS.every((k) => Number.isFinite(baseByKey[k]?.base)));
+
   const onConfirm = async () => {
     if (!canConfirm) return;
     setSaving(true);
@@ -235,7 +245,7 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
         lines: INGREDIENT_KEYS.map((k) => ({
           ingredient_key: k,
           buffer_pct: Number(buffers[k]),
-          planned_qty: round4(plannedQty(baseByKey[k]!.base, Number(buffers[k]))),
+          planned_qty: round4(plannedQty(baseByKey[k]!.base!, Number(buffers[k]))),
         })),
       });
       toast.success(t("confirmed"));
@@ -274,6 +284,7 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
    */
   const today = todayIso();
   const tomorrow = tomorrowIso();
+  const yesterday = yesterdayIso();
   const prevDay = addDaysIso(date, -1);
   const shortage = useMemo<PrevRow[] | null>(() => {
     if (!counts.data) return null;
@@ -336,7 +347,16 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
   }
 
   const firstLoad = loading && !planData && !plan.error;
-  const relative = date === today ? t("relToday") : date === tomorrow ? t("relTomorrow") : date < today ? t("relPast") : null;
+  const relative =
+    date === today
+      ? t("relToday")
+      : date === yesterday
+        ? t("relYesterday")
+        : date === tomorrow
+          ? t("relTomorrow")
+          : date < today
+            ? t("relPast")
+            : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -347,12 +367,14 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
           <DatePicker value={date} onChange={(v) => v && setDate(v)} className="w-full sm:w-40" />
           <div className="flex gap-1 rounded-lg border bg-muted/40 p-1">
             {[
-              { iso: today, label: t("relToday") },
-              { iso: tomorrow, label: t("relTomorrow") },
+              { iso: yesterday, label: t("relYesterday"), hint: t("quickYesterdayHint") },
+              { iso: today, label: t("relToday"), hint: t("quickTodayHint") },
+              { iso: tomorrow, label: t("relTomorrow"), hint: t("quickTomorrowHint") },
             ].map((q) => (
               <button
                 key={q.iso}
                 type="button"
+                title={q.hint}
                 onClick={() => setDate(q.iso)}
                 className={cn(
                   "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
@@ -402,6 +424,15 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
             </Notice>
           )}
 
+          {/* The base is built the next day — say so before anyone reads a table full of dashes. */}
+          {!showFrozen && baseWaiting && (
+            <Notice tone="warn" icon={Clock}>
+              {date > today
+                ? t("baseNotReadyFuture", { date: day.long(date) })
+                : t("baseNotReady", { date: day.long(date), next: day.long(nextDay) })}
+            </Notice>
+          )}
+
           {/* ② The plan. The downloadable picture is a separate sheet (DailyPlanSheet), not this card. */}
           <Card className="overflow-hidden">
             <CardContent className="p-0">
@@ -410,12 +441,15 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
                 title={day.long(date)}
                 store={store}
                 status={
-                  <StatusPill
-                    confirmed={confirmed}
-                    editing={editing}
-                    by={confirmedBy}
-                    at={planData.confirmed_at ? dateTime(planData.confirmed_at) : null}
-                  />
+                  <div className="flex flex-col items-end gap-1.5">
+                    <StatusPill
+                      confirmed={confirmed}
+                      editing={editing}
+                      by={confirmedBy}
+                      at={planData.confirmed_at ? dateTime(planData.confirmed_at) : null}
+                    />
+                    {!showFrozen && base.data && !base.error && <BaseChip ready={!baseWaiting} next={day.short(nextDay)} />}
+                  </div>
                 }
               />
 
@@ -425,7 +459,9 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
                 baseByKey={baseByKey}
                 lines={planData.lines}
                 frozen={showFrozen}
-                sourceDates={base.data?.source_dates ?? []}
+                history={history}
+                waiting={baseWaiting}
+                nextDayLabel={day.long(nextDay)}
                 buffers={buffers}
                 onBuffer={(k, v) => setBuffers((s) => ({ ...s, [k]: v }))}
                 bufferErrors={bufferErrors}
@@ -437,8 +473,32 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
                 morningCount={base.data?.morning_count}
                 morningDateLabel={day.short(date)}
                 weekday={base.data?.weekday}
-                lookback={base.data?.lookback}
               />
+
+              {/* What the base IS, in plain words — it changed on 2026-11-03 and nobody should have to guess. One line stays
+                  visible; the timeline and the fine print open on demand. */}
+              {!showFrozen && base.data && (
+                <div className="space-y-1.5 border-t bg-muted/20 px-4 py-3 text-xs text-muted-foreground sm:px-5">
+                  <p className="flex items-start gap-1.5 text-foreground">
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>{t("explainBase", { date: day.long(date), next: day.long(nextDay) })}</span>
+                  </p>
+                  <details className="ps-5">
+                    <summary className="cursor-pointer select-none text-muted-foreground hover:text-foreground">
+                      {t("explainBaseMore")}
+                    </summary>
+                    <ol className="mt-1.5 list-decimal space-y-1 ps-4">
+                      <li>{t("explainStepSales", { date: day.long(date) })}</li>
+                      <li>{t("explainStepBuilt", { next: day.long(nextDay) })}</li>
+                      <li>{t("explainStepPlan")}</li>
+                    </ol>
+                    <ul className="mt-1.5 list-disc space-y-1 ps-4">
+                      <li>{t("explainCorrections")}</li>
+                      <li>{t("explainReference", { weekday: base.data.weekday })}</li>
+                    </ul>
+                  </details>
+                </div>
+              )}
 
               {/* How the check is made, in plain words — the morning count is new to people. One formula line stays
                   visible; the rest opens on demand so the card isn't a wall of text. */}
@@ -486,18 +546,10 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
                 <div className={PLAN_FOOT}>
                   <span className="inline-flex items-center gap-1.5">
                     <BarChart3 className="h-3.5 w-3.5" />
-                    {t("sourceSummary", {
-                      weekday: base.data.weekday,
-                      found: base.data.days_found,
-                      lookback: base.data.lookback,
-                    })}
+                    {history
+                      ? t("sourceSummary", { weekday: base.data.weekday, found: history.found, lookback: history.dates.length })
+                      : t("sourceSummaryNoHistory", { weekday: base.data.weekday })}
                   </span>
-                  {base.data.days_found < base.data.lookback && (
-                    <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      {t("fewerDays", { found: base.data.days_found, lookback: base.data.lookback })}
-                    </span>
-                  )}
                   {/* The daily columns only exist on an unconfirmed plan, and only a converted row has the dotted numbers. */}
                   {!showFrozen && ROW_ORDER.some((k) => displayDivisor(k, baseByKey[k]) > 1) && (
                     <span className="inline-flex items-center gap-1.5">
@@ -519,8 +571,14 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
               </span>
             )}
             {!canConfirmHere && <span className="me-auto text-xs text-muted-foreground">{t("viewOnly")}</span>}
-            {canConfirmHere && !showFrozen && !dirty && <span className="me-auto text-xs text-muted-foreground">{t("confirmHint")}</span>}
-            {canConfirmHere && !showFrozen && dirty && (
+            {canConfirmHere && !showFrozen && baseWaiting && (
+              <span className="me-auto inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock className="h-3.5 w-3.5 shrink-0" />
+                {t("confirmWaiting", { next: day.long(nextDay) })}
+              </span>
+            )}
+            {canConfirmHere && !showFrozen && !baseWaiting && !dirty && <span className="me-auto text-xs text-muted-foreground">{t("confirmHint")}</span>}
+            {canConfirmHere && !showFrozen && !baseWaiting && dirty && (
               <span className="me-auto inline-flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
                 <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                 {t("unsaved")}
@@ -668,6 +726,22 @@ interface PrevRow {
   variance: number | null;
 }
 
+/** Is this day's base built yet? Visible before anyone reads a table of numbers or dashes. */
+function BaseChip({ ready, next }: { ready: boolean; next: string }) {
+  const t = useTranslations("doughSauce.daily");
+  return ready ? (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+      <CheckCircle2 className="h-3.5 w-3.5" />
+      {t("baseReadyChip")}
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-amber-500/50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+      <Clock className="h-3.5 w-3.5" />
+      {t("baseNotReadyChip", { next })}
+    </span>
+  );
+}
+
 function StatusPill({
   confirmed,
   editing,
@@ -739,7 +813,9 @@ function PlanTable({
   baseByKey,
   lines,
   frozen,
-  sourceDates,
+  history,
+  waiting,
+  nextDayLabel,
   buffers,
   onBuffer,
   bufferErrors,
@@ -751,14 +827,18 @@ function PlanTable({
   morningCount,
   morningDateLabel,
   weekday,
-  lookback,
 }: {
   keys: IngredientKey[];
   labelOf: (k: IngredientKey) => string;
   baseByKey: Partial<Record<IngredientKey, BaseIngredient>>;
   lines: PlanLine[];
   frozen: boolean;
-  sourceDates: string[];
+  /** The 4 same weekdays before this day and their average — a reference; null until loaded or when it can't be read. */
+  history: WeekdayHistory | null;
+  /** The day's sales aren't built yet, so its base is empty. */
+  waiting: boolean;
+  /** The day the sales get built, already formatted — for the "—" tooltips. */
+  nextDayLabel: string;
   buffers: Buffers;
   onBuffer: (k: IngredientKey, v: string) => void;
   bufferErrors: Partial<Record<IngredientKey, string>>;
@@ -773,13 +853,14 @@ function PlanTable({
   morningCount?: Partial<Record<IngredientKey, number | null>>;
   morningDateLabel: string;
   weekday?: string;
-  lookback?: number;
 }) {
   const t = useTranslations("doughSauce.daily");
   const showCounted = prevRows != null;
   // The morning count rides along with the base call, so it shows even when the night counts couldn't load.
   const showMorning = morningCount != null;
+  const sourceDates = history?.dates ?? [];
   const showSources = !frozen && sourceDates.length > 0 && Object.keys(baseByKey).length > 0;
+  const notBuilt = waiting && !frozen ? t("notBuiltYet", { next: nextDayLabel }) : undefined;
   const showMakeUp = frozen && keys.some((k) => (makeUpByKey[k] ?? 0) > 0);
 
   return (
@@ -792,7 +873,7 @@ function PlanTable({
           </TableHead>
           {showSources && (
             <TableHead colSpan={sourceDates.length + 1} className={cn(GROUP, "border-s text-center")}>
-              {t("groupSources", { lookback: lookback ?? sourceDates.length, weekday: weekday ?? "" })}
+              {t("groupSources", { lookback: sourceDates.length, weekday: weekday ?? "" })}
             </TableHead>
           )}
           <TableHead colSpan={showMakeUp ? 5 : 3} className={cn(GROUP, "border-s text-center")}>
@@ -851,7 +932,7 @@ function PlanTable({
           const bufferError = bufferErrors[k];
           const planned = frozen
             ? line?.planned_qty ?? null
-            : base && Number.isFinite(base.base) && !bufferError
+            : base && typeof base.base === "number" && Number.isFinite(base.base) && !bufferError
               ? plannedQty(base.base, Number(buffer))
               : null;
           const baseValue = frozen ? line?.base_qty ?? null : base?.base ?? null;
@@ -944,7 +1025,7 @@ function PlanTable({
               {/* The source days — a day far out of line is how a manager spots bad data. */}
               {showSources &&
                 sourceDates.map((d, i) => {
-                  const v = base?.values?.[i];
+                  const v = history?.values[k]?.[i];
                   const shown = v == null ? "" : fmtQty(round2(v / divisor));
                   return (
                     <TableCell key={d} className={cn(NUM, "px-1.5 text-muted-foreground")}>
@@ -975,12 +1056,32 @@ function PlanTable({
                 })}
               {showSources && (
                 <TableCell className={NUM}>
-                  {base?.average != null ? fmtQty(round2(base.average / divisor)) : <MissingValue />}
+                  {history?.average[k] != null ? fmtQty(round2(history.average[k]! / divisor)) : <MissingValue />}
                 </TableCell>
               )}
 
               <TableCell className={NUM}>
-                {baseValue != null ? fmtQty(baseValue) : <MissingValue />}
+                {baseValue == null ? (
+                  <MissingValue reason={notBuilt} />
+                ) : !frozen && base && base.divisor > 1 && base.values?.[0] != null ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help underline decoration-muted-foreground/40 decoration-dotted underline-offset-4">
+                        {fmtQty(baseValue)}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {t("baseCellTitle", {
+                        raw: fmtQty(base.values[0]!),
+                        divisor: fmtQty(base.divisor),
+                        result: fmtQty(baseValue),
+                        unit: base.unit ?? "",
+                      })}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  fmtQty(baseValue)
+                )}
                 {/* A row whose daily cells stay raw still shows the step from AVERAGE to BASE. */}
                 {!frozen && base && base.divisor > 1 && divisor === 1 && (
                   <span className="ms-1 text-[10px] font-normal text-muted-foreground">{t("divisor", { divisor: base.divisor })}</span>
@@ -1000,6 +1101,7 @@ function PlanTable({
                       invalid={!!bufferError}
                       label={t("bufferFor", { ingredient: label })}
                       suffix="%"
+                      disabled={waiting}
                     />
                     {bufferError && buffer !== "" && <p className="mt-1 text-[10px] text-destructive">{bufferError}</p>}
                   </div>
@@ -1008,7 +1110,7 @@ function PlanTable({
 
               <TableCell className={cn(NUM, "bg-muted/20", !showMakeUp && "pe-4 sm:pe-5")}>
                 <span className="font-heading text-xl font-semibold leading-none">
-                  {planned != null ? fmtQty(planned) : <MissingValue />}
+                  {planned != null ? fmtQty(planned) : <MissingValue reason={notBuilt} />}
                 </span>
                 {baseValue != null && planned != null && bufferShown != null && (
                   <p className="mt-1 whitespace-nowrap text-[10px] font-normal text-muted-foreground">

@@ -9,6 +9,12 @@
       "autoPort": true
     },
     {
+      "name": "web-local-maintenance",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["../local-maintenance-harness/dashboard.mjs"],
+      "port": 3100
+    },
+    {
       "name": "calendar-template",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "5178", "--directory", "../calendar-template"],

@@ -70,10 +70,11 @@ export function useCalendarFormat() {
       longDate: (d: Date) => format(d, { weekday: "long", month: "long", day: "numeric", year: "numeric" }),
       shortDate: (d: Date) => format(d, { weekday: "short", month: "short", day: "numeric" }),
       countLabel: (n: number) => t("eventCount", { n }),
-      /** "All day", "Day 2/3" (multi-day, when a day is given) or "09:00 - 11:00". */
+      /** "All day", "Day 2/3" (multi-day, when a day is given), "09:00 - 11:00", or just "09:00" when no end is known (`openEnded`). */
       when: (ev: CalendarEvent, day?: Date) => {
         if (ev.allDay && day && isMultiDay(ev)) return t("dayOf", { i: dayIndex(ev, day), n: spanDays(ev) });
-        return ev.allDay ? t("allDay") : timeRange(ev.start, ev.end);
+        if (ev.allDay) return t("allDay");
+        return ev.openEnded ? time(ev.start) : timeRange(ev.start, ev.end);
       },
       /** Toolbar title: month + year (just the year in Year view). */
       titleLabel: (view: CalendarView, cursor: Date) =>

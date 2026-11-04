@@ -4,6 +4,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { dayKey, isSameDay, isSameMonth, isWeekend, monthGrid } from "@/lib/calendar/dates";
+import { groupAllDay } from "@/lib/calendar/grouping";
 import { byDay, lanes } from "@/lib/calendar/layout";
 import type { CalendarEvent } from "@/lib/calendar/types";
 import { useCalendarClock } from "../calendar-clock";
@@ -58,7 +59,12 @@ function WeekRow({
 }) {
   const f = useCalendarFormat();
   const now = new Date(useCalendarClock());
-  const lay = useMemo(() => lanes(days, events, maxLanes, true), [days, events, maxLanes]);
+  // Lanes draw the all-day kinds rolled up across stores (grouping.ts); the day counts below stay per event.
+  const laneEvents = useMemo(
+    () => [...groupAllDay(events.filter((e) => e.allDay)), ...events.filter((e) => !e.allDay)],
+    [events],
+  );
+  const lay = useMemo(() => lanes(days, laneEvents, maxLanes, true), [days, laneEvents, maxLanes]);
   const grouped = useMemo(() => byDay(events), [events]);
 
   return (

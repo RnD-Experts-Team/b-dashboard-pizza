@@ -5,7 +5,8 @@ import { doughSauceService, DoughSauceError } from "@/lib/api/services/dough-sau
 import { buildIngredientMap, type IngredientMap } from "@/lib/dough-sauce/ingredient-map";
 import { buildWeekCells, indexCounts, lookupDays, unplannedCountedDays, type WeekCells } from "@/lib/dough-sauce/week-cells";
 import { isPlanComplete, progress, rankBy, score, type ScoreBreakdown } from "@/lib/dough-sauce/formulas";
-import { addDaysIso, daysBetween, todayIso } from "@/lib/dough-sauce/dates";
+import { addDaysIso, daysBetween, sameWeekdayDates, todayIso } from "@/lib/dough-sauce/dates";
+import { INGREDIENT_KEYS, type IngredientKey } from "@/types/dough-sauce.types";
 import type {
   CountRow,
   CountsResponse,
@@ -156,6 +157,75 @@ export function useStoreDailyPlan(storeKey: string | null, date: string, map: In
   return { ...live, loading, reload, confirm };
 }
 
+/**
+ * The 4 same weekdays BEFORE `date` and the average of their sales — a reference to spot a day far out of line.
+ * Since the server made `base` the day's own sales it no longer sends these, so each earlier day is read as its own
+ * day (its `values[0]` is that day's sales in raw portions, `null` = no sales built). One batch call; if the route
+ * is missing or the entries carry no `values`, the same days are read one by one. A failure only hides the
+ * reference — the plan itself never waits for it.
+ */
+export interface WeekdayHistory {
+  dates: string[];
+  /** Raw portions per ingredient, positional against `dates`; null = no sales that day. */
+  values: Partial<Record<IngredientKey, (number | null)[]>>;
+  /** Mean of the days that have sales (raw portions); null when none do. */
+  average: Partial<Record<IngredientKey, number | null>>;
+  /** How many of the days have any sales. */
+  found: number;
+}
+
+const finiteOrNull = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+export function useWeekdayHistory(storeKey: string | null, date: string) {
+  const [state, setState] = useState<{ key: string; history: WeekdayHistory | null } | null>(null);
+  const key = storeKey ? `${storeKey}|${date}` : null;
+
+  useEffect(() => {
+    if (!storeKey) return;
+    const controller = new AbortController();
+    const dates = sameWeekdayDates(date);
+    const loadedKey = `${storeKey}|${date}`;
+
+    const rawOf = (list: { key: string; values?: (number | null)[] }[] | undefined, k: IngredientKey) =>
+      finiteOrNull(list?.find((i) => i.key === k)?.values?.[0]);
+
+    const viaBatch = async () => {
+      const res = await doughSauceService.getDailyPlansAll([storeKey], dates, {}, controller.signal);
+      const entries = dates.map((d) => res.stores?.[storeKey]?.[d]);
+      // An entry without `values` can't give raw portions — hand the job to the day-by-day read.
+      if (entries.some((e) => !e || (e.ingredients ?? []).some((i) => !Array.isArray(i.values)))) throw new Error("no values");
+      return entries.map((e) => e!.ingredients);
+    };
+    const viaDays = async () => {
+      const all = await Promise.allSettled(dates.map((d) => doughSauceService.getDailyPlanBase(storeKey, d, {}, controller.signal)));
+      return all.map((r) => (r.status === "fulfilled" ? r.value.ingredients : undefined));
+    };
+
+    viaBatch()
+      .catch(() => (controller.signal.aborted ? [] : viaDays()))
+      .then((perDay) => {
+        if (controller.signal.aborted) return;
+        const values: WeekdayHistory["values"] = {};
+        const average: WeekdayHistory["average"] = {};
+        let found = 0;
+        for (const k of INGREDIENT_KEYS) {
+          const list = dates.map((_, i) => rawOf(perDay[i], k));
+          values[k] = list;
+          const have = list.filter((v): v is number => v != null);
+          average[k] = have.length > 0 ? have.reduce((a, b) => a + b, 0) / have.length : null;
+          found = Math.max(found, have.length);
+        }
+        setState({ key: loadedKey, history: { dates, values, average, found } });
+      })
+      .catch(() => !controller.signal.aborted && setState({ key: loadedKey, history: null }));
+    return () => controller.abort();
+  }, [storeKey, date]);
+
+  // Another store/day's numbers are never shown under this one.
+  const live = state && state.key === key ? state.history : null;
+  return { history: live, loading: key != null && state?.key !== key };
+}
+
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  §8.2 Specialist — who hasn't confirmed                                    */
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -267,10 +337,10 @@ const MAX_BATCH_STORES = 60;
  * or the answer carried no usable base. Both forms of lookup (all stores, per day) go through here, so
  * they agree.
  */
-function basesOf(date: string, daysFound: number | undefined, ingredients: { key: string; base: number }[] | undefined) {
+function basesOf(date: string, daysFound: number | undefined, ingredients: { key: string; base: number | null }[] | undefined) {
   if (daysFound === 0) return null;
   const out = new Map<string, number>();
-  for (const i of ingredients ?? []) if (Number.isFinite(i.base)) out.set(`${date}|${i.key}`, i.base);
+  for (const i of ingredients ?? []) if (typeof i.base === "number" && Number.isFinite(i.base)) out.set(`${date}|${i.key}`, i.base);
   return out.size > 0 ? out : null;
 }
 

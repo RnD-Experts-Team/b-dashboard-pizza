@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CleaningError } from "@/lib/api/services/cleaning.service";
 import { employeeService } from "@/lib/api/services/employee.service";
-import { MultiSelect, type MultiSelectOption } from "@/components/daily-pay/multi-select";
+import { MultiSelect, type MultiSelectOption } from "@/components/shared/multi-select";
 import { MAX_PHOTOS, PhotoPicker } from "./photo-picker";
 import type { DueItem } from "@/types/cleaning.types";
 

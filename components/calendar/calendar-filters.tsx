@@ -6,12 +6,10 @@ import { ListFilter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { CALENDAR_CATEGORIES } from "@/lib/calendar/categories";
 import { CATEGORY_KEYS, type CategoryKey } from "@/lib/calendar/types";
 import { useCalendarStore } from "@/lib/store/calendar.store";
-import { useCalendarStoreRef } from "@/lib/hooks/use-calendar-events";
 import { EventDot } from "./event-parts";
 
 /** Which ends of a horizontal scroller have hidden content (RTL-safe). */
@@ -153,13 +151,12 @@ export function CategoryTabs({ counts, total }: { counts: Record<CategoryKey, nu
   );
 }
 
-/** Filter popover: combine several types, "Only" one, and pick the store scope. */
+/** Filter popover: combine several event types, or pick "Only" one. (Stores: `StorePicker`.) */
 export function FilterPopover({ counts }: { counts: Record<CategoryKey, number> }) {
   const t = useTranslations("calendar.filter");
   const tc = useTranslations("calendar.categories");
   const scopeId = useId();
-  const store = useCalendarStoreRef();
-  const { filters, scope, toggleCategory, onlyCategory, showAll, hideAll, setScope } = useCalendarStore();
+  const { filters, toggleCategory, onlyCategory, showAll, hideAll } = useCalendarStore();
   const all = filters.length === CATEGORY_KEYS.length;
 
   return (
@@ -218,23 +215,6 @@ export function FilterPopover({ counts }: { counts: Record<CategoryKey, number> 
             );
           })}
         </div>
-        {store && (
-          <div className="mt-2 border-t px-2 pt-2.5 pb-1">
-            <h3 className="pb-1.5 font-heading text-sm font-semibold">{t("scopeTitle")}</h3>
-            <div className="flex items-start justify-between gap-3">
-              <label htmlFor={`${scopeId}-scope`} className="min-w-0 cursor-pointer">
-                <span className="block truncate text-sm">{t("scopeStore", { store: store.name })}</span>
-                <span className="block text-xs text-muted-foreground">{t("scopeStoreHint")}</span>
-              </label>
-              <Switch
-                id={`${scopeId}-scope`}
-                checked={scope === "store"}
-                onCheckedChange={(v) => setScope(v ? "store" : "all")}
-                className="mt-0.5"
-              />
-            </div>
-          </div>
-        )}
       </PopoverContent>
     </Popover>
   );

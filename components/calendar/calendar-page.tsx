@@ -11,18 +11,27 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { dayKey, fromKey, isDayKey, rangeContains, sameRange, step, suggestedStart, viewRange } from "@/lib/calendar/dates";
-import { byDay, countByCategory, uniquePeople } from "@/lib/calendar/layout";
+import { isHeavyMonth } from "@/lib/calendar/feed-plan";
+import { parseGroupPeekId } from "@/lib/calendar/grouping";
+import { byDay, countByCategory } from "@/lib/calendar/layout";
 import { CALENDAR_VIEWS, type CalendarEvent, type CalendarView } from "@/lib/calendar/types";
 import { useCalendarStore } from "@/lib/store/calendar.store";
-import { useCalendarEvents, useCalendarMutations, useCalendarNow, useTodayEvents } from "@/lib/hooks/use-calendar-events";
+import {
+  useCalendarEvents,
+  useCalendarMutations,
+  useCalendarNow,
+  useCalendarStores,
+} from "@/lib/hooks/use-calendar-events";
 import { CalendarClockProvider } from "./calendar-clock";
 import { CategoryTabs, FilterPopover } from "./calendar-filters";
 import { CalendarToolbar } from "./calendar-toolbar";
 import { DeleteEventDialog } from "./delete-event-dialog";
 import { EventDialog, type EditorTarget } from "./event-dialog";
-import { AvatarStack } from "./event-parts";
+import { FeedNotice, ManyStoresNote } from "./feed-notice";
 import { CalendarPeekProvider, usePeek, type PeekTarget } from "./event-peek";
-import { DayPeekCard, EventPeekCard } from "./peek-cards";
+import { DayPeekCard, EventPeekCard, GroupPeekCard } from "./peek-cards";
+import { ShowStoreProvider } from "./store-label";
+import { StorePicker } from "./store-picker";
 import { useCalendarFormat } from "./use-calendar-format";
 import { useIsCompact } from "./use-compact";
 import { useFitHeight } from "./use-fit-height";
@@ -32,7 +41,8 @@ import { WeekView } from "./views/week-view";
 import { YearView } from "./views/year-view";
 import type { GridScroll } from "./views/time-grid";
 
-const DEFAULT_VIEW: CalendarView = "month";
+/** What opens when the URL has no `?view=`: today, not the month. */
+const DEFAULT_VIEW: CalendarView = "day";
 type Anim = "fade" | "next" | "prev" | "none";
 
 /** Search: title, store, people and category name, case-insensitive. */
@@ -88,7 +98,8 @@ function CalendarError({ onRetry }: { onRetry: () => void }) {
  * The Calendar page: birthdays, cleaning tasks, shifts, anniversaries,
  * maintenance and meetings in Day / Week / Month / Year views.
  *
- * `?view=` and `?date=` live in the URL (defaults dropped), so the topbar's
+ * `?view=` and `?date=` live in the URL (defaults dropped: no `?view=` is the
+ * Day view, no `?date=` is today), so the topbar's
  * Today panel deep-links straight to a day and Back returns from a drill-down.
  * Category filters + store scope persist in `useCalendarStore`; search is
  * page-local. Data comes through `useCalendarEvents` → `calendarService`.
@@ -182,9 +193,11 @@ function CalendarPageInner({ now }: { now: number }) {
 
   /* ── Data ── */
   const range = useMemo(() => viewRange(view, cursor), [view, cursor]);
-  const { events, loading, showSkeleton, error, retry } = useCalendarEvents(range);
-  const { events: todayEvents } = useTodayEvents();
+  const { events, loading, showSkeleton, error, retry, failed, truncated, notice } = useCalendarEvents(range);
   const filters = useCalendarStore((s) => s.filters);
+  // Several stores on screen: chips lead with their store name (store-label.tsx).
+  const storeCount = useCalendarStores().length;
+  const showStore = storeCount > 1;
 
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
@@ -237,7 +250,7 @@ function CalendarPageInner({ now }: { now: number }) {
 
   /** After saving, make sure the event is on screen. */
   const revealSaved = useCallback(
-    (ev: CalendarEvent) => {
+    (ev: { start: Date }) => {
       if (!rangeContains(range, ev.start)) moveTo(dayKey(ev.start), "auto");
     },
     [range, moveTo],
@@ -245,6 +258,19 @@ function CalendarPageInner({ now }: { now: number }) {
 
   const index = useMemo(() => new Map(viewEvents.map((e) => [e.id, e])), [viewEvents]);
   const grouped = useMemo(() => byDay(viewEvents), [viewEvents]);
+  // My reminders by the event they were made from, so that event's card can say "Reminder set for …".
+  // From every loaded event (not the filtered ones): hiding the reminders tab shouldn't hide the proof.
+  const remindersByTarget = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    for (const e of events) {
+      const target = e.feedType === "reminder" ? e.extra?.target_ref : null;
+      if (typeof target !== "string") continue;
+      const list = map.get(target);
+      if (list) list.push(e);
+      else map.set(target, [e]);
+    }
+    return map;
+  }, [events]);
   const renderPeek = useCallback(
     (target: PeekTarget, close: () => void) => {
       const go = (key: string) => {
@@ -257,6 +283,8 @@ function CalendarPageInner({ now }: { now: number }) {
           <EventPeekCard
             ev={ev}
             onOpenDay={go}
+            onDone={close}
+            reminders={remindersByTarget.get(ev.id)}
             onEdit={(e) => {
               close();
               setEditor({ kind: "edit", event: e });
@@ -268,10 +296,16 @@ function CalendarPageInner({ now }: { now: number }) {
           />
         ) : null;
       }
+      if (target.type === "group") {
+        const members = parseGroupPeekId(target.id).flatMap((id) => index.get(id) ?? []);
+        return members.length ? (
+          <GroupPeekCard events={members} onOpenDay={go} onDone={close} remindersByTarget={remindersByTarget} />
+        ) : null;
+      }
       const list = grouped.get(target.id) ?? [];
       return list.length ? <DayPeekCard date={fromKey(target.id)} events={list} onOpenDay={go} /> : null;
     },
-    [index, grouped, openDay],
+    [index, grouped, openDay, remindersByTarget],
   );
 
   /* ── Keyboard: D W M Y · T · ← → · / ── */
@@ -351,22 +385,22 @@ function CalendarPageInner({ now }: { now: number }) {
     );
   else body = <YearView cursor={cursor} events={viewEvents} onOpenDay={openDay} onOpenMonth={openMonth} />;
 
-  const emptyNote = !loading && !error && !viewEvents.length ? (query ? t("search.noMatches", { q: search.trim() }) : t("emptyRange")) : null;
-  const people = useMemo(() => uniquePeople(todayEvents), [todayEvents]);
+  // "Nothing scheduled" would be a lie when the feeds were skipped (the year view): the notice says why.
+  const emptyNote =
+    !loading && !error && !viewEvents.length && !notice
+      ? query
+        ? t("search.noMatches", { q: search.trim() })
+        : t("emptyRange")
+      : null;
 
   return (
+    <ShowStoreProvider value={showStore}>
     <CalendarPeekProvider render={renderPeek}>
       <PeekAutoClose signal={`${rangeSignal}|${cursorKey}`} />
       {/* sm+: exactly the height the shell leaves (see useFitHeight) — the page
           never scrolls, only the calendar body does. Phones flow naturally. */}
       <div ref={pageRef} className="flex flex-col gap-5 pb-4 sm:pb-0">
         <PageHeader title={t("title")} description={t("description")}>
-          {people.length > 0 && (
-            <div className="hidden items-center gap-2 sm:flex" title={t("peopleToday")}>
-              <span className="hidden whitespace-nowrap text-xs text-muted-foreground lg:inline">{t("peopleToday")}</span>
-              <AvatarStack people={people} max={4} ring="ring-background" />
-            </div>
-          )}
           <Button size="sm" onClick={() => openCreate()} title={`${t("newEvent")} (N)`}>
             <Plus className="size-4" />
             {t("newEvent")}
@@ -418,6 +452,7 @@ function CalendarPageInner({ now }: { now: number }) {
                 </kbd>
               )}
             </label>
+            <StorePicker />
             <FilterPopover counts={counts} />
           </div>
         </div>
@@ -436,6 +471,8 @@ function CalendarPageInner({ now }: { now: number }) {
             onView={setView}
             onPick={(k) => moveTo(k, "keep")}
           />
+          {!error && <FeedNotice failed={failed} truncated={truncated} notice={notice} onRetry={retry} />}
+          {!error && isHeavyMonth(view, storeCount) && <ManyStoresNote count={storeCount} onWeek={() => setView("week")} />}
           <div className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
             <motion.div
               key={bodyKey}
@@ -467,5 +504,6 @@ function CalendarPageInner({ now }: { now: number }) {
         onConfirm={confirmDelete}
       />
     </CalendarPeekProvider>
+    </ShowStoreProvider>
   );
 }

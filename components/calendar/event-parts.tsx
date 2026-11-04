@@ -2,14 +2,16 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { CalendarX2, Check, ChevronLeft, ChevronRight, CircleDashed, TriangleAlert } from "lucide-react";
+import { Ban, CalendarX2, Check, ChevronLeft, ChevronRight, CircleDashed, TriangleAlert, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { categoryOf } from "@/lib/calendar/categories";
+import { groupPeekId, groupStats } from "@/lib/calendar/grouping";
 import { dotCategories, isMultiDay, isPast, type LaneItem, type LaneMore } from "@/lib/calendar/layout";
-import type { CalendarEvent, CategoryKey, CleaningStatus } from "@/lib/calendar/types";
+import type { CalendarEvent, CategoryKey, EventStatus } from "@/lib/calendar/types";
 import { useCalendarClock } from "./calendar-clock";
 import { usePeek, type PeekSide } from "./event-peek";
+import { StoreLabel } from "./store-label";
 import { useCalendarFormat } from "./use-calendar-format";
 
 /** Focus ring + the "this anchor's peek is open" tint, shared by every event button. */
@@ -39,23 +41,42 @@ export function DayDots({ events, className }: { events: readonly CalendarEvent[
   );
 }
 
-export function StatusBadge({ status }: { status?: CleaningStatus }) {
-  const t = useTranslations("calendar.status");
-  if (!status) return null;
-  // Only "overdue" earns colour (it needs action); done/pending stay neutral.
-  const map = {
-    done: { cls: "bg-muted text-foreground", Icon: Check },
-    overdue: { cls: "bg-destructive/10 text-destructive dark:bg-destructive/20", Icon: TriangleAlert },
-    pending: { cls: "bg-muted text-muted-foreground", Icon: CircleDashed },
-  } as const;
-  const { cls, Icon } = map[status];
+/** A small pulsing dot: "happening now" (same look as the Today panel's live hero). */
+function LiveDot() {
   return (
-    <Badge variant="outline" className={cn("gap-1 border-transparent text-[11px]", cls)}>
-      <Icon className="size-3" />
+    <span className="relative flex size-2">
+      <span className="absolute inline-flex size-full animate-ping rounded-full bg-foreground/40 opacity-60 motion-reduce:animate-none" />
+      <span className="relative inline-flex size-2 rounded-full bg-foreground/70" />
+    </span>
+  );
+}
+
+const RED = "bg-destructive/10 text-destructive dark:bg-destructive/20";
+
+export function StatusBadge({ status }: { status?: EventStatus }) {
+  const t = useTranslations("calendar.status");
+  // Only overdue / missed earn colour (they need action); everything else stays
+  // neutral. "scheduled" and "info" are the normal state — no badge at all.
+  const map: Partial<Record<EventStatus, { cls: string; icon: ReactNode }>> = {
+    done: { cls: "bg-muted text-foreground", icon: <Check className="size-3" /> },
+    pending: { cls: "bg-muted text-muted-foreground", icon: <CircleDashed className="size-3" /> },
+    in_progress: { cls: "bg-muted text-foreground", icon: <LiveDot /> },
+    overdue: { cls: RED, icon: <TriangleAlert className="size-3" /> },
+    missed: { cls: RED, icon: <Ban className="size-3" /> },
+    cancelled: { cls: "bg-muted text-muted-foreground", icon: <X className="size-3" /> },
+  };
+  const entry = status ? map[status] : undefined;
+  if (!status || !entry) return null;
+  return (
+    <Badge variant="outline" className={cn("gap-1 border-transparent text-[11px]", entry.cls)}>
+      {entry.icon}
       {t(status)}
     </Badge>
   );
 }
+
+/** Cancelled events stay visible, struck through and muted. */
+const struck = (ev: CalendarEvent) => ev.status === "cancelled" && "text-muted-foreground line-through";
 
 function initials(name: string) {
   return name
@@ -157,7 +178,8 @@ export function EventPill({ ev }: { ev: CalendarEvent }) {
       )}
     >
       <EventDot category={ev.category} />
-      <span dir="auto" className="min-w-0 flex-1 truncate text-start font-medium">
+      <StoreLabel ev={ev} />
+      <span dir="auto" className={cn("min-w-0 flex-1 truncate text-start font-medium", struck(ev))}>
         {f.title(ev)}
       </span>
       <span className="hidden shrink-0 tabular-nums text-muted-foreground @[9rem]:inline">
@@ -176,6 +198,7 @@ export function EventBar({ item, day }: { item: LaneItem; day?: Date }) {
   const f = useCalendarFormat();
   const { peekProps } = usePeek();
   const { ev, before, after } = item;
+  if (ev.members) return <GroupBar item={item} />;
   if (!ev.allDay) return <EventPill ev={ev} />;
   const radius = before && after ? "" : before ? "rounded-e-sm" : after ? "rounded-s-sm" : "rounded-sm";
   return (
@@ -194,7 +217,8 @@ export function EventBar({ item, day }: { item: LaneItem; day?: Date }) {
       ) : (
         <EventDot category={ev.category} />
       )}
-      <span dir="auto" className="min-w-0 truncate text-start">
+      <StoreLabel ev={ev} />
+      <span dir="auto" className={cn("min-w-0 truncate text-start", struck(ev))}>
         {f.title(ev)}
       </span>
       {day && isMultiDay(ev) && (
@@ -207,13 +231,72 @@ export function EventBar({ item, day }: { item: LaneItem; day?: Date }) {
   );
 }
 
-export function MoreButton({ more }: { more: LaneMore }) {
+/**
+ * One chip for the same kind of event in several stores (`grouping.ts`):
+ * "Cleaning · 39 stores", with a red count when some of them need attention.
+ * Clicking it lists the stores in a peek card.
+ */
+function GroupBar({ item }: { item: LaneItem }) {
+  const t = useTranslations("calendar");
+  const { peekProps } = usePeek();
+  const { ev, before, after } = item;
+  const members = ev.members ?? [];
+  const { stores, action } = groupStats(members);
+  const label = ev.typeLabel ?? t(`categories.${ev.category}`);
+  const radius = before && after ? "" : before ? "rounded-e-sm" : after ? "rounded-s-sm" : "rounded-sm";
+  return (
+    <button
+      type="button"
+      {...peekProps({ type: "group", id: groupPeekId(members) })}
+      className={cn(
+        "flex h-5 w-full min-w-0 items-center gap-1.5 bg-muted px-1.5 text-start text-[11px] font-medium leading-none text-foreground transition-colors duration-150 hover:bg-accent",
+        EVENT_FOCUS,
+        "data-[peek-open=true]:bg-accent",
+        radius,
+      )}
+    >
+      {before ? (
+        <ChevronLeft className="size-3 shrink-0 opacity-50 rtl:rotate-180" />
+      ) : (
+        <EventDot category={ev.category} />
+      )}
+      <span dir="auto" className="min-w-0 truncate text-start">
+        {label}
+      </span>
+      {/* The cell is the @container: "38 stores" needs ~9rem, else just the number; the label gives way first. */}
+      <span className="shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">
+        <span aria-hidden className="@[9rem]:hidden">
+          {stores}
+        </span>
+        <span className="hidden @[9rem]:inline">{t("group.stores", { n: stores })}</span>
+        <span className="sr-only @[9rem]:hidden">{t("group.stores", { n: stores })}</span>
+      </span>
+      {action > 0 && (
+        <span
+          title={t("group.needsAction", { n: action })}
+          className="ms-auto inline-flex shrink-0 items-center gap-0.5 rounded-sm bg-destructive/10 px-1 py-0.5 tabular-nums text-destructive dark:bg-destructive/20"
+        >
+          <TriangleAlert className="hidden size-2.5 @[7rem]:block" aria-hidden />
+          {action}
+          <span className="sr-only">{t("group.needsAction", { n: action })}</span>
+        </span>
+      )}
+      {after && <ChevronRight className={cn("size-3 shrink-0 opacity-50 rtl:rotate-180", action === 0 && "ms-auto")} />}
+    </button>
+  );
+}
+
+/**
+ * "+N more". By default it peeks at the day's full list; with `onExpand` it
+ * opens the row it sits in instead (the all-day row grows to show everything).
+ */
+export function MoreButton({ more, onExpand }: { more: LaneMore; onExpand?: () => void }) {
   const t = useTranslations("calendar");
   const { peekProps } = usePeek();
   return (
     <button
       type="button"
-      {...peekProps({ type: "day", id: more.key })}
+      {...(onExpand ? { onClick: onExpand } : peekProps({ type: "day", id: more.key }))}
       className={cn(
         "flex h-5 w-full items-center rounded-sm px-1.5 text-start text-[11px] font-medium text-muted-foreground transition-colors duration-150 hover:bg-accent/60 hover:text-foreground",
         EVENT_FOCUS,
@@ -270,14 +353,15 @@ export function AgendaRow({
       <span className="min-w-0 border-s ps-3">
         <span className="flex min-w-0 items-center gap-2">
           <EventDot category={ev.category} />
-          <span dir="auto" className="truncate text-start text-sm font-medium leading-snug">
+          <span dir="auto" className={cn("truncate text-start text-sm font-medium leading-snug", struck(ev))}>
             {f.title(ev)}
           </span>
         </span>
         <span className="mt-0.5 flex min-w-0 items-center gap-1.5 ps-3.5 text-xs text-muted-foreground">
           <cat.icon className="size-3 shrink-0" />
           <span className="truncate">
-            {ev.typeLabel ?? t(ev.category)} · {ev.store.name}
+            {ev.typeLabel ?? t(ev.category)}
+            {ev.store.name && ` · ${ev.store.name}`}
           </span>
         </span>
         {ev.status && !compact && (

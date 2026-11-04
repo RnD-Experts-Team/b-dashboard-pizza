@@ -151,8 +151,13 @@ export interface BaseIngredient {
   divisor: number;
   /** Positional against `source_dates`; a day with no sales is null, not 0. */
   values: (number | null)[];
+  /** Since 2026-11-03 `base` is the sales of the day ITSELF, so this is that one number — not a 4-week average. */
   average: number | null;
-  base: number;
+  /**
+   * That day's own sales ÷ divisor. `null` until the data project has built the day (the next day, 10:30 / 13:30) —
+   * "not built yet" is not "sold 0", so it must never be read as 0.
+   */
+  base: number | null;
 }
 
 export interface UnmappedItem {
@@ -188,7 +193,7 @@ export interface DailyPlanBase {
 export interface DailyPlanEntry {
   date?: string;
   days_found?: number;
-  ingredients?: Pick<BaseIngredient, "key" | "base">[];
+  ingredients?: (Pick<BaseIngredient, "key" | "base"> & Partial<Pick<BaseIngredient, "values" | "divisor">>)[];
   /** The first-shift morning count of this day (see `DailyPlanBase.morning_count`); null = no answer. */
   morning_count?: Partial<Record<IngredientKey, number | null>>;
 }

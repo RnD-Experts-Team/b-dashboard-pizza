@@ -60,9 +60,16 @@ export const metadata: Metadata = {
   description: "Enterprise-grade dashboard foundation",
 };
 
+// No pinch-zoom: the app is a fixed frame (sidebar, top bar, floating buttons) laid out
+// for the screen's CSS width. Pinch-zoom only magnifies that frame without re-laying it
+// out, so the shell shrinks to a corner or its fixed buttons leave the screen. Android
+// Chrome honours maximumScale/userScalable; iOS keeps pinch but stops zooming into
+// fields; globals.css adds touch-action for browsers that ignore the meta.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
 };
 

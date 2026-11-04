@@ -24,11 +24,18 @@ import { CALENDAR_CATEGORIES } from "@/lib/calendar/categories";
 import { DAY, MINUTE, addDays, dayKey, fromKey, isDayKey } from "@/lib/calendar/dates";
 import { lastDay } from "@/lib/calendar/layout";
 import type { CalendarEvent, CalendarEventInput, CategoryKey } from "@/lib/calendar/types";
-import { useCalendarMutations, useCalendarStoreRef } from "@/lib/hooks/use-calendar-events";
+import { useCalendarMutations, useCalendarWriteStore } from "@/lib/hooks/use-calendar-events";
+import { CALENDAR_MOCK } from "@/lib/api/services/calendar.service";
 import { EventDot } from "./event-parts";
+import { NewItemForm } from "./new-item-form";
+import { StepLabel } from "./step-label";
 import { useCalendarFormat } from "./use-calendar-format";
 
-/** What opens the editor: a new event (with a suggested start) or an existing one. */
+/**
+ * What opens the editor: a new item (with a suggested start) or an existing
+ * event. New items (event, task, reminder) are saved in Toolbox; only the
+ * events made before that, still kept on this device, open for editing.
+ */
 export type EditorTarget =
   | { kind: "create"; start: Date; allDay?: boolean }
   | { kind: "edit"; event: CalendarEvent };
@@ -109,8 +116,8 @@ export function EventDialog({
 }: {
   target: EditorTarget | null;
   onOpenChange: (open: boolean) => void;
-  /** After a successful create/update (e.g. to reveal the event's day). */
-  onSaved: (ev: CalendarEvent) => void;
+  /** After a successful create/update (e.g. to reveal the day it landed on). */
+  onSaved: (landed: { start: Date }) => void;
   /**
    * Edit mode only: ASK to delete. The editor stays open underneath the
    * confirmation, so Cancel returns to the form; the page closes the editor
@@ -122,19 +129,31 @@ export function EventDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-3xl">
-        {target && (
-          <EventForm
-            // Fresh form state per target.
-            key={target.kind === "edit" ? target.event.id : `new-${+target.start}`}
-            target={target}
-            onCancel={() => onOpenChange(false)}
-            onSaved={(ev) => {
-              onOpenChange(false);
-              onSaved(ev);
-            }}
-            onDelete={onDelete}
-          />
-        )}
+        {target &&
+          (target.kind === "create" && !CALENDAR_MOCK ? (
+            <NewItemForm
+              key={`new-${+target.start}`}
+              start={target.start}
+              allDay={target.allDay}
+              onCancel={() => onOpenChange(false)}
+              onSaved={(landed) => {
+                onOpenChange(false);
+                onSaved(landed);
+              }}
+            />
+          ) : (
+            <EventForm
+              // Fresh form state per target.
+              key={target.kind === "edit" ? target.event.id : `new-${+target.start}`}
+              target={target}
+              onCancel={() => onOpenChange(false)}
+              onSaved={(ev) => {
+                onOpenChange(false);
+                onSaved(ev);
+              }}
+              onDelete={onDelete}
+            />
+          ))}
       </DialogContent>
     </Dialog>
   );
@@ -155,7 +174,7 @@ function EventForm({
   const tc = useTranslations("calendar");
   const f = useCalendarFormat();
   const ids = useId();
-  const store = useCalendarStoreRef();
+  const store = useCalendarWriteStore();
   const { create, update } = useCalendarMutations();
   const editing = target.kind === "edit" ? target.event : null;
 
@@ -417,14 +436,3 @@ function EventForm({
   );
 }
 
-function StepLabel({ n, label, optional }: { n: number; label: string; optional?: string }) {
-  return (
-    <h3 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-      <span className="grid size-5 place-items-center rounded-full bg-muted text-[10px] tabular-nums text-foreground">
-        {n}
-      </span>
-      {label}
-      {optional && <span className="font-normal normal-case tracking-normal">({optional})</span>}
-    </h3>
-  );
-}

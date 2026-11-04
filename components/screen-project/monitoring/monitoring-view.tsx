@@ -6,7 +6,7 @@ import { Activity, RefreshCw, ShieldOff, Users } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MultiSelect } from "@/components/daily-pay/multi-select";
+import { MultiSelect } from "@/components/shared/multi-select";
 import { AnalyticsControls } from "@/components/maintenance-tickets/analytics/analytics-controls";
 import { SectionError } from "@/components/maintenance-tickets/analytics/analytics-sections";
 import type { StoreOption } from "@/components/business-reports/store-multi-select";

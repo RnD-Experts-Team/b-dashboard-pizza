@@ -3,15 +3,16 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { formatTimestamp } from "@/lib/utils/date-display";
+import { useTranslations } from "next-intl";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import {
   maintenanceTicketsService,
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
-import type { Ticket, CatalogIssue, CatalogTechnician } from "@/types/maintenance-tickets.types";
+import type { Ticket, CatalogIssue } from "@/types/maintenance-tickets.types";
 import { CreateTicketDialog } from "@/components/maintenance-tickets/create-ticket-dialog";
-import { TicketDetailSheet } from "@/components/maintenance-tickets/ticket-detail-sheet";
+import { TicketMiniList } from "@/components/maintenance-tickets/ticket-mini-list";
+import { TicketPeekSheet } from "@/components/maintenance-tickets/ticket-peek-sheet";
 import {
   Card,
   CardContent,
@@ -19,18 +20,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 import {
   AlertCircle,
   ClipboardList,
@@ -40,32 +31,6 @@ import {
   RefreshCw,
   Ticket as TicketIcon,
 } from "lucide-react";
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  Status badge                                                            */
-/* ────────────────────────────────────────────────────────────────────────── */
-
-const STATUS_STYLES: Record<string, string> = {
-  open:        "bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/30",
-  in_progress: "bg-yellow-100 text-yellow-800 hover:bg-yellow-100 dark:bg-yellow-900/30 dark:text-yellow-400 dark:hover:bg-yellow-900/30",
-  waiting:     "bg-purple-100 text-purple-800 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400 dark:hover:bg-purple-900/30",
-  complete:    "bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/30",
-  deferred:    "bg-orange-100 text-orange-800 hover:bg-orange-100 dark:bg-orange-900/30 dark:text-orange-400 dark:hover:bg-orange-900/30",
-  cancelled:   "bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/30",
-};
-
-function StatusBadge({ label, value }: { label: string; value: string }) {
-  return (
-    <Badge
-      className={cn(
-        "text-[9px] py-0 px-1.5 font-medium whitespace-nowrap",
-        STATUS_STYLES[value] ?? "bg-muted text-muted-foreground hover:bg-muted"
-      )}
-    >
-      {label}
-    </Badge>
-  );
-}
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Skeleton                                                                */
@@ -113,6 +78,7 @@ function TicketsSkeleton() {
 export function RecentMaintenanceTable() {
   const params = useParams();
   const locale = (params?.locale as string) || "en";
+  const t = useTranslations("maintenanceSystem");
   const { selectedStore } = useSelectedStoreStore();
   const storeId = selectedStore?.storeId ?? null;
 
@@ -124,10 +90,7 @@ export function RecentMaintenanceTable() {
   const abortRef = useRef<AbortController | null>(null);
 
   // ── Detail sheet ─────────────────────────────────────────────────────
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
-  const [technicians, setTechnicians] = useState<CatalogTechnician[]>([]);
-  const techLoadedRef = useRef(false);
+  const [peekTicket, setPeekTicket] = useState<Ticket | null>(null);
 
   // ── Create dialog ────────────────────────────────────────────────────
   const [createOpen, setCreateOpen] = useState(false);
@@ -155,12 +118,12 @@ export function RecentMaintenanceTable() {
     } catch (err) {
       if (ctrl.signal.aborted) return;
       setError(
-        err instanceof MaintenanceTicketsError ? err.message : "Failed to load tickets."
+        err instanceof MaintenanceTicketsError ? err.message : t("common.loadError")
       );
     } finally {
       if (!ctrl.signal.aborted) setIsLoading(false);
     }
-  }, [storeId]);
+  }, [storeId, t]);
 
   useEffect(() => {
     fetchTickets();
@@ -168,19 +131,8 @@ export function RecentMaintenanceTable() {
   }, [fetchTickets]);
 
   // ── Open detail sheet ────────────────────────────────────────────────
-  async function handleRowClick(ticket: Ticket) {
-    setSelectedTicketId(ticket.id);
-    setSheetOpen(true);
-    // Lazy-load technicians on first open
-    if (!techLoadedRef.current) {
-      techLoadedRef.current = true;
-      try {
-        const techs = await maintenanceTicketsService.getCatalogTechnicians();
-        setTechnicians(techs);
-      } catch {
-        // Sheet works fine without technicians for read-only viewing
-      }
-    }
+  function handleRowClick(ticket: Ticket) {
+    setPeekTicket(ticket);
   }
 
   // ── Open create dialog ───────────────────────────────────────────────
@@ -212,7 +164,7 @@ export function RecentMaintenanceTable() {
         <CardHeader className="pb-1 px-3">
           <CardTitle className="flex items-center gap-1 text-[11px]">
             <TicketIcon className="h-3 w-3" />
-            Recent Tickets
+            {t("tickets.card.title")}
           </CardTitle>
         </CardHeader>
         <CardContent className="px-3">
@@ -220,8 +172,8 @@ export function RecentMaintenanceTable() {
             <AlertCircle className="h-6 w-6 text-muted-foreground" />
             <p className="text-xs text-muted-foreground">{error}</p>
             <Button variant="outline" size="sm" onClick={fetchTickets}>
-              <RefreshCw className="h-3.5 w-3.5 me-1.5" />
-              Retry
+              <RefreshCw className="h-3.5 w-3.5 me-1.5" aria-hidden="true" />
+              {t("common.retry")}
             </Button>
           </div>
         </CardContent>
@@ -238,7 +190,7 @@ export function RecentMaintenanceTable() {
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="flex items-center gap-1 text-[11px]">
                 <TicketIcon className="h-3 w-3" />
-                Recent Tickets
+                {t("tickets.card.title")}
               </CardTitle>
               <Button
                 size="sm"
@@ -248,14 +200,14 @@ export function RecentMaintenanceTable() {
                 disabled={catalogLoading}
               >
                 {catalogLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-                New
+                {t("tickets.card.new")}
               </Button>
             </div>
           </CardHeader>
           <CardContent className="px-3">
             <div className="flex flex-col items-center gap-1.5 py-4 text-center">
               <ClipboardList className="h-6 w-6 text-muted-foreground/40" />
-              <p className="text-xs text-muted-foreground">No tickets yet.</p>
+              <p className="text-xs text-muted-foreground">{t("tickets.card.empty")}</p>
             </div>
           </CardContent>
         </Card>
@@ -279,10 +231,10 @@ export function RecentMaintenanceTable() {
             <div className="min-w-0">
               <CardTitle className="flex items-center gap-1 text-[11px]">
                 <TicketIcon className="h-3 w-3 shrink-0" />
-                Recent Tickets
+                {t("tickets.card.title")}
               </CardTitle>
               <CardDescription className="text-[9px] mt-0.5">
-                {tickets.length}{total != null ? ` of ${total}` : ""} tickets
+                {total != null ? t("tickets.card.countOf", { shown: tickets.length, total }) : t("tickets.card.count", { count: tickets.length })}
               </CardDescription>
             </div>
 
@@ -296,7 +248,7 @@ export function RecentMaintenanceTable() {
                 className="h-6 w-6"
                 onClick={fetchTickets}
                 disabled={isLoading}
-                aria-label="Refresh"
+                aria-label={t("common.refresh")}
               >
                 <RefreshCw className="h-3 w-3" />
               </Button>
@@ -306,19 +258,19 @@ export function RecentMaintenanceTable() {
                 className="h-6 text-[10px] gap-0.5 px-2"
                 onClick={handleOpenCreate}
                 disabled={catalogLoading}
-                aria-label="Create ticket"
+                aria-label={t("tickets.newTicket")}
               >
                 {catalogLoading
                   ? <Loader2 className="h-3 w-3 animate-spin" />
                   : <Plus className="h-3 w-3" />}
-                New
+                {t("tickets.card.new")}
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 className="h-6 px-1.5"
                 asChild
-                aria-label="View all tickets"
+                aria-label={t("tickets.card.openAll")}
               >
                 <Link href={`/${locale}/dashboard/maintenance-tickets`}>
                   <ExternalLink className="h-3 w-3" />
@@ -329,46 +281,8 @@ export function RecentMaintenanceTable() {
         </CardHeader>
 
         <CardContent className="px-0 pb-0">
-          {/* overflow-y scroll, no x overflow */}
-          <div className="overflow-x-hidden overflow-y-auto max-h-[140px]">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="h-7 px-3 text-[10px] w-10">#</TableHead>
-                  <TableHead className="h-7 px-3 text-[10px]">Status</TableHead>
-                  <TableHead className="h-7 px-3 text-[10px] text-center w-16">Issues</TableHead>
-                  <TableHead className="h-7 px-3 text-[10px] text-right">Created</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tickets.map((ticket) => (
-                  <TableRow
-                    key={ticket.id}
-                    className={cn(
-                      "cursor-pointer",
-                      isLoading && "opacity-60 pointer-events-none"
-                    )}
-                    onClick={() => handleRowClick(ticket)}
-                  >
-                    <TableCell className="py-1.5 px-3 font-mono text-[11px] text-muted-foreground">
-                      {ticket.id}
-                    </TableCell>
-                    <TableCell className="py-1.5 px-3">
-                      <StatusBadge label={ticket.status.label} value={ticket.status.value} />
-                    </TableCell>
-                    <TableCell className="py-1.5 px-3 text-center">
-                      <span className="inline-flex items-center justify-center gap-0.5 text-[11px] text-muted-foreground">
-                        <ClipboardList className="h-3 w-3" />
-                        {ticket.issueCount}
-                      </span>
-                    </TableCell>
-                    <TableCell className="py-1.5 px-3 text-[11px] text-muted-foreground text-right whitespace-nowrap">
-                      {formatTimestamp(ticket.createdAt, "MMM d, yyyy")}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="max-h-[140px] overflow-y-auto overflow-x-hidden px-1">
+            <TicketMiniList tickets={tickets} onOpen={handleRowClick} dimmed={isLoading} />
           </div>
         </CardContent>
       </Card>
@@ -382,17 +296,7 @@ export function RecentMaintenanceTable() {
         page — offering half the controls here as well would only split one
         habit across two screens.
       */}
-      {sheetOpen && storeId && (
-        <TicketDetailSheet
-          readOnly
-          open={sheetOpen}
-          ticketId={selectedTicketId}
-          storeId={storeId}
-          tickets={tickets}
-          technicians={technicians}
-          onClose={() => { setSheetOpen(false); setSelectedTicketId(null); }}
-        />
-      )}
+      <TicketPeekSheet ticket={peekTicket} locale={locale} onClose={() => setPeekTicket(null)} />
 
       {/* Create dialog */}
       <CreateTicketDialog

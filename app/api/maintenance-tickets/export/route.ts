@@ -1,44 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  requireAuthorization,
-  getAuthorizationHeader,
-} from "@/app/api/_lib/auth";
+  authorizationOrError,
+  BASE_URL,
+  errorJson,
+  fetchWithTimeout,
+} from "@/app/api/maintenance-tickets/_lib/proxy";
 
-const BASE_URL =
-  process.env.NEW_MAINTENANCE_API_URL ||
-  process.env.NEXT_PUBLIC_NEW_MAINTENANCE_API_URL ||
-  "https://maintenance.lcportal.cloud";
-
-const TIMEOUT_MS = 30_000; // Excel export may be slower
-
-async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function errorJson(code: string, message: string, status: number) {
-  return NextResponse.json(
-    { success: false, error: { code, message } },
-    { status, headers: { "Cache-Control": "no-store" } }
-  );
-}
-
+/** The whole maintenance workbook as Excel; streamed back as a file, not JSON. */
 export async function GET(request: NextRequest) {
-  const authError = requireAuthorization(request);
-  if (authError) return authError;
-
-  const authorization = getAuthorizationHeader(request)!;
-  const upstreamUrl = `${BASE_URL}/export/excel`;
+  const auth = authorizationOrError(request);
+  if ("error" in auth) return auth.error;
 
   try {
-    const res = await fetchWithTimeout(upstreamUrl, {
+    const res = await fetchWithTimeout(`${BASE_URL}/export/excel`, {
       method: "GET",
-      headers: { Authorization: authorization, Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/json" },
+      headers: {
+        Authorization: auth.authorization,
+        Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/json",
+      },
     });
 
     if (!res.ok) {
@@ -46,18 +25,15 @@ export async function GET(request: NextRequest) {
     }
 
     const blob = await res.arrayBuffer();
-    const contentType =
-      res.headers.get("Content-Type") ||
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-    const disposition =
-      res.headers.get("Content-Disposition") ||
-      'attachment; filename="maintenancepizza-export.xlsx"';
-
     return new NextResponse(blob, {
       status: 200,
       headers: {
-        "Content-Type": contentType,
-        "Content-Disposition": disposition,
+        "Content-Type":
+          res.headers.get("Content-Type") ||
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition":
+          res.headers.get("Content-Disposition") ||
+          'attachment; filename="maintenancepizza-export.xlsx"',
         "Cache-Control": "no-store",
       },
     });

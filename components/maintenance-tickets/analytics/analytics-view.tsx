@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { ArrowDown, BarChart3, Clock, FileText, Gauge, History, Hourglass, Info, LifeBuoy, ListChecks, Repeat, Store as StoreIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,6 +18,13 @@ import type {
 
 /** Module-level: a stable function keeps the chart from rebuilding each render. */
 const formatHours = (v: number) => hours(v);
+
+/** The At a glance icon tints -- class strings, not copy. */
+const TINT_RED = "bg-red-500/10 text-red-600 dark:text-red-400";
+const TINT_AMBER = "bg-amber-500/10 text-amber-600 dark:text-amber-400";
+const TINT_BLUE = "bg-blue-500/10 text-blue-600 dark:text-blue-400";
+const TINT_PURPLE = "bg-purple-500/10 text-purple-600 dark:text-purple-400";
+const TINT_CYAN = "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400";
 
 export interface AnalyticsViewProps {
   locale: string;
@@ -52,6 +60,7 @@ export function AnalyticsView({
   isLoadingMore,
   onLoadMore,
 }: AnalyticsViewProps) {
+  const t = useTranslations("maintenanceSystem.tickets.analytics");
   return (
     <div className="@container space-y-6">
       {errors.summary ? (
@@ -62,29 +71,29 @@ export function AnalyticsView({
 
       {summary && (
         <div className="grid gap-6 @4xl:grid-cols-2">
-          <AnalyticsCard center icon={BarChart3} title="Issues reported" description={`${rangeLabel}, by issue.`}>
+          <AnalyticsCard center icon={BarChart3} title={t("issuesReported")} description={t("issuesReportedDescription", { range: rangeLabel })}>
             <AnalyticsBarChart
-              title="Issues reported in the range, by issue"
+              title={t("issuesReportedChart")}
               rows={summary.by_issue.map((r) => ({ label: r.title, value: r.count }))}
-              valueLabel="issues"
+              valueLabel={t("unitIssues")}
             />
           </AnalyticsCard>
-          <AnalyticsCard center icon={Gauge} title="Open work by status" description="Right now, across the selected stores.">
+          <AnalyticsCard center icon={Gauge} title={t("openByStatus")} description={t("openByStatusDescription")}>
             <AnalyticsBarChart
-              title="Open issues right now, by status"
+              title={t("openByStatusChart")}
               rows={summary.by_status.map((r) => ({ label: r.label, value: r.count }))}
-              valueLabel="issues"
+              valueLabel={t("unitIssues")}
             />
           </AnalyticsCard>
-          <AnalyticsCard center icon={Hourglass} title="Time to complete" description={`Average from report to complete, for issues completed ${rangeLabel.toLowerCase()}.`}>
+          <AnalyticsCard center icon={Hourglass} title={t("timeToClose")} description={t("timeToCloseDescription", { range: rangeLabel.toLowerCase() })}>
             <AnalyticsBarChart
-              title="Average time from reported to complete, by issue"
+              title={t("timeToCloseChart")}
               rows={summary.completion_by_issue.map((r) => ({ label: `${r.title} (${r.completed})`, value: r.avg_hours }))}
-              valueLabel="hours"
+              valueLabel={t("unitHours")}
               format={formatHours}
             />
           </AnalyticsCard>
-          <AnalyticsCard icon={StoreIcon} title="By store" description="Busiest first: opened and completed in this range, open right now." flush>
+          <AnalyticsCard icon={StoreIcon} title={t("byStore")} description={t("byStoreDescription")} flush>
             <ByStore rows={summary.by_store} />
           </AnalyticsCard>
         </div>
@@ -99,7 +108,7 @@ export function AnalyticsView({
 
       <NewTickets
         locale={locale}
-        title={`Tickets Submitted · ${rangeLabel}`}
+        title={t("ticketsSubmitted", { range: rangeLabel })}
         tickets={summary?.created ?? []}
         recurringDays={summary?.recurring_window.days ?? 90}
         error={errors.summary}
@@ -138,7 +147,7 @@ export function AnalyticsView({
 
       <p className="flex items-center gap-2 text-sm text-muted-foreground">
         <Info className="h-4 w-4" aria-hidden="true" />
-        Click a ticket number to open the ticket and follow up.
+        {t("clickTicketHint")}
       </p>
     </div>
   );
@@ -148,16 +157,14 @@ export function AnalyticsView({
 /*  At a glance -- the details below, summed up in one line each               */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-function plural(n: number, one: string, many: string): string {
-  return `${n.toLocaleString()} ${n === 1 ? one : many}`;
-}
-
-function silenceOf(iso: string): string {
+/** How long a ticket has waited: whole hours under two days, else whole days. */
+function silenceOf(iso: string): { hours: number } | { days: number } {
   const h = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 3_600_000));
-  return h < 48 ? `${h} hours` : `${Math.floor(h / 24)} days`;
+  return h < 48 ? { hours: h } : { days: Math.floor(h / 24) };
 }
 
 function GlanceLine({ icon: Icon, tint, target, children }: { icon: LucideIcon; tint: string; target: string; children: ReactNode }) {
+  const t = useTranslations("maintenanceSystem.tickets.analytics");
   return (
     <li>
       <button
@@ -170,7 +177,7 @@ function GlanceLine({ icon: Icon, tint, target, children }: { icon: LucideIcon; 
         </span>
         <span className="min-w-0 flex-1 text-sm">{children}</span>
         <span className="hidden shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground group-hover:text-foreground sm:inline-flex">
-          View <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+          {t("view")} <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
         </span>
       </button>
     </li>
@@ -188,6 +195,7 @@ function AtAGlance({
   watchlist: AnalyticsWatchlist | null;
   updated: number | null;
 }) {
+  const t = useTranslations("maintenanceSystem.tickets.analytics");
   const range = rangeLabel.toLowerCase();
   const created = summary?.created ?? [];
   const urgent = created.filter((t) => t.issues.some((i) => i.priority.value === "urgent")).length;
@@ -196,55 +204,58 @@ function AtAGlance({
   const recurring = watchlist?.recurring ?? [];
   const top = recurring[0];
   const fixes = summary?.troubleshooting_fixes ?? [];
-  const span = watchlist && watchlist.untouched_days !== 1 ? `${watchlist.untouched_days}+ days` : "24+ hours";
+  const span = watchlist && watchlist.untouched_days !== 1 ? t("spanDays", { days: watchlist.untouched_days }) : t("spanHours");
+  const wait = oldest ? silenceOf(oldest.last_change_at) : null;
+  const b = (chunks: ReactNode) => <strong className="font-semibold">{chunks}</strong>;
+  const red = (chunks: ReactNode) => <strong className="font-semibold text-red-600 dark:text-red-400">{chunks}</strong>;
 
   return (
-    <AnalyticsCard icon={ListChecks} title="At a glance" description="What the tables below hold. Click a line to jump to it.">
+    <AnalyticsCard icon={ListChecks} title={t("glanceTitle")} description={t("glanceDescription")}>
       <ul className="-mx-3 -my-1.5 space-y-0.5">
         {summary && (
-          <GlanceLine icon={FileText} tint="bg-red-500/10 text-red-600 dark:text-red-400" target="new-tickets">
-            <strong className="font-semibold">{plural(created.length, "ticket", "tickets")}</strong> submitted {range}
-            {urgent > 0 && <>, <strong className="font-semibold text-red-600 dark:text-red-400">{urgent} urgent</strong></>}.
+          <GlanceLine icon={FileText} tint={TINT_RED} target="new-tickets">
+            {t.rich("glanceSubmitted", { count: created.length, range, urgent, b, red })}
           </GlanceLine>
         )}
         {watchlist && (
-          <GlanceLine icon={Clock} tint="bg-amber-500/10 text-amber-600 dark:text-amber-400" target="untouched">
-            {untouched.length === 0 ? (
-              <>Every open ticket has been updated in the last {span}.</>
-            ) : (
-              <>
-                <strong className="font-semibold">{plural(untouched.length, "open ticket", "open tickets")}</strong> with no update for {span}
-                {oldest && <>; the longest has waited <strong className="font-semibold text-red-600 dark:text-red-400">{silenceOf(oldest.last_change_at)}</strong></>}.
-              </>
-            )}
+          <GlanceLine icon={Clock} tint={TINT_AMBER} target="untouched">
+            {untouched.length === 0
+              ? t("glanceUntouchedNone", { span })
+              : t.rich("glanceUntouched", {
+                  count: untouched.length,
+                  span,
+                  oldest: wait ? "yes" : "no",
+                  wait: wait ? ("hours" in wait ? t("waitHours", { count: wait.hours }) : t("waitDays", { count: wait.days })) : "",
+                  b,
+                  red,
+                })}
           </GlanceLine>
         )}
         {updated !== null && (
-          <GlanceLine icon={History} tint="bg-blue-500/10 text-blue-600 dark:text-blue-400" target="what-changed">
-            <strong className="font-semibold">{plural(updated, "ticket", "tickets")}</strong> updated {range}.
+          <GlanceLine icon={History} tint={TINT_BLUE} target="what-changed">
+            {t.rich("glanceUpdated", { count: updated, range, b })}
           </GlanceLine>
         )}
         {watchlist && (
-          <GlanceLine icon={Repeat} tint="bg-purple-500/10 text-purple-600 dark:text-purple-400" target="recurring">
-            {recurring.length === 0 ? (
-              <>No issue keeps coming back.</>
-            ) : (
-              <>
-                <strong className="font-semibold">{plural(recurring.length, "issue keeps", "issues keep")}</strong> coming back
-                {top && <>; most often {top.title} at {top.store_number} ({top.count}× in {watchlist.recurring_window.days} days)</>}.
-              </>
-            )}
+          <GlanceLine icon={Repeat} tint={TINT_PURPLE} target="recurring">
+            {recurring.length === 0
+              ? t("glanceRecurringNone")
+              : t.rich("glanceRecurring", {
+                  count: recurring.length,
+                  top: top ? "yes" : "no",
+                  title: top?.title ?? "",
+                  store: top?.store_number ?? "",
+                  times: top?.count ?? 0,
+                  days: watchlist.recurring_window.days,
+                  b,
+                })}
           </GlanceLine>
         )}
         {summary && (
-          <GlanceLine icon={LifeBuoy} tint="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400" target="troubleshooting-fixes">
-            {fixes.length === 0 ? (
-              <>No problem was fixed by troubleshooting {range}.</>
-            ) : (
-              <>
-                <strong className="font-semibold">{plural(fixes.length, "problem", "problems")}</strong> fixed by troubleshooting {range}, with no ticket opened.
-              </>
-            )}
+          <GlanceLine icon={LifeBuoy} tint={TINT_CYAN} target="troubleshooting-fixes">
+            {fixes.length === 0
+              ? t("glanceFixesNone", { range })
+              : t.rich("glanceFixes", { count: fixes.length, range, b })}
           </GlanceLine>
         )}
       </ul>
@@ -254,8 +265,9 @@ function AtAGlance({
 
 /** The shape of the report while its first answer is on the way. */
 export function AnalyticsSkeleton() {
+  const t = useTranslations("maintenanceSystem.analytics");
   return (
-    <div className="space-y-6" aria-busy="true" aria-label="Loading the report">
+    <div className="space-y-6" aria-busy="true" aria-label={t("loading")}>
       <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
         {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
       </div>

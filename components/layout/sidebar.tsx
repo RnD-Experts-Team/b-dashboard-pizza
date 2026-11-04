@@ -54,6 +54,8 @@ import {
   MessageSquareWarning,
   LifeBuoy,
   Activity,
+  Route,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   Dialog,
@@ -285,6 +287,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const devToolsEnabled = useFeature("devTools");
   const i18nIntelligenceEnabled = useFeature("i18nIntelligence");
   const securityMonitorEnabled = useFeature("securityMonitor");
+  const reportBuilderEnabled = useFeature("reportBuilder");
 
   /* ---- Unread-notification → sidebar count mapping ----
    * Derived from the same `notifications` array the bell's badge count and
@@ -363,7 +366,10 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     title: "Business Reports",
     href: `/${locale}/dashboard/business-reports`,
     icon: BarChart3,
-    // No auth rule defined yet — always visible for stores the user can access.
+    // The page's main section; probed with no store (the rule allows an empty store list).
+    requirements: [
+      { service: "Data", method: "POST", path: "/reports/business/sales" },
+    ],
   };
 
   // const maintenanceItem: NavItem = {
@@ -393,11 +399,13 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     icon: Coffee,
   };
 
-  // Store calendar (birthdays, cleaning, shifts, maintenance, meetings). Reads
-  // the selected store and serves mock data for now, so there is no gate.
-  // Hidden for now: the page at /dashboard/calendar still exists. To bring it
-  // back, uncomment this, the item in `toolboxGroup`, and the matching entry in
-  // lib/nav/bottom-nav-items.ts (the two lists must stay 1:1).
+  // Store calendar: the 8 calendar feeds for the selected store. No gate here —
+  // pizzasys decides each layer per feed (a layer the user can't see answers
+  // 403 and is hidden).
+  // Hidden for now (not part of this release): the page at /dashboard/calendar
+  // still exists. To bring it back, uncomment this, the item in `toolboxGroup`,
+  // the Calendar button in topbar.tsx, and the matching entry in
+  // lib/nav/bottom-nav-items.ts (the two nav lists must stay 1:1).
   // const calendarItem: NavItem = {
   //   title: t("calendar"),
   //   href: `/${locale}/dashboard/calendar`,
@@ -636,6 +644,20 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           { service: "Data", method: "GET", path: "/stores/*/goals", storeId: effectiveStoreId }
         ],
       },
+      // Report Builder (behind the `reportBuilder` flag). Probed with NO storeId:
+      // the templates path carries none and its rule is unscoped.
+      ...(reportBuilderEnabled
+        ? [
+            {
+              title: t("reportBuilder"),
+              href: `/${locale}/dashboard/report-builder`,
+              icon: FileSpreadsheet,
+              requirements: [
+                { service: "Data", method: "GET", path: "/report-builder/templates" },
+              ],
+            },
+          ]
+        : []),
       // {
       //   title: t("employeeDebriefHistory"),
       //   href: `/${locale}/dashboard/employee-debrief-history`,
@@ -732,12 +754,32 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           { service: "Maintenance", method: "GET", path: "/stores/*/tickets", storeId: effectiveStoreId }
         ],
       },
+      // Trips and Payments are GLOBAL (no store in the path), so their probes
+      // carry NO storeId, like storage below. Payments replaced Daily Pay.
       {
-        title: t("maintenanceTroubleshooting"),
-        href: `/${locale}/dashboard/maintenance-troubleshooting`,
-        icon: LifeBuoy,
+        title: t("maintenanceTrips"),
+        href: `/${locale}/dashboard/maintenance-trips`,
+        icon: Route,
         requirements: [
-          { service: "Maintenance", method: "GET", path: "/troubleshooting-guides", storeId: effectiveStoreId }
+          { service: "Maintenance", method: "GET", path: "/trips" }
+        ],
+      },
+      {
+        title: t("maintenancePayments"),
+        href: `/${locale}/dashboard/maintenance-payments`,
+        icon: Wallet,
+        requirements: [
+          { service: "Maintenance", method: "GET", path: "/payments" }
+        ],
+      },
+      {
+        title: t("storage"),
+        href: `/${locale}/dashboard/storage`,
+        icon: Warehouse,
+        requirements: [
+          // NO storeId on purpose — storage endpoints are GLOBAL, and a
+          // store-scoped probe would be wrong. Same as inventoryUnits above.
+          { service: "Maintenance", method: "GET", path: "/storage-locations" }
         ],
       },
       {
@@ -749,21 +791,11 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         ],
       },
       {
-        title: "Daily Pay",
-        href: `/${locale}/dashboard/daily-pay`,
-        icon: Wallet,
+        title: t("maintenanceTroubleshooting"),
+        href: `/${locale}/dashboard/maintenance-troubleshooting`,
+        icon: LifeBuoy,
         requirements: [
-          { service: "Maintenance", method: "GET", path: "/daily-pay-entries", storeId: effectiveStoreId }
-        ],
-      },
-      {
-        title: t("storage"),
-        href: `/${locale}/dashboard/storage`,
-        icon: Warehouse,
-        requirements: [
-          // NO storeId on purpose — storage endpoints are GLOBAL, and a
-          // store-scoped probe would be wrong. Same as inventoryUnits above.
-          { service: "Maintenance", method: "GET", path: "/storage-locations" }
+          { service: "Maintenance", method: "GET", path: "/troubleshooting-guides", storeId: effectiveStoreId }
         ],
       },
       {

@@ -32,6 +32,7 @@ export const FEATURE_IDS = [
   "screenProjectPiP",
   "soundFx",
   "mobileBottomNav",
+  "reportBuilder",
 ] as const;
 
 /**

@@ -46,6 +46,18 @@ export function authorizationOrError(
   return { authorization };
 }
 
+/**
+ * The store the request is for, as the dashboard sent it (`X-Store-Id`), passed
+ * on so a store-scoped auth rule can judge a store user's request on a path
+ * that carries no store (the issue catalog, the troubleshooting library…).
+ * Without it such a request falls back to GLOBAL permissions and a store
+ * manager is refused.
+ */
+function storeHeader(request: NextRequest): Record<string, string> {
+  const storeId = request.headers.get("x-store-id");
+  return storeId ? { "X-Store-Id": storeId } : {};
+}
+
 export async function proxyGet(request: NextRequest, upstreamUrl: string) {
   const auth = authorizationOrError(request);
   if ("error" in auth) return auth.error;
@@ -55,6 +67,7 @@ export async function proxyGet(request: NextRequest, upstreamUrl: string) {
       method: "GET",
       headers: {
         Authorization: auth.authorization,
+        ...storeHeader(request),
         Accept: "application/json",
       },
     });
@@ -88,6 +101,7 @@ export async function proxyDelete(request: NextRequest, upstreamUrl: string) {
       method: "DELETE",
       headers: {
         Authorization: auth.authorization,
+        ...storeHeader(request),
         Accept: "application/json",
       },
     });
@@ -138,6 +152,7 @@ export async function proxyJsonPost(request: NextRequest, upstreamUrl: string) {
       method: "POST",
       headers: {
         Authorization: auth.authorization,
+        ...storeHeader(request),
         Accept: "application/json",
         "Content-Type": "application/json",
       },
@@ -183,6 +198,7 @@ export async function proxyJsonPatch(
       method: "PATCH",
       headers: {
         Authorization: auth.authorization,
+        ...storeHeader(request),
         Accept: "application/json",
         "Content-Type": "application/json",
       },
@@ -232,6 +248,7 @@ export async function proxyJsonPut(request: NextRequest, upstreamUrl: string) {
       method: "PUT",
       headers: {
         Authorization: auth.authorization,
+        ...storeHeader(request),
         Accept: "application/json",
         "Content-Type": "application/json",
       },
@@ -271,6 +288,7 @@ export async function proxyRawPost(request: NextRequest, upstreamUrl: string) {
       method: "POST",
       headers: {
         Authorization: auth.authorization,
+        ...storeHeader(request),
         Accept: "application/json",
         "Content-Type": contentType,
       },
@@ -295,4 +313,92 @@ export async function proxyRawPost(request: NextRequest, upstreamUrl: string) {
       502,
     );
   }
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Maintenance: generic passthrough for the catch-all route handlers     */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+const BODYLESS = new Set(["GET", "HEAD", "DELETE"]);
+
+/**
+ * Forwards the request as it came: method, query string, and body bytes with
+ * their content type (so a multipart boundary survives). Used by the
+ * catch-all routes (trips, payments, stock counts…), where one handler serves
+ * a whole area and a per-method helper would only repeat itself.
+ *
+ * `auth: false` is ONLY for the public trip link: no Authorization header is
+ * read or sent, the token in the path is the credential.
+ */
+export async function proxyPassthrough(
+  request: NextRequest,
+  upstreamUrl: string,
+  opts: { auth?: boolean } = {},
+): Promise<NextResponse> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+
+  if (opts.auth !== false) {
+    const auth = authorizationOrError(request);
+    if ("error" in auth) return auth.error;
+    headers.Authorization = auth.authorization;
+    Object.assign(headers, storeHeader(request));
+  }
+
+  const method = request.method.toUpperCase();
+  let body: ArrayBuffer | undefined;
+  if (!BODYLESS.has(method)) {
+    body = await request.arrayBuffer();
+    headers["Content-Type"] =
+      request.headers.get("content-type") || "application/json";
+  }
+
+  try {
+    const res = await fetchWithTimeout(upstreamUrl, { method, headers, body });
+    if (res.status === 204) {
+      return new NextResponse(null, {
+        status: 204,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+    const text = await res.text();
+    return new NextResponse(text, {
+      status: res.status,
+      headers: {
+        "Content-Type": res.headers.get("content-type") || "application/json",
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "unknown";
+    if (msg.includes("abort") || msg.includes("timed out")) {
+      return errorJson("TIMEOUT", "Upstream request timed out", 504);
+    }
+    return errorJson(
+      "NETWORK_ERROR",
+      "Failed to reach maintenance service",
+      502,
+    );
+  }
+}
+
+/**
+ * Builds `${BASE_URL}/<prefix>/<segments…>?<query>` from a catch-all route's
+ * segments, encoding each segment and forwarding the query string verbatim
+ * (repeated `stores[]` keys stay intact).
+ */
+export function upstreamFromSegments(
+  request: NextRequest,
+  prefix: string,
+  segments: string[] | undefined,
+): string {
+  const path = [prefix, ...(segments ?? []).map((s) => encodeURIComponent(s))]
+    .filter(Boolean)
+    .join("/");
+  const qs = new URL(request.url).search;
+  return `${BASE_URL}/${path}${qs}`;
+}
+
+/** Rejects a path segment that could walk out of the area ("..", empty). */
+export function hasUnsafeSegment(segments: string[] | undefined): boolean {
+  return (segments ?? []).some((s) => !s || s === "." || s === ".." || s.includes("/"));
 }

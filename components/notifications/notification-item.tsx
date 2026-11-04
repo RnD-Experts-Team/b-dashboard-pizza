@@ -18,14 +18,20 @@ import {
   TrendingUp,
   UserMinus,
   SprayCan,
+  CalendarClock,
   Coffee,
   MessageSquareWarning,
   Wrench,
+  FileBarChart,
 } from "lucide-react";
 import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
 import { useHiringActionStore, type HiringActionTab } from "@/lib/store/hiring-action.store";
 import { useCleaningActionStore } from "@/lib/store/cleaning-action.store";
 import type { PeriodType } from "@/types/cleaning.types";
+import {
+  getReportNotificationHref,
+  isReportNotification,
+} from "@/lib/notifications/notification-routing";
 
 /**
  * Parse a debrief action URL and extract keyId, date, and storeId.
@@ -171,10 +177,28 @@ function maintenanceTicketHref(locale: string, notification: Notification): stri
 }
 
 /**
+ * A calendar reminder's `action_url` is the page of the event it reminds about
+ * (`/dashboard/...`, set when the reminder was made from that event's card), or
+ * nothing. Only an in-app dashboard path is followed; anything else lands on the
+ * Calendar itself, never on a URL taken from the notification.
+ */
+function calendarReminderHref(locale: string, notification: Notification): string {
+  const url = notification.action_url ?? "";
+  if (/^\/dashboard(\/[\w%.~-]*)*(\?[^#\s]*)?$/.test(url)) return `/${locale}${url}`;
+  return `/${locale}/dashboard/calendar`;
+}
+
+/**
  * Derive icon & color from the API notification type string.
  * Common types: "announcement.created", "announcement.updated", etc.
  */
 function getTypeVisuals(type: string) {
+  if (type === "report_failed" || type === "report_delivery_failed") {
+    return { Icon: FileBarChart, bg: "bg-destructive/10 text-destructive" };
+  }
+  if (type.startsWith("report_")) {
+    return { Icon: FileBarChart, bg: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" };
+  }
   if (type.startsWith("maintenance_")) {
     return { Icon: Wrench, bg: "bg-sky-500/10 text-sky-600 dark:text-sky-400" };
   }
@@ -189,6 +213,9 @@ function getTypeVisuals(type: string) {
   }
   if (type.startsWith("announcement")) {
     return { Icon: Megaphone, bg: "bg-purple-500/10 text-purple-600 dark:text-purple-400" };
+  }
+  if (type.startsWith("calendar_")) {
+    return { Icon: CalendarClock, bg: "bg-violet-500/10 text-violet-600 dark:text-violet-400" };
   }
   if (type.startsWith("hiring_request")) {
     return { Icon: Briefcase, bg: "bg-blue-500/10 text-blue-600 dark:text-blue-400" };
@@ -283,17 +310,21 @@ export function NotificationItem({
   const isBreakType = notification.type.startsWith("break_");
   const isTicketType = notification.type.startsWith("ticket_");
   const isMaintenanceType = notification.type.startsWith("maintenance_");
+  const isCalendarType = notification.type.startsWith("calendar_");
+  const isReportType = isReportNotification(notification);
   // Only these explicitly-coded type families are clickable — an uncoded
   // type must never guess a navigation target, it just displays safely.
   const isClickable =
     isDebriefType ||
+    isCalendarType ||
     isAnnouncementType ||
     isHiringType ||
     isEmployeeType ||
     isCleaningType ||
     isBreakType ||
     isTicketType ||
-    isMaintenanceType;
+    isMaintenanceType ||
+    isReportType;
 
   function handleClick() {
     if (!isClickable) return;
@@ -302,6 +333,11 @@ export function NotificationItem({
 
     if (isAnnouncementType) {
       router.push(`/${locale}/dashboard/announcements`);
+      return;
+    }
+
+    if (isCalendarType) {
+      router.push(calendarReminderHref(locale, notification));
       return;
     }
 
@@ -333,6 +369,11 @@ export function NotificationItem({
         openCleaningEvaluation(parsed.periodType, parsed.periodKey, parsed.store);
       }
       router.push(`/${locale}/dashboard/cleaning-chart`);
+      return;
+    }
+
+    if (isReportType) {
+      router.push(getReportNotificationHref(notification.action_url, locale));
       return;
     }
 
@@ -439,6 +480,8 @@ export function NotificationItem({
                   ? "Tickets"
                   : isMaintenanceType
                   ? "Maintenance ticket"
+                  : isReportType
+                  ? "Report Builder"
                   : "Cleaning Chart"}
               </span>
             </>

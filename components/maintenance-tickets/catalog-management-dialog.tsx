@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PaymentMethodsManager } from "@/components/maintenance-payments/payment-methods";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,10 +25,10 @@ import {
   MaintenanceTicketsError,
   entityPaths,
 } from "@/lib/api/services/maintenance-tickets.service";
+import { maintenanceCatalogService } from "@/lib/api/services/maintenance-catalog.service";
+import type { Part, TechnicianCategory } from "@/types/maintenance-system";
 import type {
   CatalogIssue,
-  CatalogCategory,
-  CatalogPart,
   TicketNote,
   TicketAttachment,
 } from "@/types/maintenance-tickets.types";
@@ -352,18 +353,19 @@ function IssuesTab({ onReloadCatalog, storeId }: { onReloadCatalog: () => void; 
  * and their pay and work -- so the tab only points there.
  */
 function TechniciansPointer({ onNavigate }: { onNavigate: () => void }) {
+  const t = useTranslations("maintenanceTickets");
   const params = useParams();
   const locale = (params?.locale as string) ?? "en";
   return (
     <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-12 text-center">
       <HardHat className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
-      <p className="text-sm font-medium">Technicians have their own page</p>
+      <p className="text-sm font-medium">{t("catalog.techniciansPageTitle")}</p>
       <p className="max-w-sm text-sm text-muted-foreground">
-        Add and edit technicians, set the stores they cover, rate them, and see what they were paid and the work they did.
+        {t("catalog.techniciansPageBody")}
       </p>
       <Button asChild>
         <Link href={`/${locale}/dashboard/maintenance-technicians`} onClick={onNavigate}>
-          Open the Technicians page <ChevronRight className="ms-1 h-4 w-4" aria-hidden="true" />
+          {t("catalog.techniciansPageOpen")} <ChevronRight className="ms-1 h-4 w-4" aria-hidden="true" />
         </Link>
       </Button>
     </div>
@@ -376,7 +378,7 @@ function TechniciansPointer({ onNavigate }: { onNavigate: () => void }) {
 
 function CategoriesTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
   const t = useTranslations("maintenanceTickets");
-  const [items, setItems] = useState<CatalogCategory[]>([]);
+  const [items, setItems] = useState<TechnicianCategory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -388,7 +390,7 @@ function CategoriesTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setIsLoading(true);
     setError(null);
-    try { setItems(await maintenanceTicketsService.getCatalogCategories()); }
+    try { setItems(await maintenanceCatalogService.listCategories()); }
     catch (err) { setError(errorMessage(err, "Failed to load")); }
     finally { if (!quiet) setIsLoading(false); }
   }, []);
@@ -399,7 +401,7 @@ function CategoriesTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
     if (!name.trim()) return;
     setIsCreating(true);
     try {
-      await maintenanceTicketsService.createCatalogCategory({ name: name.trim(), description: description.trim() || undefined });
+      await maintenanceCatalogService.createCategory({ name: name.trim(), description: description.trim() || undefined });
       setName(""); setDescription(""); await load(); onReloadCatalog();
     } catch (err) { setError(errorMessage(err, "Failed")); }
     finally { setIsCreating(false); }
@@ -407,13 +409,13 @@ function CategoriesTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
 
   async function handleDelete(id: number) {
     setActingId(id);
-    try { await maintenanceTicketsService.deleteCatalogCategory(id); await load(); onReloadCatalog(); }
+    try { await maintenanceCatalogService.deleteCategory(id); await load(); onReloadCatalog(); }
     catch (err) { setError(errorMessage(err, "Failed")); }
     finally { setActingId(null); }
   }
 
   async function handleSave(id: number, newName: string, desc: string | null) {
-    const updated = await maintenanceTicketsService.updateCatalogCategory(id, { name: newName, description: desc });
+    const updated = await maintenanceCatalogService.updateCategory(id, { name: newName, description: desc });
     setItems((prev) => replaceItem(prev, updated));
     setEditingId(null);
     onReloadCatalog();
@@ -449,7 +451,7 @@ function CategoriesTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
             editor={
               <TextItemEditor
                 initialName={item.name}
-                initialDescription={item.description}
+                initialDescription={item.description ?? null}
                 nameLabel={t("catalog.nameLabel")}
                 onSave={(newName, desc) => handleSave(item.id, newName, desc)}
                 onCancel={() => setEditingId(null)}
@@ -482,7 +484,7 @@ function CategoriesTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
 
 function PartsTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
   const t = useTranslations("maintenanceTickets");
-  const [items, setItems] = useState<CatalogPart[]>([]);
+  const [items, setItems] = useState<Part[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDeleted, setShowDeleted] = useState(false);
@@ -495,7 +497,7 @@ function PartsTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setIsLoading(true);
     setError(null);
-    try { setItems(await maintenanceTicketsService.getCatalogParts(undefined, { includeDeleted: true })); }
+    try { setItems(await maintenanceCatalogService.listParts({ includeDeleted: true })); }
     catch (err) { setError(errorMessage(err, "Failed to load")); }
     finally { if (!quiet) setIsLoading(false); }
   }, []);
@@ -506,7 +508,7 @@ function PartsTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
     if (!name.trim()) return;
     setIsCreating(true);
     try {
-      await maintenanceTicketsService.createCatalogPart({ name: name.trim(), description: description.trim() || undefined });
+      await maintenanceCatalogService.createPart({ name: name.trim(), description: description.trim() || undefined });
       setName(""); setDescription(""); await load(); onReloadCatalog();
     } catch (err) { setError(errorMessage(err, "Failed")); }
     finally { setIsCreating(false); }
@@ -514,20 +516,20 @@ function PartsTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
 
   async function handleDelete(id: number) {
     setActingId(id);
-    try { await maintenanceTicketsService.deleteCatalogPart(id); await load(); onReloadCatalog(); }
+    try { await maintenanceCatalogService.deletePart(id); await load(); onReloadCatalog(); }
     catch (err) { setError(errorMessage(err, "Failed")); }
     finally { setActingId(null); }
   }
 
   async function handleRestore(id: number) {
     setActingId(id);
-    try { await maintenanceTicketsService.restoreCatalogPart(id); await load(); onReloadCatalog(); }
+    try { await maintenanceCatalogService.restorePart(id); await load(); onReloadCatalog(); }
     catch (err) { setError(errorMessage(err, "Failed")); }
     finally { setActingId(null); }
   }
 
   async function handleSave(id: number, newName: string, desc: string | null) {
-    const updated = await maintenanceTicketsService.updateCatalogPart(id, { name: newName, description: desc });
+    const updated = await maintenanceCatalogService.updatePart(id, { name: newName, description: desc });
     setItems((prev) => replaceItem(prev, updated));
     setEditingId(null);
     onReloadCatalog();
@@ -620,11 +622,12 @@ export function CatalogManagementDialog({ open, onClose, onReloadCatalog, storeI
         </DialogHeader>
 
         <Tabs defaultValue="issues" className="flex flex-col flex-1 min-h-0">
-          <TabsList className="grid w-full grid-cols-4 shrink-0">
+          <TabsList className="grid w-full grid-cols-5 shrink-0">
             <TabsTrigger value="issues" className="text-xs">{t("catalog.tabs.issues")}</TabsTrigger>
             <TabsTrigger value="technicians" className="text-xs">{t("catalog.tabs.technicians")}</TabsTrigger>
             <TabsTrigger value="categories" className="text-xs">{t("catalog.tabs.categories")}</TabsTrigger>
             <TabsTrigger value="parts" className="text-xs">{t("catalog.tabs.parts")}</TabsTrigger>
+            <TabsTrigger value="payment-methods" className="text-xs">{t("catalog.tabs.paymentMethods")}</TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-y-auto min-h-0 mt-4">
@@ -639,6 +642,9 @@ export function CatalogManagementDialog({ open, onClose, onReloadCatalog, storeI
             </TabsContent>
             <TabsContent value="parts" className="mt-0">
               <PartsTab onReloadCatalog={onReloadCatalog} />
+            </TabsContent>
+            <TabsContent value="payment-methods" className="mt-0">
+              <PaymentMethodsManager />
             </TabsContent>
           </div>
         </Tabs>

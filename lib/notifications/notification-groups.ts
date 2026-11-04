@@ -1,7 +1,9 @@
 import {
   Briefcase,
   Bell,
+  CalendarClock,
   Coffee,
+  FileBarChart,
   KeyRound,
   Megaphone,
   MessageSquareWarning,
@@ -9,6 +11,7 @@ import {
   TrendingUp,
   type LucideIcon,
 } from "lucide-react";
+import { isReportNotification } from "@/lib/notifications/notification-routing";
 import type { Notification } from "@/types/notification.types";
 
 export type NotificationGroupKey =
@@ -18,7 +21,9 @@ export type NotificationGroupKey =
   | "breaks"
   | "tickets"
   | "announcements"
+  | "calendar"
   | "employees"
+  | "reports"
   | "other";
 
 export interface NotificationGroup {
@@ -35,7 +40,9 @@ export const NOTIFICATION_GROUPS: readonly NotificationGroup[] = [
   { key: "breaks", label: "Breaks", icon: Coffee },
   { key: "tickets", label: "Tickets", icon: MessageSquareWarning },
   { key: "announcements", label: "Announcements", icon: Megaphone },
+  { key: "calendar", label: "Calendar", icon: CalendarClock },
   { key: "employees", label: "Employees", icon: TrendingUp },
+  { key: "reports", label: "Reports", icon: FileBarChart },
   { key: "other", label: "Other", icon: Bell },
 ];
 
@@ -58,7 +65,9 @@ export function getNotificationGroupKey(notification: Notification): Notificatio
   if (type.startsWith("break_")) return "breaks";
   if (type.startsWith("ticket_") || type.startsWith("maintenance_")) return "tickets";
   if (type.startsWith("announcement")) return "announcements";
+  if (type.startsWith("calendar_")) return "calendar";
   if (type.startsWith("employee_promoted")) return "employees";
+  if (isReportNotification(notification)) return "reports";
   return "other";
 }
 

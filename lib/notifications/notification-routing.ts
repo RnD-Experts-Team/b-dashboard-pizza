@@ -1,4 +1,52 @@
+import { isValidLocale } from "@/lib/i18n/config";
 import type { Notification } from "@/types/notification.types";
+
+/**
+ * The Data service's Report Builder notifications (in-app, channel web). Exact
+ * types, not a prefix: `report_` is too generic a family to claim wholesale.
+ * All four open the run page (or the schedules tab) from `action_url`.
+ */
+export const REPORT_NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
+  "report_ready",
+  "report_failed",
+  "report_delivery_failed",
+  "report_schedule_paused",
+]);
+
+export function isReportNotification(notification: Notification): boolean {
+  return REPORT_NOTIFICATION_TYPES.has(notification.type);
+}
+
+const REPORT_BUILDER_PATH = /^\/dashboard\/report-builder(?:\/runs\/[^/]+)?\/?$/;
+
+/**
+ * Where a Report Builder notification goes. `action_url` is
+ * `{dashboard}/dashboard/report-builder/runs/{ulid}` or
+ * `{dashboard}/dashboard/report-builder?tab=schedules`, absolute — or, when the
+ * backend's dashboard URL is unset, a bare `/dashboard/...` path with no
+ * locale. Only the path and query are used (the origin is never followed, so a
+ * foreign host cannot redirect the browser), the current locale is added when
+ * the path has none, and anything that is not the report-builder list or a run
+ * page falls back to the list.
+ */
+export function getReportNotificationHref(
+  actionUrl: string | null | undefined,
+  locale: string
+): string {
+  const fallback = `/${locale}/dashboard/report-builder`;
+  if (!actionUrl) return fallback;
+  try {
+    const url = new URL(actionUrl, "http://x");
+    const parts = url.pathname.split("/").filter(Boolean);
+    const hasLocale = parts.length > 0 && isValidLocale(parts[0]);
+    const pathLocale = hasLocale ? parts[0] : locale;
+    const rest = `/${(hasLocale ? parts.slice(1) : parts).join("/")}`;
+    if (!REPORT_BUILDER_PATH.test(rest)) return fallback;
+    return `/${pathLocale}${rest}${url.search}${url.hash}`;
+  } catch {
+    return fallback;
+  }
+}
 
 /**
  * Map a notification to the dashboard page segment it belongs to, e.g.
@@ -36,5 +84,10 @@ export function getNotificationPageSegment(notification: Notification): string |
   if (type.startsWith("ticket_")) return "tickets";
   // maintenance_ticket_created / _updated open the maintenance ticket.
   if (type.startsWith("maintenance_")) return "maintenance-tickets";
+  // calendar_reminder (a Calendar reminder coming due) belongs to the Calendar page.
+  if (type.startsWith("calendar_")) return "calendar";
+  // report_ready / _failed / _delivery_failed / _schedule_paused open the run
+  // page (or the schedules tab) of the Report Builder.
+  if (REPORT_NOTIFICATION_TYPES.has(type)) return "report-builder";
   return null;
 }

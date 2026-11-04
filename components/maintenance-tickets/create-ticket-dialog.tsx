@@ -31,6 +31,10 @@ import { toast } from "sonner";
 import { maintenanceTicketsService, MaintenanceTicketsError } from "@/lib/api/services/maintenance-tickets.service";
 import type { OverviewStore } from "@/lib/api/services/auth.service";
 import type { CatalogIssue, Priority, TicketType, TroubleshootingTicketOutcome } from "@/types/maintenance-tickets.types";
+import type { Impact } from "@/types/maintenance-system";
+import { IMPACTS, PRIORITIES, vocabOptions, vocabText } from "@/lib/maintenance/vocabulary";
+import { useDiscardGuard } from "@/components/storage/discard-guard";
+import { PRIORITY_ACCENT, PRIORITY_ORDER } from "./status-accent";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                   */
@@ -44,6 +48,8 @@ interface IssueRow {
   description: string;
   note: string;
   files: File[];
+  /** How much it hurts the store; "" = not said. */
+  impact: Impact | "";
   /**
    * How troubleshooting went, answered on the issue's troubleshooting page --
    * needed before the ticket can be sent when the issue has guides.
@@ -65,6 +71,7 @@ function makeRow(): IssueRow {
     description: "",
     note: "",
     files: [],
+    impact: "",
     troubleshooting: null,
   };
 }
@@ -84,13 +91,7 @@ interface CreateTicketDialogProps {
 /*  Priority Select — colored dot + label + short description per level    */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-const PRIORITY_LEVELS: { value: Priority; label: string; description: string; dotClass: string }[] = [
-  { value: "urgent", label: "Emergency", description: "Store cannot operate", dotClass: "bg-red-500" },
-  { value: "high", label: "High", description: "Issue affects operations", dotClass: "bg-orange-500" },
-  { value: "medium", label: "Normal", description: "Repair needed but store can operate", dotClass: "bg-yellow-500" },
-  { value: "low", label: "Low", description: "Cosmetic or small issue", dotClass: "bg-blue-500" },
-];
-
+/** The same words and colours as every priority badge (vocabulary + status-accent). */
 function PrioritySelect({
   value,
   onChange,
@@ -100,8 +101,8 @@ function PrioritySelect({
   onChange: (v: Priority) => void;
   disabled?: boolean;
 }) {
+  const tv = useTranslations("maintenanceSystem");
   const [open, setOpen] = useState(false);
-  const selected = PRIORITY_LEVELS.find((p) => p.value === value);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -116,29 +117,29 @@ function PrioritySelect({
             "disabled:cursor-not-allowed disabled:opacity-50"
           )}
         >
-          <span className={cn("h-2 w-2 shrink-0 rounded-full", selected?.dotClass)} />
-          <span className="flex-1 truncate text-start">{selected?.label ?? "Select priority…"}</span>
+          <span className={cn("h-2 w-2 shrink-0 rounded-full", PRIORITY_ACCENT[value].bar)} />
+          <span className="flex-1 truncate text-start">{vocabText(tv, PRIORITIES[value])}</span>
           <ChevronDown className={cn("ms-auto h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-150", open && "rotate-180")} />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" sideOffset={4} className="w-[var(--radix-popover-trigger-width)] min-w-[260px] p-1 shadow-md">
-        {PRIORITY_LEVELS.map((p) => (
+        {PRIORITY_ORDER.map((p) => (
           <button
-            key={p.value}
+            key={p}
             type="button"
-            onClick={() => { onChange(p.value); setOpen(false); }}
+            onClick={() => { onChange(p); setOpen(false); }}
             className={cn(
               "flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-start transition-colors hover:bg-accent hover:text-accent-foreground",
-              p.value === value && "bg-accent/60"
+              p === value && "bg-accent/60"
             )}
           >
-            <span className={cn("mt-1 h-2 w-2 shrink-0 rounded-full", p.dotClass)} />
+            <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", PRIORITY_ACCENT[p].bar)} />
             <span className="flex-1 min-w-0">
               <span className="flex items-center gap-1.5">
-                <span className="text-sm font-medium">{p.label}</span>
-                <Check className={cn("h-3.5 w-3.5 shrink-0 text-primary", p.value !== value && "invisible")} />
+                <span className="text-sm font-medium">{vocabText(tv, PRIORITIES[p])}</span>
+                <Check className={cn("h-3.5 w-3.5 shrink-0 text-primary", p !== value && "invisible")} />
               </span>
-              <span className="block text-xs text-muted-foreground">{p.description}</span>
+              <span className="block text-xs text-muted-foreground">{tv(`tickets.create.priorityHelp.${p}`)}</span>
             </span>
           </button>
         ))}
@@ -160,6 +161,7 @@ export function CreateTicketDialog({
   onSuccess,
 }: CreateTicketDialogProps) {
   const t = useTranslations("maintenanceTickets");
+  const tv = useTranslations("maintenanceSystem");
   const { canAccessRoute } = useAuth();
   /** Same rule as the "Manage Catalog" button — also gates the Type selector and inline issue creation. */
   const canManageCatalog = canAccessRoute({
@@ -167,7 +169,7 @@ export function CreateTicketDialog({
     method: "POST",
     path: "/technicians",
   });
-  const [rows, setRows] = useState<IssueRow[]>([makeRow()]);
+  const [rows, setRows] = useState<IssueRow[]>(() => [makeRow()]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   /** The form, or one row's troubleshooting page shown in its place. */
@@ -248,7 +250,7 @@ export function CreateTicketDialog({
   const comboItems = localCatalogIssues.map((i) => ({ id: i.id, label: i.title }));
 
   function issueTitle(row: IssueRow): string {
-    return localCatalogIssues.find((i) => i.id === row.issueId)?.title ?? "this issue";
+    return localCatalogIssues.find((i) => i.id === row.issueId)?.title ?? tv("tickets.create.thisIssue");
   }
 
   /** How many troubleshooting guides the row's issue has (0 for "Other"). */
@@ -304,11 +306,21 @@ export function CreateTicketDialog({
   }
 
   function handleClose() {
-    if (isSubmitting) return;
     setRows([makeRow()]);
     setSubmitError(null);
     setView({ kind: "form" });
     onClose();
+  }
+
+  /** Something was typed or picked: closing asks first (UX rule 5). */
+  const dirty =
+    Boolean(pickedStoreId || otherStoreText.trim()) ||
+    rows.some((r) => Boolean(r.issueId !== null || r.otherTitle.trim() || r.description.trim() || r.note.trim() || r.files.length > 0 || r.impact || r.troubleshooting));
+  const guard = useDiscardGuard(dirty, handleClose);
+
+  function requestClose() {
+    if (isSubmitting) return;
+    guard.requestClose();
   }
 
   /** The answer from a row's troubleshooting page. */
@@ -321,12 +333,12 @@ export function CreateTicketDialog({
       // Logged by the page; nothing to open a ticket for.
       const rest = rows.filter((r) => r.id !== rowId);
       if (rest.length === 0) {
-        toast.success(`Logged as fixed by troubleshooting — no ticket needed for ${issueTitle(row)}.`);
+        toast.success(tv("tickets.create.fixedNoTicket", { issue: issueTitle(row) }));
         handleClose();
         return;
       }
       setRows(rest);
-      toast.success(`${issueTitle(row)} is fixed and logged — it was taken off this ticket.`);
+      toast.success(tv("tickets.create.fixedTakenOff", { issue: issueTitle(row) }));
       return;
     }
 
@@ -351,12 +363,12 @@ export function CreateTicketDialog({
     setSubmitError(null);
 
     if (needsStorePick && !pickedStoreId) {
-      setSubmitError("Please select a store first.");
+      setSubmitError(tv("tickets.create.pickStoreFirst"));
       return;
     }
 
     if (isOtherStore && !otherStoreText.trim()) {
-      setSubmitError("Please enter a location description.");
+      setSubmitError(tv("tickets.create.placeRequired"));
       return;
     }
 
@@ -370,7 +382,7 @@ export function CreateTicketDialog({
         return;
       }
       if (troubleshootingPending(row)) {
-        setSubmitError(`Go through the troubleshooting for ${issueTitle(row)} first.`);
+        setSubmitError(tv("tickets.create.troubleshootPending", { issues: issueTitle(row) }));
         return;
       }
     }
@@ -386,6 +398,7 @@ export function CreateTicketDialog({
           description: row.description.trim(),
           ...(row.note.trim() ? { notes: [{ body: row.note.trim() }] } : {}),
           ...(row.files.length ? { files: row.files } : {}),
+          ...(row.impact ? { impact: row.impact } : {}),
           ...(guideCount(row) > 0 && row.troubleshooting
             ? {
                 troubleshooting: row.troubleshooting.outcome,
@@ -406,7 +419,7 @@ export function CreateTicketDialog({
       setRows([makeRow()]);
       setSubmitError(null);
       setView({ kind: "form" });
-      toast.success(rows.length > 1 ? "Ticket created with all issues." : "Ticket created successfully.");
+      toast.success(tv("tickets.create.created"));
       onSuccess();
       onClose();
     } catch (err) {
@@ -422,23 +435,31 @@ export function CreateTicketDialog({
   const troubleshootingRow = view.kind === "troubleshooting" ? rows.find((r) => r.id === view.rowId) ?? null : null;
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <>
+    <Dialog open={open} onOpenChange={(next) => { if (!next) requestClose(); }}>
       <DialogContent
-        ref={contentRef}
-        className={cn("w-[95vw] max-h-[90vh] overflow-y-auto", troubleshootingRow ? "max-w-3xl sm:max-w-3xl" : "max-w-2xl")}
+        className={cn("flex max-h-[90dvh] w-[95vw] flex-col gap-0 overflow-hidden p-0", troubleshootingRow ? "sm:max-w-3xl" : "sm:max-w-2xl")}
         onOpenAutoFocus={(e) => e.preventDefault()}
+        // Escape inside an open issue search only closes that search.
+        onEscapeKeyDown={(e) => {
+          if ((e.target as HTMLElement | null)?.closest?.("[data-combobox-open='true']")) e.preventDefault();
+        }}
       >
-        <DialogHeader>
-          <DialogTitle>{troubleshootingRow ? `Troubleshooting · ${issueTitle(troubleshootingRow)}` : t("createDialog.title")}</DialogTitle>
+        {/* Header and buttons stay put; only the form scrolls. */}
+        <DialogHeader className="shrink-0 border-b px-5 pt-5 pb-4 pe-12 text-start sm:px-6">
+          <DialogTitle className="font-heading font-semibold">
+            {troubleshootingRow ? tv("tickets.create.troubleshootTitle", { issue: issueTitle(troubleshootingRow) }) : t("createDialog.title")}
+          </DialogTitle>
           <DialogDescription>
-            {troubleshootingRow ? "Try these first — many problems are fixed in a few minutes without a technician." : t("createDialog.description")}
+            {troubleshootingRow ? tv("tickets.create.troubleshootIntro") : t("createDialog.description")}
           </DialogDescription>
         </DialogHeader>
 
+        <div ref={contentRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
         {troubleshootingRow && troubleshootingRow.issueId !== null && (
-          <div className="space-y-4 py-2">
+          <div className="space-y-4">
             <Button type="button" variant="ghost" size="sm" className="-ms-2" onClick={() => setView({ kind: "form" })}>
-              <ArrowLeft className="me-1.5 h-4 w-4" aria-hidden="true" /> Back to the ticket
+              <ArrowLeft className="me-1.5 h-4 w-4 rtl:rotate-180" aria-hidden="true" /> {tv("tickets.create.backToTicket")}
             </Button>
             <IssueTroubleshooting
               issueId={troubleshootingRow.issueId}
@@ -450,13 +471,13 @@ export function CreateTicketDialog({
           </div>
         )}
 
-        <div className={cn("space-y-4 py-2", troubleshootingRow && "hidden")}>
+        <div className={cn("space-y-4", troubleshootingRow && "hidden")}>
           {/* Store selector — shown only when opened in all-stores mode */}
           {needsStorePick && (
             <div className="space-y-1.5 rounded-lg border bg-muted/30 p-3">
               <Label className="flex items-center gap-1.5 text-sm font-medium">
                 <Store className="h-4 w-4 text-muted-foreground" />
-                Store <span className="text-destructive">*</span>
+                {tv("common.store")} <span className="text-destructive">*</span>
               </Label>
               <div className="flex gap-2">
                 {/* Searchable store dropdown */}
@@ -479,7 +500,7 @@ export function CreateTicketDialog({
                               const s = stores!.find((s) => (s.storeId ?? s.id) === pickedStoreId);
                               return s ? (s.name ? `${s.name} (${pickedStoreId})` : pickedStoreId) : pickedStoreId;
                             })()
-                          : "Select a store…"}
+                          : tv("tickets.create.selectStore")}
                       </span>
                       <ChevronDown className={cn("ms-auto h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-150", storePickerOpen && "rotate-180")} />
                     </button>
@@ -487,19 +508,19 @@ export function CreateTicketDialog({
                   <PopoverContent align="start" sideOffset={4} className="w-[var(--radix-popover-trigger-width)] min-w-[200px] p-0 shadow-md">
                     <div className="border-b px-2 py-1.5">
                       <div className="relative">
-                        <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Search className="pointer-events-none absolute start-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                         <input
                           ref={storeSearchRef}
                           value={storeSearch}
                           onChange={(e) => setStoreSearch(e.target.value)}
-                          placeholder="Search stores…"
-                          className="w-full rounded-sm bg-transparent py-1 pl-7 pr-2 text-sm outline-none placeholder:text-muted-foreground"
+                          placeholder={tv("tickets.create.searchStores")}
+                          className="w-full rounded-sm bg-transparent py-1 ps-7 pe-2 text-sm outline-none placeholder:text-muted-foreground"
                         />
                       </div>
                     </div>
                     <div className="max-h-52 overflow-y-auto p-1" onWheel={(e) => e.stopPropagation()}>
                       {filteredStores.length === 0 ? (
-                        <p className="py-4 text-center text-xs text-muted-foreground">No results</p>
+                        <p className="py-4 text-center text-xs text-muted-foreground">{tv("tickets.create.noResults")}</p>
                       ) : (
                         filteredStores.map((s) => {
                           const id = s.storeId ?? s.id;
@@ -532,13 +553,13 @@ export function CreateTicketDialog({
                   className="h-9 shrink-0"
                   onClick={() => setPickedStoreId(isOtherStore ? "" : "__other__")}
                 >
-                  Other
+                  {tv("tickets.create.otherPlace")}
                 </Button>
               </div>
               {isOtherStore && (
                 <Input
                   className="mt-1 text-sm"
-                  placeholder="e.g. Main Warehouse — Building C"
+                  placeholder={tv("tickets.create.otherPlacePlaceholder")}
                   value={otherStoreText}
                   onChange={(e) => setOtherStoreText(e.target.value)}
                 />
@@ -548,25 +569,25 @@ export function CreateTicketDialog({
 
           {/* Ticket type — only users with catalog-management access may choose it */}
           <div className="space-y-1.5">
-            <Label className="text-sm font-medium">Type</Label>
+            <Label className="text-sm font-medium">{tv("tickets.create.type")}</Label>
             {canManageCatalog ? (
               <Select value={ticketType} onValueChange={(v) => setTicketType(v as TicketType)}>
                 <SelectTrigger className="text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent position="popper" style={{ maxHeight: 240, overflowY: "auto" }}>
-                  <SelectItem value="normal">Normal</SelectItem>
-                  <SelectItem value="preventive_maintenance">Preventive Maintenance</SelectItem>
+                  <SelectItem value="normal">{tv("tickets.create.typeNormal")}</SelectItem>
+                  <SelectItem value="preventive_maintenance">{tv("tickets.create.typePreventive")}</SelectItem>
                 </SelectContent>
               </Select>
             ) : (
               <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground">
-                Normal
+                {tv("tickets.create.typeNormal")}
               </div>
             )}
           </div>
 
-          <div className={needsStorePick && !pickedStoreId ? "pointer-events-none opacity-40" : undefined}>
+          <div className={cn("space-y-3", needsStorePick && !pickedStoreId && "pointer-events-none opacity-40")}>
           {rows.map((row, idx) => (
             <div key={row.id} className="rounded-lg border p-4 space-y-3">
               {/* Row header */}
@@ -580,6 +601,7 @@ export function CreateTicketDialog({
                     size="icon"
                     className="h-7 w-7 text-destructive hover:text-destructive"
                     onClick={() => removeRow(row.id)}
+                    aria-label={tv("tickets.create.removeIssue")}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -594,7 +616,7 @@ export function CreateTicketDialog({
                 {isOtherStore ? (
                   <Input
                     className="text-sm"
-                    placeholder="Describe the issue…"
+                    placeholder={tv("tickets.create.otherIssuePlaceholder")}
                     value={row.otherTitle}
                     onChange={(e) => updateRow(row.id, { otherTitle: e.target.value })}
                   />
@@ -612,10 +634,10 @@ export function CreateTicketDialog({
                     onCreate={canManageCatalog ? createCatalogIssue : undefined}
                     placeholder={
                       catalogLoading
-                        ? "Loading issues…"
+                        ? tv("tickets.create.loadingIssues")
                         : canManageCatalog
-                        ? "Search issues or type to create a new one…"
-                        : "Search issues…"
+                        ? tv("tickets.create.searchOrCreate")
+                        : tv("tickets.create.searchOnly")
                     }
                   />
                 )}
@@ -628,25 +650,23 @@ export function CreateTicketDialog({
                     <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
                     <p className="min-w-0 flex-1 text-sm">
                       {row.troubleshooting.outcome === "none_match"
-                        ? guideCount(row) === 1
-                          ? "Troubleshooting done: the guide didn't describe the problem."
-                          : `Troubleshooting done: none of the ${guideCount(row)} guides described the problem.`
+                        ? tv("tickets.create.troubleshootDoneNone")
                         : row.troubleshooting.guideTitle
-                          ? `Troubleshooting done: tried "${row.troubleshooting.guideTitle}", still broken.`
-                          : "Troubleshooting done: tried the steps, still broken."}
+                          ? tv("tickets.create.troubleshootDoneTried", { guide: row.troubleshooting.guideTitle })
+                          : tv("tickets.create.troubleshootDoneSteps")}
                     </p>
                     <Button type="button" variant="ghost" size="sm" className="h-7" onClick={() => setView({ kind: "troubleshooting", rowId: row.id })}>
-                      View the steps again
+                      {tv("tickets.create.viewStepsAgain")}
                     </Button>
                   </div>
                 ) : (
                   <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2">
                     <Wrench className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
                     <p className="min-w-0 flex-1 text-sm">
-                      {issueTitle(row)} has troubleshooting steps. Try them before this ticket can be sent.
+                      {tv("tickets.create.troubleshootFirst", { issue: issueTitle(row) })}
                     </p>
                     <Button type="button" size="sm" className="h-7" onClick={() => setView({ kind: "troubleshooting", rowId: row.id })}>
-                      Go through troubleshooting
+                      {tv("tickets.create.goTroubleshoot")}
                     </Button>
                   </div>
                 )
@@ -661,9 +681,29 @@ export function CreateTicketDialog({
                 />
               </div>
 
+              {/* Impact: how much it hurts the store */}
+              <div className="space-y-1">
+                <Label className="text-sm" htmlFor={`impact-${row.id}`}>{tv("tickets.create.impact")}</Label>
+                <Select value={row.impact} onValueChange={(v) => updateRow(row.id, { impact: v as Impact })}>
+                  <SelectTrigger id={`impact-${row.id}`} className="text-sm">
+                    <SelectValue placeholder={tv("tickets.create.impactPlaceholder")} />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    {vocabOptions(IMPACTS).map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {vocabText(tv, o)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">{tv("tickets.create.impactHelp")}</p>
+              </div>
+
               {/* Description */}
               <div className="space-y-1">
-                <Label className="text-sm">{t("createDialog.descriptionLabel")}</Label>
+                <Label className="text-sm">
+                  {t("createDialog.descriptionLabel")} <span className="text-destructive">*</span>
+                </Label>
                 <Textarea
                   value={row.description}
                   onChange={(e) => updateRow(row.id, { description: e.target.value })}
@@ -724,7 +764,7 @@ export function CreateTicketDialog({
                       {t("createDialog.attachFiles")}
                     </Button>
                     <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground/60">
-                      <ClipboardPaste className="h-3 w-3" /> Paste
+                      <ClipboardPaste className="h-3 w-3" aria-hidden="true" /> {tv("tickets.create.paste")}
                     </span>
                   </div>
                   {row.files.length > 0 && (
@@ -762,17 +802,18 @@ export function CreateTicketDialog({
           </Button>
           </div>{/* end dimmed wrapper */}
 
-          {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+          {submitError && <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{submitError}</p>}
+        </div>
         </div>
 
         {!troubleshootingRow && (
-          <DialogFooter className="items-center gap-2">
+          <DialogFooter className="shrink-0 gap-2 border-t bg-muted/30 px-5 py-3 sm:items-center sm:px-6">
             {pendingRows.length > 0 && (
               <p className="me-auto text-sm text-muted-foreground">
-                Go through the troubleshooting for {pendingRows.map(issueTitle).join(", ")} to send this ticket.
+                {tv("tickets.create.troubleshootPending", { issues: pendingRows.map(issueTitle).join(", ") })}
               </p>
             )}
-            <Button variant="outline" onClick={handleClose} disabled={isSubmitting}>
+            <Button variant="outline" onClick={requestClose} disabled={isSubmitting}>
               {t("createDialog.cancel")}
             </Button>
             <Button onClick={handleSubmit} disabled={isSubmitting || pendingRows.length > 0}>
@@ -783,5 +824,7 @@ export function CreateTicketDialog({
         )}
       </DialogContent>
     </Dialog>
+    {guard.dialog}
+    </>
   );
 }

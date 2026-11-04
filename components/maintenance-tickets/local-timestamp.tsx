@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { formatLocalTimestamp } from "@/lib/utils/date-display";
 
@@ -25,13 +26,14 @@ export function LocalTimestamp({
   showZone?: boolean;
   className?: string;
 }) {
+  const t = useTranslations("maintenanceSystem.tickets.localTime");
   const ts = formatLocalTimestamp(iso, pattern);
 
   if (!ts) {
     return <span className={className}>{iso}</span>;
   }
 
-  const title = [ts.zoneName && `Your time zone: ${ts.zoneName}`, ts.utc].filter(Boolean).join(" · ");
+  const title = [ts.zoneName && t("zoneTitle", { zone: ts.zoneName }), ts.utc].filter(Boolean).join(" · ");
 
   return (
     <span className={cn("inline-flex flex-wrap items-baseline gap-x-1", className)}>
@@ -40,7 +42,7 @@ export function LocalTimestamp({
       </time>
       {showZone && (
         <span className="text-[11px] text-muted-foreground" title={title}>
-          (your time, {ts.zone})
+          {t("yourTime", { zone: ts.zone })}
         </span>
       )}
     </span>

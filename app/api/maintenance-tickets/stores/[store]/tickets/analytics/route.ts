@@ -1,91 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
-import {
-  requireAuthorization,
-  getAuthorizationHeader,
-} from "@/app/api/_lib/auth";
+import { NextRequest } from "next/server";
+import { BASE_URL, errorJson, proxyGet } from "@/app/api/maintenance-tickets/_lib/proxy";
 
-const BASE_URL =
-  process.env.NEW_MAINTENANCE_API_URL ||
-  process.env.NEXT_PUBLIC_NEW_MAINTENANCE_API_URL ||
-  "https://maintenance.lcportal.cloud";
+type Params = { params: Promise<{ store: string }> };
 
-const TIMEOUT_MS = 15_000;
-
-async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function errorJson(code: string, message: string, status: number) {
-  return NextResponse.json(
-    { success: false, error: { code, message } },
-    { status, headers: { "Cache-Control": "no-store" } }
-  );
-}
-
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ store: string }> }
-) {
-  const authError = requireAuthorization(request);
-  if (authError) return authError;
-
+/** Aggregates for a store's tickets, scoped by the same filters as the list. */
+export async function GET(request: NextRequest, { params }: Params) {
   const { store } = await params;
   if (!store) return errorJson("MISSING_PARAM", "store is required", 400);
-
-  const authorization = getAuthorizationHeader(request)!;
-  const { searchParams } = new URL(request.url);
-
-  // Forward filter params to upstream — same filter set as the list endpoint,
-  // minus pagination (analytics is not paginated).
-  const forwardParams = new URLSearchParams();
-
-  // This is an allowlist, and anything missing from it is dropped SILENTLY --
-  // the request still succeeds, it just quietly ignores the filter. Add new
-  // scalar params here in the same commit that adds them to buildFilterParams,
-  // or the filter will appear to work and do nothing.
-  const SCALAR_KEYS = [
-    "q", "assigned_from", "assigned_to", "include_analytics",
-    "created_from", "created_to", "changed_from", "changed_to",
-    "part_cost_single_gt", "part_cost_total_gt",
-    "trashed", "sort", "dir",
-  ];
-  const ARRAY_KEYS = [
-    "statuses[]", "priorities[]", "assigned_priorities[]", "issue_ids[]",
-    "issue_statuses[]", "technician_ids[]", "types[]", "changed_statuses[]",
-    "payment_statuses[]", "creator_ids[]",
-  ];
-
-  for (const key of SCALAR_KEYS) {
-    const v = searchParams.get(key);
-    if (v) forwardParams.set(key, v);
-  }
-  for (const key of ARRAY_KEYS) {
-    searchParams.getAll(key).forEach((v) => forwardParams.append(key, v));
-  }
-
-  const upstreamUrl = `${BASE_URL}/stores/${encodeURIComponent(store)}/tickets/analytics${forwardParams.toString() ? `?${forwardParams}` : ""}`;
-
-  try {
-    const res = await fetchWithTimeout(upstreamUrl, {
-      method: "GET",
-      headers: { Authorization: authorization, Accept: "application/json" },
-    });
-    const body = await res.text();
-    return new NextResponse(body, {
-      status: res.status,
-      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "unknown";
-    if (msg.includes("abort") || msg.includes("timed out")) {
-      return errorJson("TIMEOUT", "Upstream request timed out", 504);
-    }
-    return errorJson("NETWORK_ERROR", "Failed to reach maintenance service", 502);
-  }
+  const qs = new URL(request.url).search;
+  return proxyGet(request, `${BASE_URL}/stores/${encodeURIComponent(store)}/tickets/analytics${qs}`);
 }

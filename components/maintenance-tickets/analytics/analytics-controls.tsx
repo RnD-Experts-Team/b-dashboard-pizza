@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { ArrowRight, CalendarDays, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -42,6 +43,7 @@ export function AnalyticsControls({
   /** More filters, after the stores. */
   children?: ReactNode;
 }) {
+  const t = useTranslations("maintenanceSystem");
   const active = matchPreset(startDate, endDate, undefined, presets);
 
   function pick(preset: RangePreset) {
@@ -51,7 +53,7 @@ export function AnalyticsControls({
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border bg-card px-4 py-3 shadow-sm">
-      <div role="group" aria-label="Date range" className="inline-flex flex-wrap rounded-lg border bg-muted/50 p-0.5">
+      <div role="group" aria-label={t("analytics.dateRange")} className="inline-flex flex-wrap rounded-lg border bg-muted/50 p-0.5">
         {presets.map((p) => (
           <button
             key={p.id}
@@ -72,14 +74,14 @@ export function AnalyticsControls({
 
       <div className="flex items-center gap-1.5">
         <CalendarDays className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        <span className="sr-only">From</span>
+        <span className="sr-only">{t("analytics.from")}</span>
         <DatePicker
           value={startDate}
           onChange={(value) => value && onRangeChange(value, value > endDate ? value : endDate)}
           className="w-36"
         />
         <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-        <span className="sr-only">To</span>
+        <span className="sr-only">{t("analytics.to")}</span>
         <DatePicker
           value={endDate}
           onChange={(value) => value && onRangeChange(value < startDate ? value : startDate, value)}
@@ -96,7 +98,7 @@ export function AnalyticsControls({
       {isUpdating && (
         <span className="ms-auto inline-flex items-center gap-1.5 text-sm text-muted-foreground" role="status" aria-live="polite">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          Updating…
+          {t("tickets.analytics.updating")}
         </span>
       )}
     </div>
