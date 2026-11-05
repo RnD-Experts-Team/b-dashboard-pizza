@@ -5,6 +5,13 @@ import { isOkWithinStep, targetQty, variance } from "./formulas";
 import { addDaysIso, daysBetween } from "./dates";
 
 /**
+ * From this day on the BASE is the day's own sales (backend note 20, 2026-11-03), built the next day. A plan can be
+ * confirmed before that on the average of earlier weeks, so a plan's stored base may be an estimate — from this day on a
+ * count is judged against the REAL base, never the stored one. Days before it keep their stored base (that WAS the base then).
+ */
+export const BASE_SAME_DAY_FROM = "2026-11-03";
+
+/**
  * One cell of the 7 × 3 week grid. The states must stay distinct (rule 2):
  * a real count of 0 is `counted`; a count that never happened is `missing`,
  * and is never folded into a zero.
@@ -46,7 +53,15 @@ export type WeekCell =
     }
   | { kind: "missing"; date: string; key: IngredientKey; planned: number; bufferPct: number }
   /** Planned for today or a later day — not counted YET. Not a gap, and not a zero. */
-  | { kind: "awaiting"; date: string; key: IngredientKey; planned: number; bufferPct: number }
+  | {
+      kind: "awaiting";
+      date: string;
+      key: IngredientKey;
+      planned: number;
+      bufferPct: number;
+      /** "base": the count is in but the day's real base isn't built yet, so it can't be judged. Absent: no count yet. */
+      reason?: "base";
+    }
   /**
    * No confirmed plan for this day. If the night-before count exists and the day's base was
    * supplied, the count is judged against that base (`ok`/`variance`) and, like a planned cell,
@@ -176,7 +191,9 @@ export function buildWeekCells(
   bases?: Map<string, number>,
   countDivisor?: IngredientMap["countDivisor"],
   mornings?: Map<string, number>,
-  morningDivisors?: IngredientMap["morningDivisor"]
+  morningDivisors?: IngredientMap["morningDivisor"],
+  /** Dates whose sales aren't built yet (the server answered `days_found` 0): no real base exists for them. */
+  unbuilt?: Set<string>
 ): WeekCells {
   const days = daysBetween(weekStart, weekEnd);
   const planByCell = new Map<string, StoredPlanRow>();
@@ -240,7 +257,16 @@ export function buildWeekCells(
         }
         continue;
       }
-      const base = targetQty(plan.planned_qty, plan.buffer_pct);
+      // The real base when the day has one; the plan's stored base only for days before the change, or when the
+      // lookup could not be made. A day whose sales are known not to be built yet waits — never judged on an average.
+      const sameDay = date >= BASE_SAME_DAY_FROM;
+      const real = sameDay ? bases?.get(id) ?? null : null;
+      if (sameDay && real == null && unbuilt?.has(date)) {
+        awaitingCount++;
+        cells.push({ kind: "awaiting", date, key, planned: plan.planned_qty, bufferPct: plan.buffer_pct, reason: "base" });
+        continue;
+      }
+      const base = real ?? targetQty(plan.planned_qty, plan.buffer_pct);
       const divisor = countDivisor?.[key] ?? 1;
       const night = count ? toBaseUnit(count.total_in_unit_1, divisor) : null;
       const morningDivisor = morningDivisors?.[key] ?? 1;

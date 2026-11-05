@@ -98,7 +98,9 @@ function ReportBuilderHome() {
     if (next === "mine") q.delete("tab");
     else q.set("tab", next);
     const qs = q.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    // history.replaceState, not router.replace: Next keeps useSearchParams in step with it and
+    // makes no server request, so a tab switch is never held up behind the lists' calls.
+    window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
   };
 
   const runNow = async (tpl: ReportTemplate) => {

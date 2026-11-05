@@ -356,10 +356,12 @@ interface BasesState {
   values: Record<string, Map<string, number>>;
   /** Per store: `${date}|${ingredientKey}` → the first-shift morning count (answered ones only). */
   mornings: Record<string, Map<string, number>>;
+  /** Per store: the dates whose sales aren't built yet (the answer said `days_found` 0) — no real base exists for them. */
+  unbuilt: Record<string, Set<string>>;
   /** `${store}|${date}` → how that day's lookup ended. A day that isn't here is still pending. */
   settled: Record<string, "ok" | "failed">;
 }
-const NO_BASES: BasesState = { values: {}, mornings: {}, settled: {} };
+const NO_BASES: BasesState = { values: {}, mornings: {}, unbuilt: {}, settled: {} };
 
 /**
  * In the day-by-day fallback, a planned day's morning count costs one request per store-day. Past this many stores
@@ -656,11 +658,13 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
       store: string,
       found: Map<string, number>,
       outcome: Record<string, "ok" | "failed">,
-      morning: Map<string, number> = new Map()
+      morning: Map<string, number> = new Map(),
+      unbuilt: string[] = []
     ) =>
       setBases((b) => ({
         values: found.size ? { ...b.values, [store]: new Map([...(b.values[store] ?? []), ...found]) } : b.values,
         mornings: morning.size ? { ...b.mornings, [store]: new Map([...(b.mornings[store] ?? []), ...morning]) } : b.mornings,
+        unbuilt: unbuilt.length ? { ...b.unbuilt, [store]: new Set([...(b.unbuilt[store] ?? []), ...unbuilt]) } : b.unbuilt,
         settled: {
           ...b.settled,
           ...Object.fromEntries(Object.entries(outcome).map(([date, end]) => [`${store}|${date}`, end])),
@@ -679,7 +683,7 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
           if (signal.aborted) return;
           const found = basesOf(date, res.days_found, res.ingredients);
           const ok = needsBase.has(`${store}|${date}`) ? found != null : true;
-          record(store, found ?? new Map(), { [date]: ok ? "ok" : "failed" }, morningsOf(date, res.morning_count));
+          record(store, found ?? new Map(), { [date]: ok ? "ok" : "failed" }, morningsOf(date, res.morning_count), res.days_found === 0 ? [date] : []);
         } catch {
           if (!signal.aborted) record(store, new Map(), { [date]: "failed" });
         }
@@ -704,17 +708,19 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
               const found = new Map<string, number>();
               const morning = new Map<string, number>();
               const outcome: Record<string, "ok" | "failed"> = {};
+              const unbuilt: string[] = [];
               for (const date of dates) {
                 // A store or date the answer left out, or an empty `{}` entry, can't be checked.
                 const entry = res.stores?.[store]?.[date];
                 const bases = entry ? basesOf(date, entry.days_found, entry.ingredients) : null;
                 if (bases) for (const [key, base] of bases) found.set(key, base);
                 if (entry) for (const [key, v] of morningsOf(date, entry.morning_count)) morning.set(key, v);
+                if (entry?.days_found === 0) unbuilt.push(date);
                 // An unplanned day needs its base; a planned day only needs the store-day to be in the answer.
                 const answered = needsBase.has(`${store}|${date}`) ? bases != null : entry != null && Object.keys(entry).length > 0;
                 outcome[date] = answered ? "ok" : "failed";
               }
-              record(store, found, outcome, morning);
+              record(store, found, outcome, morning, unbuilt);
             }
           } catch (err) {
             if (signal.aborted || isAbort(err)) return;
@@ -753,7 +759,8 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
         storeBases,
         map.countDivisor,
         storeMornings,
-        map.morningDivisor
+        map.morningDivisor,
+        bases.unbuilt[s.store]
       );
       // Counted days with no plan are scored too, but only once their base is known, and every judged day waits
       // for its morning count: until every one of them has ended its lookup the variance part is unknown, never
@@ -797,7 +804,8 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
           storeBases,
           map.countDivisor,
           storeMornings,
-          map.morningDivisor
+          map.morningDivisor,
+          bases.unbuilt[s.store]
         );
         // A week with no plan, nothing counted and no judgement has no score to compare
         // against — it's "no data", not 0% (rule 2), or it would inflate progress.

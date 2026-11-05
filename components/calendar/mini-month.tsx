@@ -1,12 +1,25 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { dayKey, isSameDay, isSameMonth, monthGrid42 } from "@/lib/calendar/dates";
+import { dayHeat, type DayCount, type DayHeat } from "@/lib/calendar/day-counts";
 import type { CalendarEvent } from "@/lib/calendar/types";
 import { useCalendarClock } from "./calendar-clock";
 import { DayDots } from "./event-parts";
 import { usePeek } from "./event-peek";
 import { useCalendarFormat } from "./use-calendar-format";
+
+/**
+ * A day's tint in the Year view, from its worst status. Red stays reserved for
+ * overdue/missed (the calendar's one colour rule); the rest are neutral steps.
+ */
+const HEAT: Record<DayHeat, string> = {
+  attention: "bg-destructive/15 font-semibold text-destructive dark:bg-destructive/25",
+  active: "bg-foreground/20 font-semibold",
+  open: "bg-muted font-medium",
+  done: "bg-muted/40 text-muted-foreground",
+};
 
 /**
  * A 6-week mini month (constant height while paging). Used by the Year view
@@ -16,6 +29,7 @@ import { useCalendarFormat } from "./use-calendar-format";
 export function MiniMonth({
   month,
   grouped,
+  counts,
   onPick,
   highlight,
   peek = false,
@@ -23,12 +37,15 @@ export function MiniMonth({
 }: {
   month: Date;
   grouped: Map<string, CalendarEvent[]>;
+  /** Year view: each day's numbers (`group=day`). The day is tinted and peeks its tally. */
+  counts?: Map<string, DayCount>;
   onPick: (key: string) => void;
   highlight?: (d: Date) => boolean;
   /** Hovering a day with events previews them (Year view). */
   peek?: boolean;
   cellClass?: string;
 }) {
+  const t = useTranslations("calendar");
   const f = useCalendarFormat();
   const now = new Date(useCalendarClock());
   const { peekProps } = usePeek();
@@ -58,14 +75,23 @@ export function MiniMonth({
           : "";
         const list = grouped.get(k) ?? [];
         const today = isSameDay(d, now);
-        const peekBind = peek && list.length ? peekProps({ type: "day", id: k }, { onActivate: () => onPick(k) }) : null;
+        const count = counts?.get(k);
+        const heat = count ? dayHeat(count) : null;
+        // A counted day peeks its numbers; otherwise its events (if any).
+        const peekBind = !peek
+          ? null
+          : heat
+            ? peekProps({ type: "counts", id: k }, { onActivate: () => onPick(k) })
+            : list.length
+              ? peekProps({ type: "day", id: k }, { onActivate: () => onPick(k) })
+              : null;
         return (
           <button
             key={k}
             type="button"
             {...peekBind}
             onClick={peekBind ? peekBind.onClick : () => onPick(k)}
-            aria-label={f.longDate(d)}
+            aria-label={count ? `${f.longDate(d)}, ${t("year.total", { n: count.total })}` : f.longDate(d)}
             className={cn("group/day relative grid place-items-center outline-none", cellClass, band)}
           >
             <span
@@ -75,7 +101,9 @@ export function MiniMonth({
                   ? "bg-primary font-semibold text-primary-foreground"
                   : on
                     ? "font-semibold"
-                    : "group-hover/day:bg-accent group-data-[peek-open=true]/day:bg-accent",
+                    : heat
+                      ? cn(HEAT[heat], "group-hover/day:ring-2 group-hover/day:ring-ring/40 group-data-[peek-open=true]/day:ring-2 group-data-[peek-open=true]/day:ring-ring/60")
+                      : "group-hover/day:bg-accent group-data-[peek-open=true]/day:bg-accent",
               )}
             >
               {d.getDate()}

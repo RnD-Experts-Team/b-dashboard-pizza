@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { ArrowLeft, Download, FileSpreadsheet, Loader2, Pencil, XCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
@@ -53,7 +53,6 @@ function RunScreen() {
   const locale = (params?.locale as string) || "en";
   const runId = String(params?.runId ?? "");
   const base = `/${locale}/dashboard/report-builder`;
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const qs = searchParams.toString();
@@ -62,9 +61,11 @@ function RunScreen() {
   const setQuery = useCallback(
     (patch: Partial<GridQuery>) => {
       const next = gridQueryToParams({ ...query, ...patch }).toString();
-      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+      // history.replaceState, not router.replace: no server request, so sorting, searching
+      // and paging are never held up behind the run's polling.
+      window.history.replaceState(null, "", next ? `${pathname}?${next}` : pathname);
     },
-    [query, pathname, router],
+    [query, pathname],
   );
 
   const { run, isLoading, error, reload } = useReportRun(runId);
