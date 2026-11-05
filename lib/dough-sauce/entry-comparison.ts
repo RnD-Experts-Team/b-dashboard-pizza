@@ -3,6 +3,7 @@ import { INGREDIENT_KEYS } from "@/types/dough-sauce.types";
 import type { EntryItem } from "@/types/inventory.types";
 import { toBaseUnit, type IngredientMap } from "./ingredient-map";
 import { gapOf, isOkWithinStep, targetQty, variance } from "./formulas";
+import { BASE_SAME_DAY_FROM } from "./week-cells";
 
 /**
  * How one dough/sauce ingredient in a SUBMITTED entry compares with the BASE of the day that count feeds. States
@@ -49,11 +50,13 @@ export function entryHasPlanItems(items: EntryItem[], map: IngredientMap): boole
  */
 export function targetsFor(
   plan: Plan | null,
-  base: DailyPlanBase | null
+  base: DailyPlanBase | null,
+  /** The day the base is for. From 2026-11-03 only the REAL base counts — a plan confirmed on the average never does. */
+  day: string
 ): Partial<Record<IngredientKey, number>> {
   const out: Partial<Record<IngredientKey, number>> = {};
   for (const key of INGREDIENT_KEYS) {
-    const line = plan?.confirmed ? plan.lines.find((l) => l.ingredient_key === key) : undefined;
+    const line = plan?.confirmed && day < BASE_SAME_DAY_FROM ? plan.lines.find((l) => l.ingredient_key === key) : undefined;
     if (line) {
       out[key] = targetQty(line.planned_qty, line.buffer_pct, line.base_qty);
       continue;

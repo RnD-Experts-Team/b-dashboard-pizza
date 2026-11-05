@@ -76,9 +76,9 @@ export function EntryPlanComparison({ storeKey, date, items }: EntryPlanComparis
 
   const comparison = useMemo(() => {
     if (state.status !== "ready") return null;
-    const targets = targetsFor(state.plan, state.base);
+    const targets = targetsFor(state.plan, state.base, target);
     return Object.keys(targets).length > 0 ? buildEntryComparison(targets, items, map) : null;
-  }, [state, items, map]);
+  }, [state, items, map, target]);
 
   if (!relevant || !storeKey) return null;
   // No access to the base — the reader simply doesn't get this aid.

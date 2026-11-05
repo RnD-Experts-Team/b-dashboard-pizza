@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { calendarService, type CalendarEventsPage, type CalendarNotice } from "@/lib/api/services/calendar.service";
+import { calendarService, type CalendarEventsPage, type CalendarYearCounts } from "@/lib/api/services/calendar.service";
 import { calendarToolboxService } from "@/lib/api/services/calendar-toolbox.service";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useCalendarStore } from "@/lib/store/calendar.store";
@@ -98,7 +98,6 @@ interface CalendarEventsResult {
   failed: FeedSource[];
   /** Some feed hit its event cap. */
   truncated: boolean;
-  notice?: CalendarNotice;
 }
 
 const EMPTY_PAGE: CalendarEventsPage = { events: [], failed: [], truncated: false };
@@ -189,8 +188,70 @@ export function useCalendarEvents(
     retry,
     failed: page.failed,
     truncated: page.truncated,
-    notice: page.notice,
   };
+}
+
+const EMPTY_YEAR: CalendarYearCounts = { days: new Map(), failed: [], truncated: false };
+
+/**
+ * The Year view's daily counts for the stores the Calendar shows
+ * (`calendarService.getYearCounts`, `group=day`). Same contract as
+ * `useCalendarEvents`: keyed by the request so another year never flashes the
+ * previous one, a skeleton only after a short wait, `error` + `retry()` when no
+ * source loads. A write bumps `revision`, which re-reads only what it dropped.
+ */
+export function useCalendarYear(range: DateRange, { enabled = true }: { enabled?: boolean } = {}) {
+  const stores = useCalendarStores();
+  const [loaded, setLoaded] = useState<{ key: string; data: CalendarYearCounts } | null>(null);
+  const [failedKey, setFailedKey] = useState<string | null>(null);
+  const [slowKey, setSlowKey] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const forceNext = useRef(false);
+  const revision = useCalendarStore((s) => s.revision);
+
+  const fromMs = +range.from;
+  const toMs = +range.to;
+  const storesKey = stores.map((s) => s.code).join(",");
+  const key = `${fromMs}|${toMs}|${storesKey}|${attempt}|${revision}`;
+
+  useEffect(() => {
+    if (!enabled) return;
+    let live = true;
+    const controller = new AbortController();
+    const slow = setTimeout(() => {
+      if (live) setSlowKey(key);
+    }, SKELETON_DELAY_MS);
+    const force = forceNext.current;
+    forceNext.current = false;
+
+    calendarService
+      .getYearCounts({ from: new Date(fromMs), to: new Date(toMs) }, stores, { signal: controller.signal, force })
+      .then((data) => {
+        if (live) setLoaded({ key, data });
+      })
+      .catch(() => {
+        if (live && !controller.signal.aborted) setFailedKey(key);
+      })
+      .finally(() => clearTimeout(slow));
+
+    return () => {
+      live = false;
+      clearTimeout(slow);
+      controller.abort();
+    };
+    // `stores` is captured through `storesKey` (part of `key`).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, fromMs, toMs, enabled]);
+
+  const retry = useCallback(() => {
+    forceNext.current = true;
+    setAttempt((n) => n + 1);
+  }, []);
+  const fresh = loaded?.key === key;
+  const error = failedKey === key;
+  const loading = enabled && !fresh && !error;
+  const data = fresh && loaded ? loaded.data : EMPTY_YEAR;
+  return { ...data, loading, showSkeleton: loading && slowKey === key, error, retry };
 }
 
 /**

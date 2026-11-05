@@ -322,7 +322,7 @@ function Cell({ cell }: { cell: WeekCell }) {
       );
     case "awaiting":
       return (
-        <div className={STACK} title={titled(t("awaiting"), cell.planned, cell.bufferPct)}>
+        <div className={STACK} title={titled(t(cell.reason === "base" ? "awaitingBase" : "awaiting"), cell.planned, cell.bufferPct)}>
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
             <Clock className="h-3 w-3" />
             {t("plan", { n: fmtQty(round2(cell.planned)) })}

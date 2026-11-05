@@ -396,11 +396,10 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
 
   // Store calendar: the 8 calendar feeds for the selected store. No gate here —
   // pizzasys decides each layer per feed (a layer the user can't see answers
-  // 403 and is hidden).
-  // Hidden for now (not part of this release): the page at /dashboard/calendar
-  // still exists. To bring it back, uncomment this, the item in `toolboxGroup`,
-  // the Calendar button in topbar.tsx, and the matching entry in
-  // lib/nav/bottom-nav-items.ts (the two nav lists must stay 1:1).
+  // 403 and is hidden). Mirrored 1:1 by the "calendar" entry in
+  // lib/nav/bottom-nav-items.ts.
+  // HIDDEN (commented out on request): the page stays routable at /dashboard/calendar.
+  // To show it again, restore this item and its entry in the Toolbox group below.
   // const calendarItem: NavItem = {
   //   title: t("calendar"),
   //   href: `/${locale}/dashboard/calendar`,

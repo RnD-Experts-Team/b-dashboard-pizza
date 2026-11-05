@@ -36,7 +36,7 @@ import { doughSauceService, DoughSauceError } from "@/lib/api/services/dough-sau
 import { useIngredients, useStoreDailyPlan, useWeekdayHistory, type WeekdayHistory } from "@/lib/hooks/use-dough-sauce";
 import { gapOf, plannedQty, targetQty, variance } from "@/lib/dough-sauce/formulas";
 import { COUNT_DIVIDED_KEYS, MORNING_DIVIDED_KEYS } from "@/lib/dough-sauce/ingredient-map";
-import { indexCounts } from "@/lib/dough-sauce/week-cells";
+import { BASE_SAME_DAY_FROM, indexCounts } from "@/lib/dough-sauce/week-cells";
 import { addDaysIso, todayIso, tomorrowIso, yesterdayIso } from "@/lib/dough-sauce/dates";
 import {
   INGREDIENT_KEYS,
@@ -220,20 +220,38 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
     return errs;
   }, [buffers, maxPct, t]);
 
+  // Since 2026-11-03 the base is the day's OWN sales, built the next day (10:30 / 13:30). Until then the server answers with
+  // null bases (days_found 0): that is "not built yet", never "sold 0".
+  const nextDay = addDaysIso(date, 1);
+  const baseWaiting =
+    !!base.data && !base.error && (base.data.days_found === 0 || !INGREDIENT_KEYS.every((k) => Number.isFinite(baseByKey[k]?.base)));
+
+  // Until the sales are built the plan can still be made on the AVERAGE of the 4 earlier same weekdays (in the row's unit,
+  // exactly the Average column). It is an estimate, labelled as one, and only used when ALL three ingredients have one.
+  const estimateByKey = useMemo(() => {
+    const m: Partial<Record<IngredientKey, number>> = {};
+    if (!baseWaiting || !history) return m;
+    for (const k of INGREDIENT_KEYS) {
+      const avg = history.average[k];
+      const div = baseByKey[k]?.divisor ?? 1;
+      if (avg != null && Number.isFinite(avg) && div > 0) m[k] = round4(avg / div);
+    }
+    return m;
+  }, [baseWaiting, history, baseByKey]);
+  const estimating = baseWaiting && INGREDIENT_KEYS.every((k) => estimateByKey[k] != null);
+  // What a row is planned from: the real base, else (only while waiting) the estimate. Never 0 for a missing one (rule 2).
+  const usableBase = (k: IngredientKey): number | null => {
+    const b = baseByKey[k]?.base;
+    return typeof b === "number" && Number.isFinite(b) ? b : estimating ? estimateByKey[k] ?? null : null;
+  };
+
   const canConfirm =
     !!store &&
     !!planData &&
     !!base.data &&
-    // A missing base must never be confirmed as a plan of 0 (rule 2).
-    INGREDIENT_KEYS.every((k) => Number.isFinite(baseByKey[k]?.base) && !bufferErrors[k]) &&
+    INGREDIENT_KEYS.every((k) => usableBase(k) != null && !bufferErrors[k]) &&
     !loading &&
     !saving;
-
-  // Since 2026-11-03 the base is the day's OWN sales, built the next day (10:30 / 13:30). Until then the server answers with
-  // null bases (days_found 0): that is "not built yet", never "sold 0", and nothing can be confirmed on it.
-  const nextDay = addDaysIso(date, 1);
-  const baseWaiting =
-    !!base.data && !base.error && (base.data.days_found === 0 || !INGREDIENT_KEYS.every((k) => Number.isFinite(baseByKey[k]?.base)));
 
   const onConfirm = async () => {
     if (!canConfirm) return;
@@ -245,7 +263,7 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
         lines: INGREDIENT_KEYS.map((k) => ({
           ingredient_key: k,
           buffer_pct: Number(buffers[k]),
-          planned_qty: round4(plannedQty(baseByKey[k]!.base!, Number(buffers[k]))),
+          planned_qty: round4(plannedQty(usableBase(k)!, Number(buffers[k]))),
         })),
       });
       toast.success(t("confirmed"));
@@ -279,8 +297,9 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
    * ── The night-before count vs THIS day's base ──
    * The inventory taken on the night of the 12th is what has to meet the plan for the 13th, and it is
    * judged against that plan's BASE (before the buffer): the buffer is a production margin, not the
-   * inventory target. A confirmed plan's own line is used; before confirming, the base the server has
-   * just computed for this day.
+   * inventory target. From 2026-11-03 that base is the day's REAL one (its own sales, from the server) — a plan
+   * confirmed earlier on the average does not change what a count is judged against, and until the day's sales are
+   * built there is no base, so there is no verdict yet. Days before that keep their plan's stored base.
    */
   const today = todayIso();
   const tomorrow = tomorrowIso();
@@ -291,14 +310,13 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
     const idx = indexCounts(counts.data.data ?? [], map);
     const rows: PrevRow[] = [];
     for (const k of ROW_ORDER) {
-      const line = planData?.confirmed ? planData.lines.find((l) => l.ingredient_key === k) : undefined;
+      const line = planData?.confirmed && date < BASE_SAME_DAY_FROM ? planData.lines.find((l) => l.ingredient_key === k) : undefined;
       const serverBase = baseByKey[k]?.base;
       const target = line
         ? targetQty(line.planned_qty, line.buffer_pct, line.base_qty)
-        : Number.isFinite(serverBase)
-          ? round4(serverBase!)
+        : typeof serverBase === "number" && Number.isFinite(serverBase)
+          ? round4(serverBase)
           : null;
-      if (target == null) continue;
       const row = idx.get(`${prevDay}|${k}`);
       // The 10 OZ dough is counted in single balls but its base is in units of 12 (the server's divisor), so
       // the count is divided the same way before it is compared. The sauce is counted in containers already.
@@ -321,7 +339,7 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
         morningDivisor,
         rawCounted: row ? row.total_in_unit_1 : null,
         divisor,
-        variance: counted != null ? variance(counted, target) : null,
+        variance: counted != null && target != null ? variance(counted, target) : null,
       });
     }
     return rows.length > 0 ? rows : null;
@@ -427,9 +445,11 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
           {/* The base is built the next day — say so before anyone reads a table full of dashes. */}
           {!showFrozen && baseWaiting && (
             <Notice tone="warn" icon={Clock}>
-              {date > today
-                ? t("baseNotReadyFuture", { date: day.long(date) })
-                : t("baseNotReady", { date: day.long(date), next: day.long(nextDay) })}
+              {estimating
+                ? t("baseEstimating", { date: day.long(date), next: day.long(nextDay), weekday: base.data?.weekday ?? "" })
+                : date > today
+                  ? t("baseNotReadyFuture", { date: day.long(date) })
+                  : t("baseNotReady", { date: day.long(date), next: day.long(nextDay) })}
             </Notice>
           )}
 
@@ -448,7 +468,7 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
                       by={confirmedBy}
                       at={planData.confirmed_at ? dateTime(planData.confirmed_at) : null}
                     />
-                    {!showFrozen && base.data && !base.error && <BaseChip ready={!baseWaiting} next={day.short(nextDay)} />}
+                    {!showFrozen && base.data && !base.error && <BaseChip ready={!baseWaiting} estimating={estimating} next={day.short(nextDay)} />}
                   </div>
                 }
               />
@@ -461,6 +481,7 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
                 frozen={showFrozen}
                 history={history}
                 waiting={baseWaiting}
+                estimateByKey={estimating ? estimateByKey : {}}
                 nextDayLabel={day.long(nextDay)}
                 buffers={buffers}
                 onBuffer={(k, v) => setBuffers((s) => ({ ...s, [k]: v }))}
@@ -493,6 +514,7 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
                       <li>{t("explainStepPlan")}</li>
                     </ol>
                     <ul className="mt-1.5 list-disc space-y-1 ps-4">
+                      <li>{t("explainEstimate", { weekday: base.data.weekday })}</li>
                       <li>{t("explainCorrections")}</li>
                       <li>{t("explainReference", { weekday: base.data.weekday })}</li>
                     </ul>
@@ -574,11 +596,13 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
             {canConfirmHere && !showFrozen && baseWaiting && (
               <span className="me-auto inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Clock className="h-3.5 w-3.5 shrink-0" />
-                {t("confirmWaiting", { next: day.long(nextDay) })}
+                {estimating
+                  ? t("confirmEstimate", { weekday: base.data?.weekday ?? "", next: day.long(nextDay) })
+                  : t("confirmWaiting", { next: day.long(nextDay) })}
               </span>
             )}
             {canConfirmHere && !showFrozen && !baseWaiting && !dirty && <span className="me-auto text-xs text-muted-foreground">{t("confirmHint")}</span>}
-            {canConfirmHere && !showFrozen && !baseWaiting && dirty && (
+            {canConfirmHere && !showFrozen && (!baseWaiting || estimating) && dirty && (
               <span className="me-auto inline-flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
                 <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                 {t("unsaved")}
@@ -710,8 +734,8 @@ function Notice({
 
 interface PrevRow {
   key: IngredientKey;
-  /** The target the count is judged against: this day's base, before the buffer. */
-  base: number;
+  /** The target the count is judged against: this day's base, before the buffer. Null while the day's sales aren't built. */
+  base: number | null;
   /** What was on hand: night count + morning count, in the base's unit. `variance` is measured from it. */
   counted: number | null;
   /** The night-before count alone (÷ divisor), and the morning count of this day (null = not counted). */
@@ -727,8 +751,16 @@ interface PrevRow {
 }
 
 /** Is this day's base built yet? Visible before anyone reads a table of numbers or dashes. */
-function BaseChip({ ready, next }: { ready: boolean; next: string }) {
+function BaseChip({ ready, estimating, next }: { ready: boolean; estimating: boolean; next: string }) {
   const t = useTranslations("doughSauce.daily");
+  if (!ready && estimating) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-amber-500/50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+        <Clock className="h-3.5 w-3.5" />
+        {t("baseEstimateChip", { next })}
+      </span>
+    );
+  }
   return ready ? (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
       <CheckCircle2 className="h-3.5 w-3.5" />
@@ -815,6 +847,7 @@ function PlanTable({
   frozen,
   history,
   waiting,
+  estimateByKey,
   nextDayLabel,
   buffers,
   onBuffer,
@@ -837,6 +870,8 @@ function PlanTable({
   history: WeekdayHistory | null;
   /** The day's sales aren't built yet, so its base is empty. */
   waiting: boolean;
+  /** While waiting: the average of the earlier same weekdays, in the row's unit — what the plan is made on instead. */
+  estimateByKey: Partial<Record<IngredientKey, number>>;
   /** The day the sales get built, already formatted — for the "—" tooltips. */
   nextDayLabel: string;
   buffers: Buffers;
@@ -930,12 +965,15 @@ function PlanTable({
           const line = lines.find((l) => l.ingredient_key === k);
           const buffer = buffers[k];
           const bufferError = bufferErrors[k];
+          const realBase = typeof base?.base === "number" && Number.isFinite(base.base) ? base.base : null;
+          const estimate = !frozen && realBase == null ? estimateByKey[k] ?? null : null;
+          const usable = realBase ?? estimate;
           const planned = frozen
             ? line?.planned_qty ?? null
-            : base && typeof base.base === "number" && Number.isFinite(base.base) && !bufferError
-              ? plannedQty(base.base, Number(buffer))
+            : usable != null && !bufferError
+              ? plannedQty(usable, Number(buffer))
               : null;
-          const baseValue = frozen ? line?.base_qty ?? null : base?.base ?? null;
+          const baseValue = frozen ? line?.base_qty ?? null : usable;
           const bufferShown = frozen ? line?.buffer_pct ?? null : bufferError ? null : Number(buffer);
           const prev = prevRows?.find((r) => r.key === k);
           // Only a gap that survives the rounding counts: "short by 0" is a pass, not a shortage.
@@ -971,11 +1009,13 @@ function PlanTable({
                               )}
                             >
                               {/* Both directions show, as in the weekly grid: short is the one to act on, over is for information. */}
-                              {isShort
-                                ? t("prevShort", { by: fmtGap(k, Math.abs(prev.variance!)) })
-                                : isOver
-                                  ? t("prevOver", { by: fmtGap(k, prev.variance!) })
-                                  : t("prevMet")}
+                              {prev.base == null
+                                ? t("prevBaseWaiting")
+                                : isShort
+                                  ? t("prevShort", { by: fmtGap(k, Math.abs(prev.variance!)) })
+                                  : isOver
+                                    ? t("prevOver", { by: fmtGap(k, prev.variance!) })
+                                    : t("prevMet")}
                             </span>
                             <span className="font-heading text-lg font-semibold leading-none tabular-nums">{fmtQty(prev.counted)}</span>
                           </div>
@@ -996,10 +1036,11 @@ function PlanTable({
                             ? t("onHandTitle", {
                                 night: fmtQty(prev.night),
                                 morning: fmtQty(prev.morning),
-                                base: fmtQty(prev.base),
+                                base: prev.base != null ? fmtQty(prev.base) : "—",
                               })
-                            : t("onHandTitleNoNight", { morning: fmtQty(prev.morning), base: fmtQty(prev.base) })
-                          : t("onHandTitleNoMorning", { night: fmtQty(prev.night!), base: fmtQty(prev.base) })) +
+                            : t("onHandTitleNoNight", { morning: fmtQty(prev.morning), base: prev.base != null ? fmtQty(prev.base) : "—" })
+                          : t("onHandTitleNoMorning", { night: fmtQty(prev.night!), base: prev.base != null ? fmtQty(prev.base) : "—" })) +
+                          (prev.base == null ? "\n" + t("onHandBaseWaiting") : "") +
                           (prev.morning == null && prev.divisor > 1 && prev.rawCounted != null
                             ? "\n" +
                               t("nightConverted", {
@@ -1063,6 +1104,15 @@ function PlanTable({
               <TableCell className={NUM}>
                 {baseValue == null ? (
                   <MissingValue reason={notBuilt} />
+                ) : estimate != null ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help italic text-amber-700 dark:text-amber-400">≈ {fmtQty(baseValue)}</span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-64 text-start">
+                      {t("estimateCellTitle", { weekday: weekday ?? "", next: nextDayLabel })}
+                    </TooltipContent>
+                  </Tooltip>
                 ) : !frozen && base && base.divisor > 1 && base.values?.[0] != null ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -1101,7 +1151,7 @@ function PlanTable({
                       invalid={!!bufferError}
                       label={t("bufferFor", { ingredient: label })}
                       suffix="%"
-                      disabled={waiting}
+                      disabled={waiting && estimate == null}
                     />
                     {bufferError && buffer !== "" && <p className="mt-1 text-[10px] text-destructive">{bufferError}</p>}
                   </div>

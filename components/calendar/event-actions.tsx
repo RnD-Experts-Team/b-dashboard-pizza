@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { AlarmClock, BellPlus, BellRing, Ban, Check, Loader2, Play, Send, Undo2 } from "lucide-react";
+import { AlarmClock, BellPlus, BellRing, Ban, Check, Loader2, Play, RotateCcw, Send, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,14 +12,17 @@ import { feedPath } from "@/lib/calendar/feed-links";
 import type { CalendarEvent } from "@/lib/calendar/types";
 import {
   awaitingReview,
+  canCancel,
   canRemind,
-  isCancellable,
   isLiveReminder,
+  isPrivate,
+  PER_STORE_CANCEL,
   taskActionsFor,
   toolboxIdOf,
   type TaskAction,
 } from "@/lib/calendar/toolbox-write";
 import { CalendarWriteError } from "@/lib/api/services/calendar-toolbox.service";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import { useCalendarToolbox } from "@/lib/hooks/use-calendar-events";
 import { usePeek } from "./event-peek";
 import { useCalendarFormat } from "./use-calendar-format";
@@ -40,6 +43,13 @@ function tomorrowAtNine(): Date {
 }
 
 const BTN = "h-7 gap-1 px-2 text-xs";
+
+/**
+ * What Toolbox refused this user (`cancel|review:userId:toolboxId`). The feed
+ * doesn't always say who created an item, so a refusal is the proof: that action
+ * (Cancel, or Approve + Return) is never offered again for it until the page reloads.
+ */
+const denied = new Set<string>();
 
 /**
  * What can be DONE with an event from its card, kept inside the card (no
@@ -69,6 +79,7 @@ export function EventActions({
   const f = useCalendarFormat();
   const { pin } = usePeek();
   const toolbox = useCalendarToolbox();
+  const user = useAuthStore((s) => s.user);
   const [mode, setMode] = useState<Mode>(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -77,9 +88,15 @@ export function EventActions({
   const [justSet, setJustSet] = useState<string | null>(null);
 
   const id = toolboxIdOf(ev);
-  const taskActions = taskActionsFor(ev);
+  const viewer = user ? { id: user.id, name: user.name } : null;
+  const cancelKey = id != null ? `cancel:${user?.id ?? ""}:${id}` : null;
+  const reviewKey = id != null ? `review:${user?.id ?? ""}:${id}` : null;
+  const reviewDenied = !!reviewKey && denied.has(reviewKey);
+  // Approve and Return are the creator's: hidden from anyone else (see `mayBeCreator`).
+  const taskActions = taskActionsFor(ev, viewer).filter((a) => !(reviewDenied && (a === "approve" || a === "return")));
   const liveReminder = isLiveReminder(ev);
-  const cancellable = isCancellable(ev);
+  // Only the creator may cancel: hide the button from anyone else (see `canCancel`).
+  const cancellable = canCancel(ev, viewer) && !(cancelKey && denied.has(cancelKey));
   const remindable = canRemind(ev);
   const waiting = awaitingReview(ev) && !taskActions.length;
   if (!taskActions.length && !liveReminder && !cancellable && !remindable && !waiting && !reminders?.length) return null;
@@ -100,10 +117,13 @@ export function EventActions({
     ok: string,
     {
       forbidden = "forbidden",
+      onForbidden,
       description,
       after = onDone,
     }: {
       forbidden?: "forbidden" | "forbiddenReview" | "forbiddenCancel";
+      /** Runs when Toolbox answers 403 (to take the offer away). */
+      onForbidden?: () => void;
       /** Second line of the success toast. */
       description?: string;
       /** What happens once it worked (default: close the card). */
@@ -120,14 +140,36 @@ export function EventActions({
       const e = err instanceof CalendarWriteError ? err : null;
       // Toolbox's own 422 text says what is wrong; anything else gets a plain sentence.
       toast.error(e?.kind === "invalid" && e.message ? e.message : t(`errors.${e?.kind === "forbidden" ? forbidden : (e?.kind ?? "other")}`));
+      if (e?.kind === "forbidden") onForbidden?.();
       setBusy(false);
     }
   };
 
   const storeCode = ev.store.code;
-  const doTask = (action: TaskAction, body: { note?: string; reason?: string } = {}) =>
+  const storeName = ev.store.name || storeCode;
+  // A store's copy of an event/task can be cancelled on its own once Toolbox supports it
+  // (`PER_STORE_CANCEL`); until then Cancel is for every store and the dialog says so.
+  // A private item has no store.
+  const perStore = PER_STORE_CANCEL && !isPrivate(ev) && !!storeCode;
+  const cancelsAll = !PER_STORE_CANCEL && !isPrivate(ev) && !!storeCode;
+  const doCancel = (store: string | undefined) =>
+    void run(() => toolbox.cancel(id!, store), "cancelEvent", {
+      forbidden: "forbiddenCancel",
+      onForbidden: () => {
+        if (cancelKey) denied.add(cancelKey);
+        go(null);
+      },
+    });
+  const doTask =(action: TaskAction, body: { note?: string; reason?: string } = {}) =>
     run(() => toolbox.taskAction(id!, action, storeCode, body), action, {
       forbidden: action === "approve" || action === "return" ? "forbiddenReview" : "forbidden",
+      onForbidden:
+        action === "approve" || action === "return"
+          ? () => {
+              if (reviewKey) denied.add(reviewKey);
+              go(null);
+            }
+          : undefined,
     });
 
   const onTaskAction = (action: TaskAction) => {
@@ -165,6 +207,9 @@ export function EventActions({
     submit: <Send className="size-3" />,
     approve: <Check className="size-3" />,
     return: <Undo2 className="size-3" />,
+    // A private task: just done, or not done again.
+    done: <Check className="size-3" />,
+    reopen: <RotateCcw className="size-3" />,
   };
 
   const preset = (label: string, onPick: () => void) => (
@@ -336,19 +381,34 @@ export function EventActions({
 
       {mode === "cancel" && (
         <div className="space-y-2">
-          <p className="text-xs">{t("cancelAsk")}</p>
-          <div className="flex items-center gap-1.5">
+          <p className="text-xs">
+            {perStore ? t("cancelAskStores", { store: storeName }) : cancelsAll ? t("cancelAskAll", { store: storeName }) : t("cancelAsk")}
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5">
             <Button
               type="button"
               variant="destructive"
               size="sm"
               className={BTN}
               disabled={busy}
-              onClick={() => void run(() => toolbox.cancel(id!), "cancelEvent", { forbidden: "forbiddenCancel" })}
+              onClick={() => doCancel(perStore ? storeCode : undefined)}
             >
               {busy && <Loader2 className="size-3 animate-spin" />}
-              {t("cancelYes")}
+              {perStore ? t("cancelThisStore", { store: storeName }) : t("cancelYes")}
             </Button>
+            {/* A multi-store item can also be cancelled everywhere (no `stores` in the request). */}
+            {perStore && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={cn(BTN, "border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive")}
+                disabled={busy}
+                onClick={() => doCancel(undefined)}
+              >
+                {t("cancelAllStores")}
+              </Button>
+            )}
             <Button type="button" variant="ghost" size="sm" className={BTN} disabled={busy} onClick={() => go(null)}>
               {t("keep")}
             </Button>

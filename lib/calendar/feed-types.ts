@@ -86,15 +86,42 @@ export interface FeedEvent {
   extra?: Record<string, unknown> | null;
 }
 
+/** `group=day`: what one store had on one day. Statuses at 0 are left out; `total` is always there. */
+export type FeedDayCounts = Partial<Record<"done" | "pending" | "overdue" | "missed" | "in_progress" | "scheduled", number>> & {
+  total?: number;
+};
+
+/** One row of a `group=day` answer: a store × day with something on it (empty days don't come). */
+export interface FeedDay {
+  store: string;
+  /** `YYYY-MM-DD`. */
+  date: string;
+  counts: FeedDayCounts;
+}
+
 export interface FeedResponse {
   contract: string;
   source: FeedSource | string;
   generated_at?: string;
   range?: { from: string; to: string };
   stores?: { number: string; timezone: string | null }[];
+  /** Normal answers. */
   events?: FeedEvent[];
+  /** `group=day` answers (FRONTEND_CALENDAR_YEAR.md). */
+  group?: "day";
+  days?: FeedDay[];
   meta?: { count?: number; truncated?: boolean };
 }
+
+/**
+ * The sources asked for daily counts (the Year view). Hiring and Notifications
+ * only send "for your information" events (birthdays, announcements), which are
+ * never counted, so they are not asked (FRONTEND_CALENDAR_YEAR.md §1).
+ */
+export const YEAR_SOURCES: readonly FeedSource[] = ["maintenance", "operations", "auditapp", "data", "inventory", "toolbox"];
+
+/** Longest window a `group=day` request may ask for, inclusive: a 53-week fiscal year. */
+export const FEED_GROUP_MAX_DAYS = 371;
 
 /** Stores per request (contract §2). More than this is split into several requests. */
 export const FEED_MAX_STORES = 50;

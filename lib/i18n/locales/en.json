@@ -2896,7 +2896,7 @@
   "doughSauce": {
     "page": {
       "title": "Dough & Sauce",
-      "description": "Confirm each day's dough and sauce plan from that day's sales, and score each store's week against what was counted."
+      "description": "Confirm each day's dough and sauce plan — from that day's sales once they are built, or from the average of the same weekday before that — and score each store's week against what was counted."
     },
     "tabs": {
       "daily": "Daily plan",
@@ -3049,9 +3049,9 @@
       "confirmHint": "Review the buffers, then confirm. Once confirmed, the numbers are frozen.",
       "relYesterday": "Yesterday",
       "quickYesterdayHint": "Its sales are built — you can plan it",
-      "quickTodayHint": "Sales are built tomorrow after 10:30 — view only",
-      "quickTomorrowHint": "Hasn't happened yet — nothing to build a base from, view only",
-      "baseNotReady": "Sales for {date} aren't built yet. They are built the next day, {next}, after 10:30 (and again at 13:30). Refresh then — until then nothing can be confirmed.",
+      "quickTodayHint": "Sales are built tomorrow after 10:30 — until then you can plan on the average",
+      "quickTomorrowHint": "Hasn't happened yet — you can plan on the average of the last 4 same weekdays",
+      "baseNotReady": "Sales for {date} aren't built yet (they are built {next} after 10:30) and there is no average of earlier days to plan from either, so nothing can be confirmed yet.",
       "baseNotReadyFuture": "{date} hasn't happened yet, so there are no sales to build a base from.",
       "baseNotReadyChip": "Base available {next} after 10:30",
       "baseReadyChip": "Base ready",
@@ -3065,7 +3065,14 @@
       "explainStepBuilt": "{next}, 10:30 (and 13:30): that day's sales are built — the base appears.",
       "explainStepPlan": "From then the buffers can be reviewed and the plan confirmed.",
       "explainCorrections": "A sales correction within 7 days changes the base of an unconfirmed day. A confirmed plan never changes.",
-      "explainReference": "The earlier {weekday}s and their average are only a reference to spot an odd day — they are not used in the plan."
+      "explainReference": "The earlier {weekday}s and their average are only a reference to spot an odd day — they are not used in the plan.",
+      "baseEstimating": "Sales for {date} aren't built yet — they are built {next} after 10:30. You can still plan now on the average of the last 4 {weekday}s. A plan confirmed now keeps these numbers: they are not replaced when the real sales arrive (use Edit plan then, if you want the real base).",
+      "baseEstimateChip": "Planning on the average · real base {next}",
+      "confirmEstimate": "Confirming now uses the average of the last 4 {weekday}s as the base (real sales arrive {next} after 10:30).",
+      "estimateCellTitle": "Estimate: the average of the last 4 {weekday}s. The real base replaces it once the day's sales are built ({next}, after 10:30).",
+      "explainEstimate": "Before the sales are built the plan can be made on the average of the last 4 {weekday}s (marked ≈). Once confirmed it is frozen; to switch to the real base later, edit the plan and confirm again.",
+      "prevBaseWaiting": "Base not built yet",
+      "onHandBaseWaiting": "This day's sales aren't built yet, so there is no base to judge this count against. It is judged against the real base once they are built (never against the average the plan may have been made on)."
     },
     "stores": {
       "searchPlaceholder": "Search store…",
@@ -3259,7 +3266,8 @@
         "today": "Today",
         "onTargetRow": "{ok}/{total} on target",
         "legendAwaiting": "Not counted yet (today or later)",
-        "awaiting": "Not counted yet — counts are submitted at night"
+        "awaiting": "Not counted yet — counts are submitted at night",
+        "awaitingBase": "Counted, but this day's sales aren't built yet — it is judged against the real base once they are (the next day after 10:30)"
       },
       "filter": {
         "all": "All",
@@ -3768,7 +3776,6 @@
       "unavailable": "Couldn't load {names}.",
       "retry": "Retry",
       "truncated": "Some events are hidden — this range has too many. Pick a shorter range.",
-      "yearNoFeed": "For now the year view shows only the events you created.",
       "open": "Open",
       "movedFrom": "Moved from {when}",
       "companyWide": "Company-wide",
@@ -3787,7 +3794,10 @@
       },
       "manyStores": "{n} stores make a heavy month. The week view loads much faster.",
       "switchToWeek": "Switch to week",
-      "onlyYou": "Only you"
+      "onlyYou": "Only you",
+      "private": "Private",
+      "privateOnlyYou": "Private · only you",
+      "public": "Sent to every store"
     },
     "stores": {
       "title": "Stores",
@@ -3840,7 +3850,8 @@
         "proof": "Proof when done",
         "requiresReview": "I approve it first",
         "requiresReviewHint": "Off: it counts as done as soon as the store submits it.",
-        "remindIn": "Remind me"
+        "remindIn": "Remind me",
+        "scope": "Who sees it"
       },
       "priorities": {
         "low": "Low",
@@ -3880,12 +3891,23 @@
         "notFound": "Something it refers to no longer exists.",
         "invalid": "Check the form and try again.",
         "network": "Couldn't reach the server. Try again.",
-        "other": "Couldn't save. Try again."
+        "other": "Couldn't save. Try again.",
+        "forbiddenScope": "You need the calendar administrator permission to add something for all stores or only for yourself.",
+        "serverSaid": "Server says: {message}"
       },
       "submit": {
         "event": "Create event",
         "task": "Create task",
         "reminder": "Set reminder"
+      },
+      "scope": {
+        "custom": "Chosen stores",
+        "public": "All stores",
+        "private": "Only me"
+      },
+      "scopeHint": {
+        "public": "Goes to every store open today. Stores opened later won't get it.",
+        "private": "Only you will see it, with no store. No proof or approval."
       }
     },
     "actions": {
@@ -3893,7 +3915,9 @@
         "start": "Start",
         "submit": "Submit",
         "approve": "Approve",
-        "return": "Return"
+        "return": "Return",
+        "done": "Mark done",
+        "reopen": "Reopen"
       },
       "done": {
         "start": "Task started",
@@ -3904,7 +3928,9 @@
         "remind": "Reminder set",
         "snooze": "Snoozed",
         "reminderDone": "Reminder done",
-        "reminderCancel": "Reminder removed"
+        "reminderCancel": "Reminder removed",
+        "done": "Marked done",
+        "reopen": "Reopened"
       },
       "awaitingReview": "Waiting for review by the person who created it.",
       "noteLabel": "Note for the reviewer",
@@ -3932,6 +3958,10 @@
       "cancelTask": "Cancel task",
       "cancelAsk": "Cancel this? Everyone who sees it will see it as cancelled.",
       "cancelYes": "Yes, cancel it",
+      "cancelAskStores": "Cancel it for {store} only, or for every store it was sent to?",
+      "cancelAskAll": "This cancels it for every store it was sent to, not only {store}. Cancel it?",
+      "cancelThisStore": "Only {store}",
+      "cancelAllStores": "All stores",
       "keep": "Keep it",
       "errors": {
         "auth": "Your session expired. Sign in again.",
@@ -3945,7 +3975,19 @@
       },
       "reminderSetFor": "Reminder set for {when}"
     },
-    "reminderLabel": "Reminder"
+    "reminderLabel": "Reminder",
+    "year": {
+      "total": "{n, plural, one {# item} other {# items}}",
+      "needAttention": "Need attention",
+      "moreStores": "{n, plural, one {+# more store} other {+# more stores}}",
+      "note": "The year shows every type, coloured by its worst status. Filters and search apply in Day, Week and Month.",
+      "legend": {
+        "attention": "Overdue or missed",
+        "active": "In progress",
+        "open": "Still to do",
+        "done": "All done"
+      }
+    }
   },
   "bottomNav": {
     "editTrigger": "Customize quick links",

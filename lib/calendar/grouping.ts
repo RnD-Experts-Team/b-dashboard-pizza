@@ -36,11 +36,15 @@ const STATUS_RANK: Readonly<Record<EventStatus, number>> = {
   cancelled: 7,
 };
 
+/** The title only says how this store is doing ("Cleaning 0/19"), so it differs per store and is not grouped on. */
+function isCaption(ev: CalendarEvent): boolean {
+  return isSummaryEvent(ev) || (!!ev.feedType && CAPTION_TYPES.has(ev.feedType));
+}
+
 /** Events that are the same thing in another store share a key; null = never grouped. */
 function bucketKey(ev: CalendarEvent): string | null {
   if (ev.source === "user" || ev.companyWide || !ev.store.code) return null;
-  const caption = isSummaryEvent(ev) || (!!ev.feedType && CAPTION_TYPES.has(ev.feedType));
-  return [ev.category, ev.feedType ?? "", caption ? "" : (ev.title ?? ev.titleKey ?? ""), +ev.start, +ev.end].join("|");
+  return [ev.category, ev.feedType ?? "", isCaption(ev) ? "" : (ev.title ?? ev.titleKey ?? ""), +ev.start, +ev.end].join("|");
 }
 
 function storeCount(events: readonly CalendarEvent[]): number {
@@ -56,6 +60,9 @@ function rollUp(key: string, members: CalendarEvent[]): CalendarEvent {
   return {
     id: `group:${key}`,
     category: first.category,
+    // The same thing in every store (a public "Fire drill", a "dough racks" task) keeps its
+    // own name on the chip; a per-store caption doesn't, and the chip names the category.
+    title: isCaption(first) ? undefined : first.title,
     start: first.start,
     end: first.end,
     allDay: first.allDay,
