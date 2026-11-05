@@ -4,16 +4,20 @@ import { useMemo, useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import { V1Metric } from "@/components/dashboard-v1/v1-ui";
-import { WbrDetailDialog } from "@/components/dspr/wbr-detail-dialog";
 import { fmtCurrency, fmtHours, fmtNumber, fmtPercent } from "@/components/labor/labor-format";
+import { preferFinal, useFinalLabor, type FinalLabor } from "@/components/business-reports/final-labor";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
 import { useReport } from "@/components/business-reports/report-context";
+import { ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
+import { weekLabel } from "@/components/business-reports/report-format";
 import { cn } from "@/lib/utils";
-import type { LaborBlock, LaborReport } from "@/types/business-reports.types";
+import type { LaborBlock, LaborReport, LaborTrendWeek } from "@/types/business-reports.types";
+import { LaborPctValue, fmtMoneyTile } from "./br-people-kit";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  Labor Summary — the Labor report's KPI strip as V1 tiles, for every
- *  loaded store over the range. Expanding shows the same figures per store.
+ *  loaded store over the range. Expanding shows the same figures per store
+ *  and per week, with FINAL labor % (Hiring) where it exists.
  * ────────────────────────────────────────────────────────────────────────── */
 
 const AMBER = "text-amber-600 dark:text-amber-400";
@@ -35,16 +39,21 @@ function netAccent(n: number): string | undefined {
   return undefined;
 }
 
-export function BrLaborSummary({ data }: { data: LaborReport }) {
-  const { storeName } = useReport();
-  const [open, setOpen] = useState(false);
-  const s = data.combined.summary;
-  const net = s.headcount_end - s.headcount_start;
+/** A store's or week's labor %: final when Hiring has it, else the derived one. */
+function laborOf(final: number | null | undefined, derived: number | null): { value: number | null; isFinal: boolean } {
+  if (derived === null) return { value: final ?? null, isFinal: final !== null && final !== undefined };
+  return preferFinal(final, derived);
+}
 
-  const rows = useMemo<StoreRow[]>(
-    () => Object.entries(data.by_store).map(([store, block]) => ({ store, block })),
-    [data.by_store],
-  );
+function storeLabor(final: FinalLabor | null, r: StoreRow) {
+  return laborOf(final?.byStore.get(r.store), r.block.labor.highlights.average_labor_percent);
+}
+
+function LaborSummaryDialog({ data, rows, onClose }: { data: LaborReport; rows: StoreRow[]; onClose: () => void }) {
+  const { storeName } = useReport();
+  const final = useFinalLabor();
+  const s = data.combined.summary;
+  const overall = laborOf(final?.overall, data.combined.labor.highlights.average_labor_percent);
 
   const columns = useMemo<PagedColumn<StoreRow>[]>(
     () => [
@@ -111,6 +120,16 @@ export function BrLaborSummary({ data }: { data: LaborReport }) {
         sortValue: (r) => r.block.summary.turnover_rate_percent,
       },
       {
+        key: "labor",
+        header: "Labor %",
+        numeric: true,
+        render: (r) => {
+          const l = storeLabor(final, r);
+          return <LaborPctValue value={l.value} isFinal={l.isFinal} />;
+        },
+        sortValue: (r) => storeLabor(final, r).value,
+      },
+      {
         key: "gross",
         header: "Avg Wk Gross",
         numeric: true,
@@ -143,9 +162,92 @@ export function BrLaborSummary({ data }: { data: LaborReport }) {
         sortValue: (r) => r.block.summary.employee_weeks_over_60,
       },
     ],
-    [storeName],
+    [storeName, final],
   );
 
+  const weekColumns = useMemo<PagedColumn<LaborTrendWeek>[]>(
+    () => [
+      { key: "week", header: "Week", render: (w) => <span className="font-medium">{weekLabel(w, true)}</span>, sortValue: (w) => w.week_start },
+      { key: "headcount", header: "Headcount", numeric: true, render: (w) => fmtNumber(w.headcount_active_end), sortValue: (w) => w.headcount_active_end },
+      { key: "hours", header: "Hours", numeric: true, render: (w) => fmtHours(w.total_hours, 0), sortValue: (w) => w.total_hours },
+      { key: "gross", header: "Gross Pay", numeric: true, render: (w) => fmtCurrency(w.total_gross_pay, 0), sortValue: (w) => w.total_gross_pay },
+      { key: "sales", header: "Sales", numeric: true, render: (w) => fmtCurrency(w.total_sales, 0), sortValue: (w) => w.total_sales },
+      {
+        key: "labor",
+        header: "Labor %",
+        numeric: true,
+        render: (w) => {
+          const l = laborOf(final?.byWeek.get(w.week_start), w.average_labor_percent);
+          return <LaborPctValue value={l.value} isFinal={l.isFinal} />;
+        },
+        sortValue: (w) => laborOf(final?.byWeek.get(w.week_start), w.average_labor_percent).value,
+      },
+      { key: "turnover", header: "Turnover", numeric: true, render: (w) => fmtPercent(w.turnover_rate_percent), sortValue: (w) => w.turnover_rate_percent },
+      { key: "pay", header: "Avg Hourly", numeric: true, render: (w) => fmtCurrency(w.average_hourly_pay), sortValue: (w) => w.average_hourly_pay },
+    ],
+    [final],
+  );
+
+  const net = s.headcount_end - s.headcount_start;
+  const stats: ReportStat[] = [
+    { label: "Headcount", value: `${fmtNumber(s.headcount_start)} → ${fmtNumber(s.headcount_end)}`, sub: `${signed(net)} net`, tone: netAccent(net) },
+    { label: "New hires", value: fmtNumber(s.new_hires), tone: s.new_hires > 0 ? EMERALD : undefined },
+    { label: "Separations", value: fmtNumber(s.separations), sub: `${fmtNumber(s.notable_departures)} notable`, tone: s.separations > 0 ? ROSE : undefined },
+    { label: "Turnover", value: fmtPercent(s.turnover_rate_percent) },
+    { label: "Avg weekly gross", value: fmtMoneyTile(s.avg_weekly_gross_pay), sub: `${fmtHours(s.avg_weekly_hours, 0)} / week` },
+    {
+      label: overall.isFinal ? "Final labor" : "Labor (est.)",
+      value: <LaborPctValue value={overall.value} isFinal={overall.isFinal} tagClassName="text-[10px]" />,
+    },
+  ];
+  const storeSearch = (r: StoreRow) => storeName(r.store);
+
+  return (
+    <ReportDialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      title="Labor Summary"
+      category="people"
+      stats={stats}
+      tabs={[
+        {
+          key: "stores",
+          label: `By store (${rows.length})`,
+          content: (
+            <PagedTable
+              size="lg"
+              rows={rows}
+              columns={columns}
+              rowKey={(r) => r.store}
+              initialSort="end"
+              searchText={storeSearch}
+              searchPlaceholder="Search stores…"
+            />
+          ),
+        },
+        {
+          key: "weeks",
+          label: `By week (${data.combined.trend.length})`,
+          content: (
+            <PagedTable size="lg" rows={data.combined.trend} columns={weekColumns} rowKey={(w) => w.week_start} initialSort="week" initialDir="asc" />
+          ),
+        },
+      ]}
+    />
+  );
+}
+
+export function BrLaborSummary({ data }: { data: LaborReport }) {
+  const [open, setOpen] = useState(false);
+  const s = data.combined.summary;
+  const net = s.headcount_end - s.headcount_start;
+
+  const rows = useMemo<StoreRow[]>(
+    () => Object.entries(data.by_store).map(([store, block]) => ({ store, block })),
+    [data.by_store],
+  );
   const multiStore = rows.length > 1;
 
   return (
@@ -156,8 +258,8 @@ export function BrLaborSummary({ data }: { data: LaborReport }) {
       period="R"
       span={4}
       className="h-auto"
-      headerNote={multiStore ? `${rows.length} stores · click for per-store` : undefined}
-      onExpand={multiStore ? () => setOpen(true) : undefined}
+      headerNote={multiStore ? `${rows.length} stores · click for per-store / per-week` : "click for per-week"}
+      onExpand={() => setOpen(true)}
     >
       <div className="grid grid-cols-2 gap-1 pb-0.5 sm:grid-cols-3 lg:grid-cols-9">
         <V1Metric
@@ -180,8 +282,11 @@ export function BrLaborSummary({ data }: { data: LaborReport }) {
           accent={s.notable_departures > 0 ? AMBER : undefined}
         />
         <V1Metric label="Turnover Rate" value={fmtPercent(s.turnover_rate_percent)} />
-        <V1Metric label="Avg Weekly Gross" value={fmtCurrency(s.avg_weekly_gross_pay, 0)} />
-        <V1Metric label="Avg Weekly Hours" value={fmtHours(s.avg_weekly_hours)} />
+        <V1Metric
+          label="Avg Weekly Gross"
+          value={<span title={fmtCurrency(s.avg_weekly_gross_pay, 0)}>{fmtMoneyTile(s.avg_weekly_gross_pay)}</span>}
+        />
+        <V1Metric label="Avg Weekly Hours" value={fmtHours(s.avg_weekly_hours, 0)} />
         <V1Metric label="Emp-Weeks > 40h" value={fmtNumber(s.employee_weeks_over_40)} />
         <V1Metric
           label="Emp-Weeks > 60h"
@@ -190,11 +295,7 @@ export function BrLaborSummary({ data }: { data: LaborReport }) {
         />
       </div>
 
-      {open && (
-        <WbrDetailDialog open={open} onOpenChange={setOpen} title="Labor by Store" badgeText={`${rows.length} stores`} className="sm:max-w-6xl">
-          <PagedTable rows={rows} columns={columns} rowKey={(r) => r.store} initialSort="end" />
-        </WbrDetailDialog>
-      )}
+      {open && <LaborSummaryDialog data={data} rows={rows} onClose={() => setOpen(false)} />}
     </V1Card>
   );
 }

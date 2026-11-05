@@ -2,41 +2,84 @@
 
 import { useMemo, useState } from "react";
 import { MessageSquareWarning } from "lucide-react";
-import { DetailField } from "@/components/dspr/wbr-detail-dialog";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import { V1Empty, V1Metric } from "@/components/dashboard-v1/v1-ui";
 import type { PagedColumn } from "@/components/business-reports/paged-table";
-import { fmtDate } from "@/components/business-reports/report-format";
-import type { WbrBulkComplaint, WbrBulkResponse } from "@/types/business-reports.types";
+import { compareText, fmtDate, fmtNumD } from "@/components/business-reports/report-format";
+import type { WbrBulkResponse } from "@/types/business-reports.types";
 import { CARD_LIST_LIMIT, plural } from "@/components/business-reports/cards/operations/br-shared";
-import { RecordsDialog, useWbrRecords } from "./br-records";
-import { compareText } from "../../report-format";
+import { DetailItem, RecordsDialog, groupByStore, useRecordWeeks, useWbrRecords, type WbrRecord } from "./br-records";
 
-const fullName = (c: WbrBulkComplaint) => `${c.first_name} ${c.last_name}`.trim();
+type Complaint = WbrRecord<"complaints">;
 
-const COLUMNS: PagedColumn<WbrBulkComplaint>[] = [
-  { key: "date", header: "Date", sortValue: (c) => c.complaint_date, render: (c) => fmtDate(c.complaint_date), className: "whitespace-nowrap" },
-  { key: "store", header: "Store", sortValue: (c) => c.store_label, render: (c) => c.store_label },
+const fullName = (c: Complaint) => `${c.first_name} ${c.last_name}`.trim();
+const dateOf = (c: Complaint) => c.complaint_date;
+const informed = (c: Complaint) => c.manager_informed?.trim().toLowerCase() === "yes";
+
+const COLUMNS: PagedColumn<Complaint>[] = [
+  { key: "date", header: "Date", sortValue: dateOf, render: (c) => fmtDate(c.complaint_date), className: "whitespace-nowrap" },
+  { key: "store", header: "Store", sortValue: (c) => c.storeDisplay, render: (c) => c.storeDisplay },
   { key: "name", header: "Customer", sortValue: fullName, render: fullName },
   {
     key: "issue",
     header: "Issue",
-    render: (c) => <span className="line-clamp-2 min-w-[220px] whitespace-normal">{c.issue}</span>,
+    render: (c) => <span className="line-clamp-2 min-w-[260px] whitespace-normal">{c.issue}</span>,
   },
   { key: "mgr", header: "Mgr Informed", sortValue: (c) => c.manager_informed, render: (c) => c.manager_informed },
 ];
 
-function ComplaintDetail({ c }: { c: WbrBulkComplaint }) {
+const searchText = (c: Complaint) => `${fullName(c)} ${c.storeDisplay} ${c.issue} ${c.suggestion} ${c.phone} ${c.email}`;
+
+function ComplaintDetail({ c }: { c: Complaint }) {
   return (
     <>
-      <DetailField label="Store" value={c.store_label} />
-      <DetailField label="Date" value={fmtDate(c.complaint_date)} />
-      <DetailField label="Phone" value={c.phone} />
-      <DetailField label="Email" value={c.email} />
-      <DetailField label="Mgr Informed" value={c.manager_informed} />
-      <DetailField label="Issue" value={c.issue} wrap />
-      <DetailField label="Suggestion" value={c.suggestion} wrap />
+      <DetailItem label="Store" value={c.storeDisplay} />
+      <DetailItem label="Date" value={fmtDate(c.complaint_date)} />
+      <DetailItem label="Customer" value={fullName(c)} />
+      <DetailItem label="Mgr Informed" value={c.manager_informed} />
+      <DetailItem label="Phone" value={c.phone} />
+      <DetailItem label="Email" value={c.email} />
+      <DetailItem label="Issue" value={c.issue} wide />
+      <DetailItem label="Suggestion" value={c.suggestion} wide />
+      <DetailItem label="Submitted" value={fmtDate(c.submitted_at)} />
     </>
+  );
+}
+
+function ComplaintsDialog({ records, onClose }: { records: Complaint[]; onClose: () => void }) {
+  const weeks = useRecordWeeks(records, dateOf);
+  const informedCount = useMemo(() => records.filter(informed).length, [records]);
+  const latest = useMemo(
+    () => records.reduce<string | null>((max, c) => (compareText(c.complaint_date, max) > 0 ? c.complaint_date : max), null),
+    [records],
+  );
+  return (
+    <RecordsDialog
+      title="Complaints"
+      category="quality"
+      noun="complaint"
+      rows={records}
+      dateOf={dateOf}
+      stats={[
+        { label: "Mgr informed", value: informedCount.toLocaleString(), sub: `of ${plural(records.length, "complaint")}` },
+        { label: "Per week", value: weeks.length ? fmtNumD(records.length / weeks.length) : "0", sub: plural(weeks.length, "week") },
+        { label: "Latest", value: fmtDate(latest) },
+      ]}
+      columns={COLUMNS}
+      rowKey={(c) => c.id}
+      initialSort="date"
+      searchText={searchText}
+      detailTitle={(c) => (
+        <span className="flex flex-wrap items-baseline justify-between gap-2">
+          <span>{fullName(c) || "Complaint"}</span>
+          <span className="text-sm font-normal text-muted-foreground">
+            {c.storeDisplay} · {fmtDate(c.complaint_date)}
+          </span>
+        </span>
+      )}
+      renderDetail={(c) => <ComplaintDetail c={c} />}
+      onClose={onClose}
+    />
   );
 }
 
@@ -48,7 +91,7 @@ export function BrComplaintsCard({ data }: { data: WbrBulkResponse }) {
     () => [...records].sort((a, b) => compareText(b.complaint_date, a.complaint_date)),
     [records],
   );
-  const stores = useMemo(() => new Set(records.map((c) => c.store_label)).size, [records]);
+  const stores = useMemo(() => groupByStore(records).length, [records]);
   const empty = records.length === 0;
 
   return (
@@ -70,7 +113,7 @@ export function BrComplaintsCard({ data }: { data: WbrBulkResponse }) {
               <div className="flex items-center justify-between gap-2">
                 <span className="min-w-0 truncate text-[11px] font-semibold">
                   {fullName(c)}
-                  <span className="ms-1.5 text-[10px] font-normal text-muted-foreground">{c.store_label}</span>
+                  <span className="ms-1.5 text-[10px] font-normal text-muted-foreground">{c.storeDisplay}</span>
                 </span>
                 <span className="shrink-0 text-[10px] text-muted-foreground">{fmtDate(c.complaint_date)}</span>
               </div>
@@ -84,24 +127,7 @@ export function BrComplaintsCard({ data }: { data: WbrBulkResponse }) {
           )}
         </div>
       )}
-      {open && (
-        <RecordsDialog
-          title="Complaints"
-          noun="record"
-          rows={records}
-          columns={COLUMNS}
-          rowKey={(c) => c.id}
-          initialSort="date"
-          detailTitle={(c) => (
-            <span className="flex items-center justify-between gap-2">
-              <span>{fullName(c)}</span>
-              <span className="text-[11px] font-normal text-muted-foreground">{fmtDate(c.complaint_date)}</span>
-            </span>
-          )}
-          renderDetail={(c) => <ComplaintDetail c={c} />}
-          onClose={() => setOpen(false)}
-        />
-      )}
+      {open && <ComplaintsDialog records={records} onClose={() => setOpen(false)} />}
     </V1Card>
   );
 }

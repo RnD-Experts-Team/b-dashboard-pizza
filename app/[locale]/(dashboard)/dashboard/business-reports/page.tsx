@@ -10,7 +10,9 @@ import { useBusinessReports } from "@/lib/hooks/use-business-reports";
 import type { BusinessReportsParams, StoreSelection } from "@/types/business-reports.types";
 import { BusinessReportsControls } from "@/components/business-reports/business-reports-controls";
 import type { StoreOption } from "@/components/business-reports/store-multi-select";
-import { presetRange, rangeDays, type DateRange } from "@/components/business-reports/range-presets";
+import { lastCompleteWeeks, rangeDays, type DateRange } from "@/components/business-reports/range-presets";
+import { weekLabel } from "@/components/business-reports/report-format";
+import { businessWeekStart } from "@/lib/utils/business-week";
 import { ReportProvider, type ReportContextValue } from "@/components/business-reports/report-context";
 import { KpiStrip } from "@/components/business-reports/kpi-strip";
 import { SalesSection } from "@/components/business-reports/sections/sales-section";
@@ -21,13 +23,14 @@ import { FinanceSection } from "@/components/business-reports/sections/finance-s
 import { QualitySection } from "@/components/business-reports/sections/quality-section";
 import { StoresSection } from "@/components/business-reports/sections/stores-section";
 
-const DEFAULT_PRESET = "last-4-weeks";
-
 function describeRange(params: BusinessReportsParams): string {
   const days = rangeDays({ start: params.startDate, end: params.endDate });
   const fmt = (d: string) => format(parseISO(d), "MMM d, yyyy");
   const stores = params.stores.length;
-  return `${fmt(params.startDate)} → ${fmt(params.endDate)} · ${days} day${days === 1 ? "" : "s"} · ${stores} store${stores === 1 ? "" : "s"}`;
+  const fromWeek = weekLabel({ week_start: businessWeekStart(params.startDate) }, true);
+  const toWeek = weekLabel({ week_start: businessWeekStart(params.endDate) }, true);
+  const weeks = fromWeek === toWeek ? fromWeek : `${fromWeek} → ${toWeek}`;
+  return `${weeks} (${fmt(params.startDate)} → ${fmt(params.endDate)}) · ${days} day${days === 1 ? "" : "s"} · ${stores} store${stores === 1 ? "" : "s"}`;
 }
 
 /**
@@ -38,12 +41,14 @@ function describeRange(params: BusinessReportsParams): string {
 export default function BusinessReportsPage() {
   const overviewStores = useAuthStore((s) => s.overviewStores);
 
-  // The endpoints take store numbers ("03795-00001"), never the numeric ids.
+  // The endpoints take store numbers ("03795-00001"), never the numeric ids,
+  // and stores are shown by number first — the number is what people use.
   const storeOptions: StoreOption[] = useMemo(
     () =>
       (overviewStores ?? [])
         .filter((s) => s.isActive && s.storeId)
-        .map((s) => ({ id: s.storeId as string, name: s.name || (s.storeId as string) })),
+        .map((s) => ({ id: s.storeId as string, name: s.name ? `${s.storeId} · ${s.name}` : (s.storeId as string) }))
+        .sort((a, b) => a.id.localeCompare(b.id)),
     [overviewStores],
   );
   const storeNames = useMemo(
@@ -52,7 +57,7 @@ export default function BusinessReportsPage() {
   );
 
   const [selection, setSelection] = useState<StoreSelection>("all");
-  const [range, setRange] = useState<DateRange>(() => presetRange(DEFAULT_PRESET));
+  const [range, setRange] = useState<DateRange>(() => lastCompleteWeeks());
   // The full selection to go back to after focusing one store.
   const [beforeFocus, setBeforeFocus] = useState<{ params: BusinessReportsParams; selection: StoreSelection } | null>(null);
 
@@ -107,18 +112,18 @@ export default function BusinessReportsPage() {
             ? `${describeRange(loadedParams)}${loadedAt ? ` · loaded ${format(loadedAt, "h:mm a")}` : ""}`
             : "Dashboard V1 and the Labor report for any stores over any range"
         }
-      >
-        <BusinessReportsControls
-          storeOptions={storeOptions}
-          selection={selection}
-          onSelectionChange={setSelection}
-          range={range}
-          onRangeChange={setRange}
-          onLoad={handleLoad}
-          busy={busy}
-          hasLoaded={loadedParams !== null}
-        />
-      </PageHeader>
+      />
+
+      <BusinessReportsControls
+        storeOptions={storeOptions}
+        selection={selection}
+        onSelectionChange={setSelection}
+        range={range}
+        onRangeChange={setRange}
+        onLoad={handleLoad}
+        busy={busy}
+        hasLoaded={loadedParams !== null}
+      />
 
       {!context && (
         <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed py-24 text-center">
@@ -157,13 +162,13 @@ export default function BusinessReportsPage() {
             )}
 
             <KpiStrip />
+            <StoresSection />
             <SalesSection />
             <OperationsSection />
             <MenuSection />
             <PeopleSection />
             <FinanceSection />
             <QualitySection />
-            <StoresSection />
           </div>
         </ReportProvider>
       )}

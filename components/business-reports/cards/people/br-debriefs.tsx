@@ -3,17 +3,17 @@
 import { useMemo, useState } from "react";
 import { ClipboardList } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import { V1Empty, V1Metric, V1MetricGrid, V1StackedBar, V1SubLabel } from "@/components/dashboard-v1/v1-ui";
-import { WbrDetailDialog } from "@/components/dspr/wbr-detail-dialog";
 import { DASH, fmtNumber } from "@/components/labor/labor-format";
 import { ApexChart, useChartTheme } from "@/components/business-reports/chart";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
 import { useReport } from "@/components/business-reports/report-context";
+import { ReportBlock, ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
+import { StoreChecklist, inStores } from "@/components/business-reports/store-checklist";
 import type { DebriefTypeCount, DebriefsSection } from "@/types/business-reports.types";
-import { ROW_CARD_HEIGHT, TWO_DP, employeeName, peopleLineOptions, safeDay } from "./br-people-kit";
-import { compareText } from "../../report-format";
+import { ActiveToggle, ROW_CARD_HEIGHT, TWO_DP, employeeName, matchesActive, peopleLineOptions, safeDay, type ActiveFilter } from "./br-people-kit";
+import { compareText, weekLabel } from "../../report-format";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  Debriefs — the Employee report's debrief summary over the range for every
@@ -24,6 +24,8 @@ import { compareText } from "../../report-format";
 /** Distinct hue per type (same set as the Employee report's breakdown). */
 const SEGMENT_COLORS = ["#8b5cf6", "#f43f5e", "#0ea5e9", "#f59e0b", "#10b981", "#71717a"];
 const CHART_PX = 120;
+const DIALOG_CHART_PX = 300;
+const BADGE_LG = "h-5 px-1.5 text-xs";
 const UNTYPED = "Untyped";
 
 type DebriefEvent = DebriefsSection["events"][number];
@@ -45,12 +47,16 @@ function typeMix(byType: DebriefTypeCount[]): string {
   return parts.length > 0 ? parts.join(" · ") : DASH;
 }
 
-function DebriefTables({ data }: { data: DebriefsSection }) {
+function DebriefsDialog({ data, onClose }: { data: DebriefsSection; onClose: () => void }) {
   const { storeName } = useReport();
+  const theme = useChartTheme();
+  const [stores, setStores] = useState<string[]>([]);
+  const [active, setActive] = useState<ActiveFilter>("active");
+  const s = data.summary;
 
   const events = useMemo(() => [...data.events].sort((a, b) => compareText(b.date, a.date)), [data.events]);
-  const stores = useMemo<StoreRow[]>(
-    () => Object.entries(data.by_store).map(([store, s]) => ({ store, ...s })),
+  const storeRows = useMemo<StoreRow[]>(
+    () => Object.entries(data.by_store).map(([store, block]) => ({ store, ...block })),
     [data.by_store],
   );
 
@@ -68,7 +74,7 @@ function DebriefTables({ data }: { data: DebriefsSection }) {
         key: "type",
         header: "Type",
         render: (e) => (
-          <Badge variant="outline" className="h-4 px-1 text-[9px]">
+          <Badge variant="outline" className={BADGE_LG}>
             {typeLabel(e.type)}
           </Badge>
         ),
@@ -92,7 +98,7 @@ function DebriefTables({ data }: { data: DebriefsSection }) {
         key: "active",
         header: "Status",
         render: (e) => (
-          <Badge variant={e.active ? "secondary" : "outline"} className="h-4 px-1 text-[9px]">
+          <Badge variant={e.active ? "secondary" : "outline"} className={BADGE_LG}>
             {e.active ? "Active" : "Inactive"}
           </Badge>
         ),
@@ -121,23 +127,115 @@ function DebriefTables({ data }: { data: DebriefsSection }) {
     [storeName],
   );
 
+  const filteredEvents = useMemo(() => inStores(events, stores, (e) => e.store), [events, stores]);
+  const filteredEmployees = useMemo(
+    () => inStores(data.employees, stores, (e) => e.store).filter((e) => matchesActive(e.active, active)),
+    [data.employees, stores, active],
+  );
+
+  const options = useMemo(
+    () => peopleLineOptions(theme, data.weeks.map((w) => weekLabel(w)), (v) => fmtNumber(v)),
+    [theme, data.weeks],
+  );
+  const series = useMemo(() => [{ name: "Debriefs", data: data.weeks.map((w) => w.total_count) }], [data.weeks]);
+
+  const stats: ReportStat[] = [
+    { label: "Debriefs", value: fmtNumber(s.total_debriefs) },
+    { label: "Avg / week", value: fmtNumber(s.avg_weekly_debriefs, 1) },
+    { label: "Most common", value: s.most_common_type?.label ?? DASH },
+    { label: "Active employees", value: fmtNumber(s.active_employees), sub: `${fmtNumber(s.inactive_employees)} inactive` },
+    {
+      label: "Per active employee",
+      value: s.active_employees > 0 ? fmtNumber(s.total_debriefs / s.active_employees, TWO_DP) : DASH,
+    },
+    { label: "Stores", value: fmtNumber(storeRows.length) },
+  ];
+  const eventSearch = (e: DebriefEvent) =>
+    `${employeeName(e.employee_name, e.employee_id)} ${storeName(e.store)} ${typeLabel(e.type)} ${e.note ?? ""} ${e.author ?? ""}`;
+  const employeeSearch = (e: DebriefEmployee) => `${e.name} ${storeName(e.store)}`;
+  const storeSearch = (r: StoreRow) => storeName(r.store);
+
   return (
-    <Tabs defaultValue="events" className="space-y-3">
-      <TabsList>
-        <TabsTrigger value="events">Events ({events.length.toLocaleString()})</TabsTrigger>
-        <TabsTrigger value="employees">Employees ({data.employees.length.toLocaleString()})</TabsTrigger>
-        <TabsTrigger value="stores">Stores ({stores.length})</TabsTrigger>
-      </TabsList>
-      <TabsContent value="events">
-        <PagedTable rows={events} columns={eventColumns} rowKey={(e) => e.debrief_id} initialSort="date" />
-      </TabsContent>
-      <TabsContent value="employees">
-        <PagedTable rows={data.employees} columns={employeeColumns} rowKey={(e) => `${e.store}-${e.employee_id}`} initialSort="total" />
-      </TabsContent>
-      <TabsContent value="stores">
-        <PagedTable rows={stores} columns={storeColumns} rowKey={(s) => s.store} initialSort="total" />
-      </TabsContent>
-    </Tabs>
+    <ReportDialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      title="Debriefs"
+      category="people"
+      stats={stats}
+      tabs={[
+        {
+          key: "overview",
+          label: "By week",
+          content: (
+            <ReportBlock title="Debriefs per week" description="Every loaded store together, by week number.">
+              {data.weeks.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">No weeks in this range</p>
+              ) : (
+                <ApexChart key={theme.key} options={options} series={series} type="line" height={DIALOG_CHART_PX} />
+              )}
+            </ReportBlock>
+          ),
+        },
+        {
+          key: "events",
+          label: `Events (${events.length.toLocaleString()})`,
+          content: (
+            <div className="space-y-2">
+              <StoreChecklist value={stores} onChange={setStores} />
+              <PagedTable
+                key={stores.join(",")}
+                size="lg"
+                rows={filteredEvents}
+                columns={eventColumns}
+                rowKey={(e) => e.debrief_id}
+                initialSort="date"
+                searchText={eventSearch}
+                searchPlaceholder="Search debriefs…"
+              />
+            </div>
+          ),
+        },
+        {
+          key: "employees",
+          label: `Employees (${data.employees.length.toLocaleString()})`,
+          content: (
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <ActiveToggle value={active} onChange={setActive} />
+                <StoreChecklist value={stores} onChange={setStores} />
+              </div>
+              <PagedTable
+                key={`${stores.join(",")}|${active}`}
+                size="lg"
+                rows={filteredEmployees}
+                columns={employeeColumns}
+                rowKey={(e) => `${e.store}-${e.employee_id}`}
+                initialSort="total"
+                searchText={employeeSearch}
+                searchPlaceholder="Search employees…"
+              />
+            </div>
+          ),
+        },
+        {
+          key: "stores",
+          label: `By store (${storeRows.length})`,
+          content: (
+            <PagedTable
+              size="lg"
+              rows={storeRows}
+              columns={storeColumns}
+              rowKey={(r) => r.store}
+              initialSort="total"
+              searchText={storeSearch}
+              searchPlaceholder="Search stores…"
+            />
+          ),
+        },
+      ]}
+    />
   );
 }
 
@@ -159,7 +257,7 @@ export function BrDebriefs({ data }: { data: DebriefsSection }) {
   );
 
   const options = useMemo(
-    () => peopleLineOptions(theme, data.weeks.map((w) => safeDay(w.week_start)), (v) => fmtNumber(v)),
+    () => peopleLineOptions(theme, data.weeks.map((w) => weekLabel(w)), (v) => fmtNumber(v)),
     [theme, data.weeks],
   );
   const series = useMemo(() => [{ name: "Debriefs", data: data.weeks.map((w) => w.total_count) }], [data.weeks]);
@@ -171,7 +269,7 @@ export function BrDebriefs({ data }: { data: DebriefsSection }) {
       title="Debriefs"
       category="people"
       period="R"
-      span={2}
+      span={4}
       height={ROW_CARD_HEIGHT}
       onExpand={hasAny ? () => setOpen(true) : undefined}
     >
@@ -200,11 +298,7 @@ export function BrDebriefs({ data }: { data: DebriefsSection }) {
         <V1Empty icon={ClipboardList}>No debriefs logged in this range</V1Empty>
       )}
 
-      {open && (
-        <WbrDetailDialog open={open} onOpenChange={setOpen} title="Debriefs" badgeText={`${fmtNumber(s.total_debriefs)} logged`} className="sm:max-w-6xl">
-          <DebriefTables data={data} />
-        </WbrDetailDialog>
-      )}
+      {open && <DebriefsDialog data={data} onClose={() => setOpen(false)} />}
     </V1Card>
   );
 }

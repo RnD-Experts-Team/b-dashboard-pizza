@@ -6,16 +6,19 @@ import { V1Card } from "@/components/dashboard-v1/v1-card";
 import { V1Empty, V1Toggle } from "@/components/dashboard-v1/v1-ui";
 import { CATEGORIES } from "@/components/dashboard-v1/category";
 import { DASH } from "@/components/labor/labor-format";
+import { preferFinal, useFinalLabor, type FinalLabor } from "@/components/business-reports/final-labor";
 import { useReport } from "@/components/business-reports/report-context";
-import { fmt$, fmtNum, fmtPct, laborColor } from "@/components/business-reports/report-format";
+import { fmt$, fmtNum, fmtPct, laborColor, weekLabel } from "@/components/business-reports/report-format";
 import { cn } from "@/lib/utils";
 import type { ReportWeek, SalesSection, StoreWeekCompact } from "@/types/business-reports.types";
 import { GRID_TD, StoreWeekGrid } from "./br-store-week-grid";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  Weekly Sales by Store — a stores × weeks heat grid of sales, labor % or
- *  guests. Sales/guests tint by size (the store's best week is outlined);
- *  labor % uses V1's labor colour bands.
+ *  guests, by week number. Sales/guests tint by size (the store's best week
+ *  is outlined); labor % is Hiring's FINAL labor for that store-week where it
+ *  exists (else the derived labor cost ÷ sales, in italics), in V1's labor
+ *  colour bands.
  * ────────────────────────────────────────────────────────────────────────── */
 
 type Metric = "sales" | "labor" | "guests";
@@ -45,12 +48,39 @@ const METRICS: Record<Metric, MetricDef> = {
   guests: { label: "Guests", value: (c) => c.customer_count, format: (v) => fmtNum(v), total: "Range" },
 };
 
+const LABOR_SOURCE: Record<string, string> = {
+  true: " · final labor",
+  false: " · est. (labor cost ÷ sales)",
+};
+
+interface CellValue {
+  value: number | null;
+  /** Labor only: false = derived (est.). */
+  isFinal: boolean;
+}
+
+/** A cell's figure: for labor, the store-week's final labor when Hiring has one. */
+function cellValue(
+  metric: Metric,
+  final: FinalLabor | null,
+  store: string,
+  week: string,
+  compact: StoreWeekCompact | undefined,
+): CellValue {
+  const derived = compact ? METRICS[metric].value(compact) : null;
+  if (metric !== "labor") return { value: derived, isFinal: false };
+  const fin = final?.byStoreWeek.get(store)?.get(week);
+  if (derived === null) return { value: fin ?? null, isFinal: fin !== undefined };
+  return preferFinal(fin, derived);
+}
+
 function tintFor(color: string, percent: number): string {
   return `color-mix(in srgb, ${color} ${Math.round(percent)}%, transparent)`;
 }
 
 export function BrWeeklySalesByStore({ data }: { data: SalesSection }) {
   const { params, storeName } = useReport();
+  const final = useFinalLabor();
   const [metric, setMetric] = useState<Metric>("sales");
   const def = METRICS[metric];
   const weeks = data.meta.weeks;
@@ -80,7 +110,7 @@ export function BrWeeklySalesByStore({ data }: { data: SalesSection }) {
 
   const renderCell = (store: string, week: ReportWeek) => {
     const compact = data.by_store_week[store]?.[week.week_start];
-    const value = compact ? def.value(compact) : null;
+    const { value, isFinal } = cellValue(metric, final, store, week.week_start, compact);
     if (value === null) {
       return (
         <td key={week.week_start} className={cn(GRID_TD, "text-muted-foreground/60")}>
@@ -96,9 +126,16 @@ export function BrWeeklySalesByStore({ data }: { data: SalesSection }) {
     return (
       <td
         key={week.week_start}
-        className={cn(GRID_TD, "font-medium", isBest && "outline-1 -outline-offset-2 outline-emerald-500")}
+        className={cn(
+          GRID_TD,
+          "font-medium",
+          isBest && "outline-1 -outline-offset-2 outline-emerald-500",
+          isLabor && !isFinal && "italic opacity-80",
+        )}
         style={{ backgroundColor: background }}
-        title={`${storeName(store)} · ${week.start} → ${week.end}${isBest ? " · best week" : ""}`}
+        title={`${storeName(store)} · ${weekLabel(week)} · ${week.start} → ${week.end}${isBest ? " · best week" : ""}${
+          isLabor ? LABOR_SOURCE[String(isFinal)] : ""
+        }`}
       >
         {def.format(value)}
       </td>
@@ -110,7 +147,14 @@ export function BrWeeklySalesByStore({ data }: { data: SalesSection }) {
     if (!m || m.store_days === 0) return DASH;
     if (metric === "sales") return fmt$(m.sales);
     if (metric === "guests") return fmtNum(m.customer_count);
-    return m.sales > 0 ? <span style={{ color: laborColor(m.labor_percent) }}>{fmtPct(m.labor_percent)}</span> : DASH;
+    const fin = final?.byStore.get(store);
+    if (m.sales <= 0 && fin === undefined) return DASH;
+    const l = m.sales > 0 ? preferFinal(fin, m.labor_percent) : { value: fin ?? 0, isFinal: true };
+    return (
+      <span className={cn(!l.isFinal && "italic opacity-80")} style={{ color: laborColor(l.value) }} title={l.isFinal ? "Final labor" : "Est."}>
+        {fmtPct(l.value)}
+      </span>
+    );
   };
 
   const renderRowHead = (store: string) => <span className="block truncate font-medium">{storeName(store)}</span>;
@@ -143,7 +187,7 @@ export function BrWeeklySalesByStore({ data }: { data: SalesSection }) {
           renderRowHead={renderRowHead}
           renderCell={renderCell}
           tail={{ header: def.total, render: renderTotal }}
-          note={metric === "labor" ? "labor % = labor cost ÷ sales" : "outlined = the store's best week"}
+          note={metric === "labor" ? "final labor (Hiring); italics = est. (labor cost ÷ sales)" : "outlined = the store's best week"}
         />
       )}
     </V1Card>

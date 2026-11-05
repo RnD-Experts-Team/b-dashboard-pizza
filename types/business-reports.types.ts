@@ -7,13 +7,15 @@
  *           quality, debriefs, store-score)  → app/api/reports/business/[section]
  *   - Hiring GET /v1/reports/labor            → app/api/reports/labor
  *   - Hooks GET /reports/wbr/bulk             → app/api/reports/wbr-bulk
- *   - Maintenance GET /tickets/analytics      → app/api/maintenance-tickets/tickets/analytics
+ *   - Maintenance GET /maintenance-analytics/summary → app/api/maintenance-tickets/analytics/summary
+ *   - Operations GET /v1/skills/overview → app/api/scheduling/skills/overview
  *
  * Shapes mirror the upstream JSON (snake_case). Stores are store numbers
  * ("03795-00001"), always sent as an explicit list.
  */
 
-import type { TicketsAnalytics } from "@/types/maintenance-tickets.types";
+import type { AnalyticsSummary } from "@/types/maintenance-analytics.types";
+import type { StoreSkillsOverview } from "@/types/skills.types";
 
 /* ══════════════════════════════════════════════════════════════════════
  *  Request
@@ -795,7 +797,10 @@ export interface BusinessReportsData {
   storeScore: StoreScoreSection;
   labor: LaborReport;
   feedback: WbrBulkResponse;
-  tickets: TicketsAnalytics;
+  /** Maintenance analytics summary over the range (recurring issues, statuses, per store). */
+  tickets: AnalyticsSummary;
+  /** Operations: every active employee of the stores against every skill (a snapshot, not ranged). */
+  skills: StoreSkillsOverview;
 }
 
 export type SectionKey = keyof BusinessReportsData;

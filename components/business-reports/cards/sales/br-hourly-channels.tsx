@@ -5,10 +5,12 @@ import type { ApexOptions } from "apexcharts";
 import { BarChart2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { V1Card, type V1Span } from "@/components/dashboard-v1/v1-card";
-import { V1Empty, V1Toggle, V1_TBL, V1_TH, V1_TD, V1_NUM } from "@/components/dashboard-v1/v1-ui";
-import { WbrDetailDialog } from "@/components/dspr/wbr-detail-dialog";
+import { V1Empty, V1Toggle } from "@/components/dashboard-v1/v1-ui";
 import { ApexChart, CHANNEL_COLORS, CHANNEL_LABELS, useChartTheme } from "@/components/business-reports/chart";
+import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
+import { ReportBlock, ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
 import { fmt$, fmt$2, fmtNum, fmtPct, perStoreDay, share } from "@/components/business-reports/report-format";
+import { BarList, TrendChart, type BarRow } from "@/components/business-reports/cards/sales/br-dialog-kit";
 import type { ChannelKey, HourlyRow, SalesSection } from "@/types/business-reports.types";
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -16,6 +18,7 @@ import type { ChannelKey, HourlyRow, SalesSection } from "@/types/business-repor
  *  Hourly: stacked bars per channel, summed over every store-day, or averaged
  *  per store-day (each hour's own `store_days`). By Channel: one bar per
  *  channel from the range totals. Legend chips hide/show channels.
+ *  Expand: the stacked hourly chart large, every hour, the channel mix.
  * ────────────────────────────────────────────────────────────────────────── */
 
 export const BR_HOURLY_CHANNELS_SPAN: V1Span = 2;
@@ -40,6 +43,7 @@ const CHART_HEIGHT = 200;
 const BAR_RADIUS = 2;
 const LABEL_ROTATE = -45;
 const NOON = 12;
+const HOURS_PER_DAY = 24;
 const EMPTY_COLOR = "#94a3b8";
 const HIDDEN_DOT = "#71717a";
 
@@ -301,94 +305,149 @@ export function BrHourlyChannelsCard({ data }: { data: SalesSection }) {
 
       {renderChart()}
 
-      <WbrDetailDialog
-        open={open}
-        onOpenChange={setOpen}
-        title="Sales by Hour and Channel"
-        badgeText={`${fmtNum(data.totals.store_days)} store-days`}
-      >
-        {open && <HourlyDetail hours={hours} channelTotals={channelTotals} channelGrand={channelGrand} initialTab={tab} />}
-      </WbrDetailDialog>
+      {open && (
+        <HourlyDialog
+          data={data}
+          hours={hours}
+          channelTotals={channelTotals}
+          channelGrand={channelGrand}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </V1Card>
   );
 }
 
-/* ── Expand dialog body — mounted only while open ────────────────────────── */
+/* ── Expand dialog — mounted only while open ─────────────────────────────── */
 
-function HourlyDetail({
+interface HourRow {
+  hour: number;
+  storeDays: number;
+  total: number;
+  avg: number;
+  pct: number;
+}
+
+interface ChannelTotal {
+  id: ChannelId;
+  sum: number;
+  avg: number;
+}
+
+const HOUR_COLUMNS: PagedColumn<HourRow>[] = [
+  { key: "hour", header: "Hour", sortValue: (r) => r.hour, render: (r) => <span className="font-medium">{formatHour(r.hour)}</span> },
+  { key: "total", header: "Sales", numeric: true, sortValue: (r) => r.total, render: (r) => <span className="font-semibold">{fmt$(r.total)}</span> },
+  { key: "avg", header: "Avg / store-day", numeric: true, sortValue: (r) => r.avg, render: (r) => fmt$2(r.avg) },
+  { key: "days", header: "Store-days", numeric: true, sortValue: (r) => r.storeDays, render: (r) => fmtNum(r.storeDays) },
+  { key: "pct", header: "Share", numeric: true, sortValue: (r) => r.pct, render: (r) => fmtPct(r.pct) },
+];
+
+function HourlyDialog({
+  data,
   hours,
   channelTotals,
   channelGrand,
-  initialTab,
+  onClose,
 }: {
+  data: SalesSection;
   hours: HourlyRow[];
-  channelTotals: { id: ChannelId; sum: number; avg: number }[];
+  channelTotals: ChannelTotal[];
   channelGrand: number;
-  initialTab: Tab;
+  onClose: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>(initialTab);
-
-  const hourRows = useMemo(() => {
+  const hourRows = useMemo<HourRow[]>(() => {
     const totals = hours.map((h) => ({ hour: h.hour, storeDays: h.store_days, total: hourTotal(h) }));
     const grand = totals.reduce((s, r) => s + r.total, 0);
     return totals.map((r) => ({ ...r, avg: perStoreDay(r.total, r.storeDays), pct: share(r.total, grand) }));
   }, [hours]);
 
+  const peak = useMemo(
+    () => hourRows.reduce<HourRow | null>((a, r) => (a === null || r.total > a.total ? r : a), null),
+    [hourRows],
+  );
+  const ranked = useMemo(() => [...channelTotals].sort((a, b) => b.sum - a.sum), [channelTotals]);
+  const topChannel = ranked[0] && ranked[0].sum > 0 ? ranked[0] : null;
+
+  const chart = useMemo(() => {
+    const withData = CHANNEL_IDS.filter((c) => hours.some((h) => (Number(h[salesKey(c)]) || 0) !== 0));
+    return {
+      categories: hours.map((h) => formatHour(h.hour)),
+      bars: withData.map((c) => ({
+        name: CHANNEL_LABELS[c],
+        data: hours.map((h) => Math.round(Number(h[salesKey(c)]) || 0)),
+        color: CHANNEL_COLORS[c],
+      })),
+    };
+  }, [hours]);
+
+  const mix = useMemo<BarRow[]>(
+    () =>
+      ranked.map((c) => ({
+        key: c.id,
+        label: CHANNEL_LABELS[c.id],
+        value: c.sum,
+        display: fmt$(c.sum),
+        sub: `${fmtPct(share(c.sum, channelGrand))} · ${fmt$2(c.avg)} / store-day`,
+        color: CHANNEL_COLORS[c.id],
+      })),
+    [ranked, channelGrand],
+  );
+
+  const stats: ReportStat[] = [
+    { label: "Sales", value: fmt$(channelGrand), sub: `${fmtNum(data.totals.store_days)} store-days` },
+    { label: "Per store-day", value: fmt$2(perStoreDay(channelGrand, data.totals.store_days)) },
+    { label: "Peak hour", value: peak ? formatHour(peak.hour) : "—", sub: peak ? `${fmt$(peak.total)} · ${fmtPct(peak.pct)}` : undefined },
+    {
+      label: "Top channel",
+      value: topChannel ? CHANNEL_LABELS[topChannel.id] : "—",
+      sub: topChannel ? `${fmt$(topChannel.sum)} · ${fmtPct(share(topChannel.sum, channelGrand))}` : undefined,
+    },
+  ];
+
+  const tabs = [
+    {
+      key: "overview",
+      label: "Overview",
+      content: (
+        <ReportBlock title="Sales by hour, stacked by channel" description="Summed over every store-day in the range">
+          {chart.bars.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No hourly sales in this range</p>
+          ) : (
+            <TrendChart categories={chart.categories} bars={chart.bars} stacked />
+          )}
+        </ReportBlock>
+      ),
+    },
+    {
+      key: "hours",
+      label: "By hour",
+      content: (
+        <ReportBlock title="Every hour" description="Avg / store-day divides by the store-days that had sales at that hour">
+          <PagedTable size="lg" rows={hourRows} columns={HOUR_COLUMNS} rowKey={(r) => r.hour} initialSort="hour" initialDir="asc" pageSize={HOURS_PER_DAY} />
+        </ReportBlock>
+      ),
+    },
+    {
+      key: "channels",
+      label: "By channel",
+      content: (
+        <ReportBlock title="Channel mix" description="Range totals per channel, largest first">
+          <BarList rows={mix} color={CHANNEL_COLORS.register} empty="No channel sales in this range" />
+        </ReportBlock>
+      ),
+    },
+  ];
+
   return (
-    <div className="space-y-3">
-      <div className="flex justify-end">
-        <V1Toggle<Tab> options={TAB_OPTIONS} value={tab} onChange={setTab} />
-      </div>
-      {tab === "hourly" ? (
-        <table className={V1_TBL}>
-          <thead>
-            <tr>
-              <th className={V1_TH}>Hour</th>
-              <th className={cn(V1_TH, V1_NUM)}>Total</th>
-              <th className={cn(V1_TH, V1_NUM)}>Avg / store-day</th>
-              <th className={cn(V1_TH, V1_NUM)}>Store-days</th>
-              <th className={cn(V1_TH, V1_NUM)}>Share</th>
-            </tr>
-          </thead>
-          <tbody>
-            {hourRows.map((r) => (
-              <tr key={r.hour}>
-                <td className={cn(V1_TD, "font-medium")}>{formatHour(r.hour)}</td>
-                <td className={cn(V1_TD, V1_NUM, "font-semibold")}>{fmt$(r.total)}</td>
-                <td className={cn(V1_TD, V1_NUM)}>{fmt$2(r.avg)}</td>
-                <td className={cn(V1_TD, V1_NUM, "text-muted-foreground")}>{fmtNum(r.storeDays)}</td>
-                <td className={cn(V1_TD, V1_NUM, "text-muted-foreground")}>{fmtPct(r.pct)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        <table className={V1_TBL}>
-          <thead>
-            <tr>
-              <th className={V1_TH}>Channel</th>
-              <th className={cn(V1_TH, V1_NUM)}>Sales</th>
-              <th className={cn(V1_TH, V1_NUM)}>Avg / store-day</th>
-              <th className={cn(V1_TH, V1_NUM)}>Share</th>
-            </tr>
-          </thead>
-          <tbody>
-            {channelTotals.map((c) => (
-              <tr key={c.id}>
-                <td className={cn(V1_TD, "font-medium")}>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: CHANNEL_COLORS[c.id] }} />
-                    {CHANNEL_LABELS[c.id]}
-                  </span>
-                </td>
-                <td className={cn(V1_TD, V1_NUM, "font-semibold")}>{fmt$(c.sum)}</td>
-                <td className={cn(V1_TD, V1_NUM)}>{fmt$2(c.avg)}</td>
-                <td className={cn(V1_TD, V1_NUM, "text-muted-foreground")}>{fmtPct(share(c.sum, channelGrand))}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
+    <ReportDialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      title="Sales by Hour and Channel"
+      category="sales"
+      stats={stats}
+      tabs={tabs}
+    />
   );
 }

@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { WbrDetailDialog } from "@/components/dspr/wbr-detail-dialog";
+import { CATEGORIES } from "@/components/dashboard-v1/category";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import { V1Empty, V1Toggle, V1_NUM, V1_TBL, V1_TD, V1_TH } from "@/components/dashboard-v1/v1-ui";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
+import { ReportBlock, ReportDialog, type ReportTab } from "@/components/business-reports/report-dialog";
 import { useSection } from "@/components/business-reports/report-context";
-import { fmtNum, fmtPct, fmtRange, weekLabel } from "@/components/business-reports/report-format";
+import { compareText, fmtNum, fmtPct, fmtRange } from "@/components/business-reports/report-format";
 import type {
   HnrTotals,
   OperationsMetrics,
@@ -15,9 +16,22 @@ import type {
   OrdersSection,
   ReportWeek,
 } from "@/types/business-reports.types";
-import { NO_VALUE, PpDelta, plural } from "./br-shared";
-import { HNR_SCOPE_OPTIONS, type HnrScope } from "./br-hnr";
-import { compareText } from "../../report-format";
+import {
+  DialogNote,
+  NO_VALUE,
+  PpDelta,
+  TrendChart,
+  meanOf,
+  plural,
+  storeSearch,
+  useStoreFocus,
+  useStoreRows,
+  useWeekLabel,
+} from "./br-shared";
+import { HNR_SCOPE_OPTIONS, ScopeBar, hnrSource, type HnrScope } from "./br-hnr";
+
+const [PORTAL_COLOR, HNR_COLOR] = CATEGORIES.operations.chartColors;
+const fmtAxisPct = (v: number): string => `${v.toFixed(0)}%`;
 
 interface WeekRow {
   week: ReportWeek & OperationsMetrics;
@@ -53,49 +67,149 @@ function Dash() {
 const hnrCell = (r: WeekRow, read: (h: HnrTotals) => number, format: (n: number) => string) =>
   r.hnr ? format(read(r.hnr)) : <Dash />;
 
-const COLUMNS: PagedColumn<WeekRow>[] = [
-  { key: "week", header: "Week", sortValue: (r) => r.week.week_start, render: (r) => weekLabel(r.week), className: "whitespace-nowrap" },
+/** Every column after the week, shared by the dialog's By week table. */
+const VALUE_COLUMNS: PagedColumn<WeekRow>[] = [
+  { key: "portal", header: "Portal %", numeric: true, sortValue: (r) => r.week.in_portal_on_time_percent, render: (r) => fmtPct(r.week.in_portal_on_time_percent) },
+  { key: "portal_d", header: "Δ Portal", numeric: true, render: (r) => <PpDelta curr={r.week.in_portal_on_time_percent} prev={r.prevPortal} /> },
   { key: "eligible", header: "Eligible", numeric: true, sortValue: (r) => r.week.portal_eligible_orders, render: (r) => fmtNum(r.week.portal_eligible_orders) },
   { key: "used", header: "Used", numeric: true, sortValue: (r) => r.week.portal_used_orders, render: (r) => fmtNum(r.week.portal_used_orders) },
   { key: "ontime", header: "On-Time", numeric: true, sortValue: (r) => r.week.portal_on_time_orders, render: (r) => fmtNum(r.week.portal_on_time_orders) },
-  { key: "portal", header: "Portal %", numeric: true, sortValue: (r) => r.week.in_portal_on_time_percent, render: (r) => fmtPct(r.week.in_portal_on_time_percent) },
-  { key: "portal_d", header: "Δ", numeric: true, render: (r) => <PpDelta curr={r.week.in_portal_on_time_percent} prev={r.prevPortal} /> },
-  { key: "trans", header: "HNR Txns", numeric: true, sortValue: (r) => r.hnr?.hnr_transactions, render: (r) => hnrCell(r, (h) => h.hnr_transactions, fmtNum) },
-  { key: "broken", header: "Broken", numeric: true, sortValue: (r) => r.hnr?.hnr_broken_promises, render: (r) => hnrCell(r, (h) => h.hnr_broken_promises, fmtNum) },
-  { key: "met", header: "Met", numeric: true, sortValue: (r) => r.hnr?.hnr_promise_met, render: (r) => hnrCell(r, (h) => h.hnr_promise_met, fmtNum) },
   { key: "hnr", header: "HNR %", numeric: true, sortValue: (r) => r.hnr?.hnr_promise_met_percent, render: (r) => hnrCell(r, (h) => h.hnr_promise_met_percent, fmtPct) },
   {
     key: "hnr_d",
-    header: "Δ",
+    header: "Δ HNR",
     numeric: true,
     render: (r) => (r.hnr ? <PpDelta curr={r.hnr.hnr_promise_met_percent} prev={r.prevHnr} /> : <Dash />),
   },
+  { key: "trans", header: "HNR Txns", numeric: true, sortValue: (r) => r.hnr?.hnr_transactions, render: (r) => hnrCell(r, (h) => h.hnr_transactions, fmtNum) },
+  { key: "met", header: "Met", numeric: true, sortValue: (r) => r.hnr?.hnr_promise_met, render: (r) => hnrCell(r, (h) => h.hnr_promise_met, fmtNum) },
+  { key: "broken", header: "Broken", numeric: true, sortValue: (r) => r.hnr?.hnr_broken_promises, render: (r) => hnrCell(r, (h) => h.hnr_broken_promises, fmtNum) },
 ];
 
-function WeeklyDialog({
-  ops,
-  orders,
-  onClose,
-}: {
-  ops: OperationsSection;
-  orders: OrdersSection | null;
-  onClose: () => void;
-}) {
+interface StoreWeeklyRow {
+  store: string;
+  name: string;
+  portal: number;
+  hnr: number | null;
+  eligible: number;
+  trans: number | null;
+}
+
+const STORE_COLUMNS: PagedColumn<StoreWeeklyRow>[] = [
+  { key: "store", header: "Store", sortValue: (r) => r.name, render: (r) => r.name },
+  { key: "portal", header: "Portal %", numeric: true, sortValue: (r) => r.portal, render: (r) => fmtPct(r.portal) },
+  { key: "eligible", header: "Eligible", numeric: true, sortValue: (r) => r.eligible, render: (r) => fmtNum(r.eligible) },
+  { key: "hnr", header: "HNR %", numeric: true, sortValue: (r) => r.hnr, render: (r) => (r.hnr === null ? <Dash /> : fmtPct(r.hnr)) },
+  { key: "trans", header: "HNR Txns", numeric: true, sortValue: (r) => r.trans, render: (r) => (r.trans === null ? <Dash /> : fmtNum(r.trans)) },
+];
+
+function WeeklyDialog({ ops, orders, onClose }: { ops: OperationsSection; orders: OrdersSection | null; onClose: () => void }) {
   const [scope, setScope] = useState<HnrScope>("all");
   const rows = useMemo(() => buildRows(ops, orders, scope), [ops, orders, scope]);
+  const labelOf = useWeekLabel(ops.by_week);
+  const chronological = useMemo(() => [...rows].reverse(), [rows]);
+  const categories = useMemo(() => chronological.map((r) => labelOf(r.week.week_start)), [chronological, labelOf]);
+  const series = useMemo(
+    () => [
+      { name: "Portal %", data: chronological.map((r) => Number(r.week.in_portal_on_time_percent.toFixed(1))), color: PORTAL_COLOR },
+      { name: "HNR %", data: chronological.map((r) => (r.hnr ? Number(r.hnr.hnr_promise_met_percent.toFixed(1)) : null)), color: HNR_COLOR },
+    ],
+    [chronological],
+  );
+  const columns = useMemo<PagedColumn<WeekRow>[]>(
+    () => [{ key: "week", header: "Week", sortValue: (r) => r.week.week_start, render: (r) => labelOf(r.week.week_start) }, ...VALUE_COLUMNS],
+    [labelOf],
+  );
+  const hnrStores = hnrSource(scope, ops, orders).byStore;
+  const opsStores = useStoreRows(ops.by_store);
+  const stores = useMemo<StoreWeeklyRow[]>(
+    () =>
+      opsStores.map((r) => {
+        const h = hnrStores[r.store];
+        return {
+          store: r.store,
+          name: r.name,
+          portal: r.data.in_portal_on_time_percent,
+          eligible: r.data.portal_eligible_orders,
+          hnr: h ? h.hnr_promise_met_percent : null,
+          trans: h ? h.hnr_transactions : null,
+        };
+      }),
+    [opsStores, hnrStores],
+  );
+  const focus = useStoreFocus<StoreWeeklyRow>();
+  const latest = rows[0];
+  const avgPortal = meanOf(rows.map((r) => r.week.in_portal_on_time_percent));
+  const avgHnr = meanOf(rows.map((r) => r.hnr?.hnr_promise_met_percent));
+  const scopeNote = scope === "special" ? " (Special Items)" : "";
+  const bar = (children: ReactNode) => (
+    <ScopeBar scope={scope} onChange={setScope} hasSpecial={Boolean(orders)}>
+      {children}
+    </ScopeBar>
+  );
+
+  const tabs: ReportTab[] = [
+    {
+      key: "overview",
+      label: "Overview",
+      content: bar(
+        <ReportBlock title="Portal % and HNR % by week" description={`Portal % = in-portal on time; HNR % = promise met${scopeNote}.`}>
+          <TrendChart key={scope} categories={categories} series={series} format={fmtAxisPct} />
+        </ReportBlock>,
+      ),
+    },
+    {
+      key: "weeks",
+      label: "By week",
+      content: bar(
+        <div className="space-y-2">
+          <PagedTable key={scope} size="lg" rows={rows} columns={columns} rowKey={(r) => r.week.week_start} initialSort="week" />
+          <DialogNote>Δ compares each week to the previous week in the range.</DialogNote>
+        </div>,
+      ),
+    },
+    {
+      key: "stores",
+      label: "By store",
+      content: bar(
+        <PagedTable
+          key={scope}
+          size="lg"
+          rows={stores}
+          columns={STORE_COLUMNS}
+          rowKey={(r) => r.store}
+          initialSort="portal"
+          searchText={storeSearch}
+          onRowClick={focus.onRowClick}
+          footerNote={focus.footerNote}
+        />,
+      ),
+    },
+  ];
+
   return (
-    <WbrDetailDialog open onOpenChange={(o) => !o && onClose()} title="Portal & HNR — Weekly" badgeText={plural(rows.length, "week")}>
-      {orders && (
-        <div className="mb-3 flex justify-end">
-          <V1Toggle options={HNR_SCOPE_OPTIONS} value={scope} onChange={setScope} />
-        </div>
-      )}
-      <PagedTable key={scope} rows={rows} columns={COLUMNS} rowKey={(r) => r.week.week_start} initialSort="week" />
-      <p className="mt-3 text-[11px] text-muted-foreground">
-        Δ compares each week to the previous week in the range. Portal % = in-portal on-time; HNR % = promise met
-        {scope === "special" ? " (Special Items)" : ""}.
-      </p>
-    </WbrDetailDialog>
+    <ReportDialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title="Portal & HNR — Weekly"
+      category="operations"
+      stats={[
+        { label: "Weeks", value: fmtNum(rows.length) },
+        {
+          label: "Latest Portal %",
+          value: latest ? fmtPct(latest.week.in_portal_on_time_percent) : NO_VALUE,
+          sub: latest ? labelOf(latest.week.week_start) : undefined,
+        },
+        {
+          label: "Latest HNR %",
+          value: latest?.hnr ? fmtPct(latest.hnr.hnr_promise_met_percent) : NO_VALUE,
+          sub: latest ? `${labelOf(latest.week.week_start)}${scopeNote}` : undefined,
+        },
+        { label: "Avg Portal %", value: avgPortal === null ? NO_VALUE : fmtPct(avgPortal), sub: "mean of weeks" },
+        { label: "Avg HNR %", value: avgHnr === null ? NO_VALUE : fmtPct(avgHnr), sub: `mean of weeks${scopeNote}` },
+      ]}
+      tabs={tabs}
+    />
   );
 }
 
@@ -106,6 +220,7 @@ export function BrPortalWeeklyCard({ data }: { data: OperationsSection }) {
   const [open, setOpen] = useState(false);
   const effectiveScope: HnrScope = orders ? scope : "all";
   const rows = useMemo(() => buildRows(data, orders, effectiveScope), [data, orders, effectiveScope]);
+  const labelOf = useWeekLabel(data.by_week);
   const empty = rows.length === 0;
 
   return (
@@ -136,9 +251,8 @@ export function BrPortalWeeklyCard({ data }: { data: OperationsSection }) {
           <tbody>
             {rows.map((r) => (
               <tr key={r.week.week_start}>
-                <td className={cn(V1_TD, "whitespace-nowrap")}>
-                  <span className="font-medium">Wk {r.week.week_number}</span>{" "}
-                  <span className="text-muted-foreground">{fmtRange(r.week.start, r.week.end)}</span>
+                <td className={cn(V1_TD, "whitespace-nowrap font-medium")} title={fmtRange(r.week.start, r.week.end)}>
+                  {labelOf(r.week.week_start)}
                 </td>
                 <td className={cn(V1_TD, V1_NUM)}>
                   {fmtPct(r.week.in_portal_on_time_percent)}{" "}

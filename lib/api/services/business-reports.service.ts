@@ -1,6 +1,9 @@
 import axios from "axios";
 import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
-import type { TicketsAnalytics } from "@/types/maintenance-tickets.types";
+import { schedulingService } from "@/lib/api/services/scheduling.service";
+import { daysToInstants } from "@/lib/maintenance-tickets/local-range";
+import type { AnalyticsSummary } from "@/types/maintenance-analytics.types";
+import type { StoreSkillsOverview } from "@/types/skills.types";
 import type {
   BusinessReportsParams,
   DebriefsSection,
@@ -27,6 +30,9 @@ const CLIENT_TIMEOUT_MS = CLIENT_TIMEOUT_SECONDS * MS_PER_SECOND;
  */
 const STORE_SCORE_BATCH = 25;
 const STORE_SCORE_PARALLEL = 4;
+
+/** Operations takes at most this many stores per skills-overview call, so bigger lists are split and merged. */
+const SKILLS_STORES_PER_CALL = 100;
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -141,11 +147,24 @@ export const businessReportsService = {
     return data;
   },
 
-  /** Maintenance tickets opened in the range (analytics over the same stores). */
-  getTickets(params: BusinessReportsParams, signal?: AbortSignal): Promise<TicketsAnalytics> {
-    return maintenanceTicketsService.getGlobalTicketsAnalytics(
-      { stores: params.stores, created_from: params.startDate, created_to: params.endDate },
-      signal,
+  /** Maintenance analytics summary for the range: tickets, recurring issues, statuses, per store. */
+  getTickets(params: BusinessReportsParams, signal?: AbortSignal): Promise<AnalyticsSummary> {
+    const range = daysToInstants(params.startDate, params.endDate);
+    if (!range) throw new Error("Invalid date range.");
+    return maintenanceTicketsService.getAnalyticsSummary({ stores: params.stores, ...range }, signal);
+  },
+
+  /** Skills and their coverage by employees (Operations), split into calls of 100 stores and merged. */
+  async getSkills(params: BusinessReportsParams, signal?: AbortSignal): Promise<StoreSkillsOverview> {
+    const parts = await Promise.all(
+      chunk(params.stores, SKILLS_STORES_PER_CALL).map((stores) => schedulingService.getSkillsOverview(stores, signal)),
     );
+    // An employee of stores in two calls appears in both: keep one, with every store.
+    const employees = new Map<string, StoreSkillsOverview["employees"][number]>();
+    parts.flatMap((p) => p.employees).forEach((e) => {
+      const seen = employees.get(e.id);
+      employees.set(e.id, seen ? { ...seen, store_numbers: [...new Set([...seen.store_numbers, ...e.store_numbers])] } : e);
+    });
+    return { skills: parts[0]?.skills ?? [], employees: [...employees.values()] };
   },
 };

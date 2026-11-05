@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { V1_NUM, V1_TBL, V1_TD, V1_TH } from "@/components/dashboard-v1/v1-ui";
 import { useTableSort, type SortAccessor, type SortDir } from "@/components/labor/use-table-sort";
 import { cn } from "@/lib/utils";
+import { RD_NUM, RD_TBL, RD_TD, RD_TH } from "./report-dialog";
 
 export interface PagedColumn<T> {
   key: string;
@@ -18,6 +20,12 @@ export interface PagedColumn<T> {
 }
 
 const DEFAULT_PAGE_SIZE = 25;
+
+/** "sm" = the compact V1 card table; "lg" = the roomier dialog table. */
+const SIZES = {
+  sm: { tbl: V1_TBL, th: V1_TH, td: V1_TD, num: V1_NUM },
+  lg: { tbl: RD_TBL, th: RD_TH, td: RD_TD, num: RD_NUM },
+} as const;
 
 /**
  * The V1 compact table, sortable and paged (the Labor roster's pattern), so a
@@ -34,6 +42,9 @@ export function PagedTable<T>({
   onRowClick,
   rowClassName,
   footerNote,
+  size = "sm",
+  searchText,
+  searchPlaceholder = "Search…",
   className,
 }: {
   rows: T[];
@@ -46,8 +57,19 @@ export function PagedTable<T>({
   rowClassName?: (row: T) => string | undefined;
   /** Extra text after "Showing a–b of N" (e.g. "click a row to focus the store"). */
   footerNote?: string;
+  size?: keyof typeof SIZES;
+  /** Shows a search box that keeps the rows whose text contains the query. */
+  searchText?: (row: T) => string;
+  searchPlaceholder?: string;
   className?: string;
 }) {
+  const cls = SIZES[size];
+  const [query, setQuery] = useState("");
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q && searchText ? rows.filter((r) => searchText(r).toLowerCase().includes(q)) : rows;
+  }, [rows, query, searchText]);
+
   const accessors = useMemo(
     () =>
       Object.fromEntries(
@@ -56,7 +78,7 @@ export function PagedTable<T>({
     [columns],
   );
   const { sorted, sortKey, sortDir, toggleSort } = useTableSort<T, string>(
-    rows,
+    filtered,
     accessors,
     initialSort ?? columns.find((c) => c.sortValue)?.key ?? "",
     initialDir,
@@ -69,12 +91,26 @@ export function PagedTable<T>({
 
   return (
     <div className={cn("flex min-h-0 flex-col", className)}>
+      {searchText && (
+        <div className="relative mb-2 max-w-xs" onClick={(e) => e.stopPropagation()}>
+          <Search className="pointer-events-none absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(1);
+            }}
+            placeholder={searchPlaceholder}
+            className="h-8 ps-8 text-xs"
+          />
+        </div>
+      )}
       <div className="min-h-0 flex-1 overflow-auto">
-        <table className={V1_TBL}>
+        <table className={cls.tbl}>
           <thead>
             <tr>
               {columns.map((c) => (
-                <th key={c.key} className={cn(V1_TH, c.numeric && "text-right", c.className)}>
+                <th key={c.key} className={cn(cls.th, c.numeric && "text-end", c.className)}>
                   {c.sortValue ? (
                     <button
                       type="button"
@@ -107,7 +143,7 @@ export function PagedTable<T>({
                 className={cn(onRowClick && "cursor-pointer hover:bg-muted/40", rowClassName?.(row))}
               >
                 {columns.map((c) => (
-                  <td key={c.key} className={cn(V1_TD, c.numeric && V1_NUM, c.className)}>
+                  <td key={c.key} className={cn(cls.td, c.numeric && cls.num, c.className)}>
                     {c.render(row)}
                   </td>
                 ))}

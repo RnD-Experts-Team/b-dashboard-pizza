@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { fmtDay } from "@/components/business-reports/report-format";
+import { fmtDay, weekLabel } from "@/components/business-reports/report-format";
 import { cn } from "@/lib/utils";
 import type { ReportWeek } from "@/types/business-reports.types";
 
@@ -65,10 +65,10 @@ export function StoreWeekGrid({
                 <th
                   key={w.week_start}
                   className="sticky top-0 z-[1] border-b border-border/40 bg-card px-1.5 py-1 text-center font-semibold"
-                  title={`${w.start} → ${w.end}`}
+                  title={`${weekLabel(w, true)} · ${w.start} → ${w.end}`}
                 >
-                  <span className="block text-[9px] uppercase tracking-wide text-muted-foreground">Wk {w.week_number}</span>
-                  <span className="block text-[9.5px] font-medium tabular-nums">{fmtDay(w.start)}</span>
+                  <span className="block text-[10px] font-bold tracking-wide">{weekLabel(w)}</span>
+                  <span className="block text-[9.5px] font-medium tabular-nums text-muted-foreground">{fmtDay(w.start)}</span>
                 </th>
               ))}
               {tail && (

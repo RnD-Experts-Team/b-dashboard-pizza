@@ -8,7 +8,7 @@ import { fmtNumber } from "@/components/labor/labor-format";
 import { ApexChart, useChartTheme } from "@/components/business-reports/chart";
 import { cn } from "@/lib/utils";
 import type { LaborReport } from "@/types/business-reports.types";
-import { ROW_CARD_HEIGHT, peopleBarOptions } from "./br-people-kit";
+import { TALL_ROW_HEIGHT, peopleBarOptions } from "./br-people-kit";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  Headcount — active employees at the start vs end of the range, hires and
@@ -32,7 +32,7 @@ export function BrHeadcount({ data }: { data: LaborReport }) {
   const chartHeight = Math.max(MIN_CHART_PX, positions.length * BAR_ROW_PX);
 
   return (
-    <V1Card reportId="br-headcount" title="Headcount" category="people" period="R" span={1} height={ROW_CARD_HEIGHT}>
+    <V1Card reportId="br-headcount" title="Headcount" category="people" period="R" span={1} height={TALL_ROW_HEIGHT}>
       <div className="space-y-1.5">
         <div className="flex items-center justify-center gap-2 rounded-lg border border-border/50 bg-background/55 px-2 py-1.5">
           <div className="text-center">

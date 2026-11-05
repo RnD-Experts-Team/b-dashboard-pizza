@@ -1,4 +1,5 @@
 import { format, isValid, parseISO } from "date-fns";
+import { toBusinessWeek } from "@/lib/utils/business-week";
 import type { ReportWeek } from "@/types/business-reports.types";
 
 /**
@@ -28,6 +29,24 @@ const PERCENT = 100;
  */
 export function compareText(a: string | null | undefined, b: string | null | undefined): number {
   return (a ?? "").localeCompare(b ?? "");
+}
+
+const THOUSAND = 1_000;
+const MILLION = 1_000_000;
+const EXACT_BELOW = 10_000;
+const MILLION_DIGITS = 2;
+
+/**
+ * Money that has to fit a small tile: "$102.8K", "$2.53M" (put the exact value
+ * in the tile's title). Under $10K it stays exact.
+ */
+export function fmt$Compact(n: number | null | undefined): string {
+  const v = n ?? 0;
+  const abs = Math.abs(v);
+  const sign = v < 0 ? "-" : "";
+  if (abs >= MILLION) return `${sign}$${(abs / MILLION).toFixed(MILLION_DIGITS)}M`;
+  if (abs >= EXACT_BELOW) return `${sign}$${(abs / THOUSAND).toFixed(1)}K`;
+  return `${sign}$${Math.round(abs).toLocaleString("en-US")}`;
 }
 
 /** Per-store-day average, or 0 when nothing was recorded. */
@@ -79,9 +98,19 @@ export function fmtRange(start: string, end: string): string {
   return start === end ? fmtDay(start) : `${fmtDay(start)} → ${fmtDay(end)}`;
 }
 
-/** "Wk 43 · Oct 21" for a week row. */
-export function weekLabel(w: Pick<ReportWeek, "week_number" | "start">): string {
-  return `Wk ${w.week_number} · ${fmtDay(w.start)}`;
+/**
+ * The week NUMBER the whole project uses for a Tue–Mon business week: the ISO
+ * week of its Tuesday (V1's "Week N" badge, the screens/maintenance week
+ * pickers) — not the fiscal week the Data payload also carries.
+ */
+export function weekNumber(weekStart: string): number {
+  return toBusinessWeek(weekStart).number;
+}
+
+/** "Wk 43" for a week (by its Tuesday); `withYear` adds " · 2026". */
+export function weekLabel(w: { week_start: string }, withYear = false): string {
+  const week = toBusinessWeek(w.week_start);
+  return withYear ? `Wk ${week.number} · ${week.year}` : `Wk ${week.number}`;
 }
 
 export interface Bucket<T> {
