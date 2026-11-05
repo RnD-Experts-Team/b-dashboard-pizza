@@ -17,6 +17,7 @@ import { LaborMetrics } from "./labor-metrics";
 import { LaborOvertime } from "./labor-overtime";
 import { LaborTrend } from "./labor-trend";
 import { LaborRoster } from "./labor-roster";
+import { LaborSkills } from "./labor-skills";
 import { LaborSkeleton } from "./labor-skeleton";
 import { buildEmployeeBadges } from "./labor-badges";
 import { EmployeeReportSummaryStrip } from "./employee-report-summary";
@@ -157,6 +158,8 @@ export function LaborDashboard() {
               badgesByEmployee={badgesByEmployee}
               storeId={String(storeId)}
             />
+
+            <LaborSkills storeId={String(storeId)} />
 
             {employeeReport.error && (
               <Card className="border-destructive/40 bg-destructive/5">

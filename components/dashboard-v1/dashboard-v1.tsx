@@ -7,7 +7,8 @@ import html2canvas from "html2canvas-pro";
 import { useWbrCard } from "@/lib/hooks/use-wbr-card";
 import { useManagerDashboard } from "@/lib/hooks/use-manager-dashboard";
 import { useHooksWbr } from "@/lib/hooks/use-hooks-wbr";
-import { StoreGoals, DsprDashboardSkeleton, DaySummaryStats } from "@/components/dspr";
+import { StoreGoals, DaySummaryStats } from "@/components/dspr";
+import { V1DashboardSkeleton } from "./v1-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -425,7 +426,7 @@ export function DashboardV1({
 
   // ── Loading / empty / error states ──────────────────────────────────────
   if (isLoading && !data) {
-    return <DsprDashboardSkeleton />;
+    return <V1DashboardSkeleton />;
   }
 
   if (!selectedStore) {

@@ -5,125 +5,114 @@ import axios from "axios";
 import { businessReportsService } from "@/lib/api/services/business-reports.service";
 import type {
   BusinessReportsData,
-  BusinessReportsErrors,
   BusinessReportsParams,
+  BusinessReportsState,
+  SectionKey,
 } from "@/types/business-reports.types";
 
-const EMPTY_DATA: BusinessReportsData = {
-  sales: null,
-  labor: null,
-  feedback: null,
-};
-const NO_ERRORS: BusinessReportsErrors = {
-  sales: null,
-  labor: null,
-  feedback: null,
-};
+const SECTION_KEYS: SectionKey[] = [
+  "sales",
+  "operations",
+  "menu",
+  "orders",
+  "quality",
+  "debriefs",
+  "storeScore",
+  "labor",
+  "feedback",
+  "tickets",
+  "skills",
+];
 
-/** Pull a human-readable message out of an axios/proxy error. */
-function toMessage(err: unknown, fallback: string): string {
+const IDLE: BusinessReportsState = Object.fromEntries(
+  SECTION_KEYS.map((k) => [k, { data: null, error: null, loading: false }]),
+) as unknown as BusinessReportsState;
+
+const LOADING: BusinessReportsState = Object.fromEntries(
+  SECTION_KEYS.map((k) => [k, { data: null, error: null, loading: true }]),
+) as unknown as BusinessReportsState;
+
+const HTTP_FORBIDDEN = 403;
+
+/** A readable message out of an axios / proxy error. */
+function toMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
     const data = err.response?.data as
       | { error?: { message?: string }; message?: string }
       | undefined;
-    return (
-      data?.error?.message ??
-      data?.message ??
-      err.message ??
-      fallback
-    );
+    if (err.response?.status === HTTP_FORBIDDEN) return "You don't have access to this part for the selected stores.";
+    return data?.error?.message ?? data?.message ?? err.message;
   }
-  return err instanceof Error ? err.message : fallback;
+  return err instanceof Error ? err.message : "Failed to load.";
 }
 
 interface UseBusinessReportsResult {
-  data: BusinessReportsData | null;
-  errors: BusinessReportsErrors;
-  /** First load with no data yet. */
-  isLoading: boolean;
-  /** A load while data is already on screen. */
-  isRefreshing: boolean;
-  hasLoaded: boolean;
+  sections: BusinessReportsState;
   loadedParams: BusinessReportsParams | null;
+  loadedAt: Date | null;
+  /** Any section still loading. */
+  busy: boolean;
   load: (params: BusinessReportsParams) => void;
 }
 
 /**
- * Fetches the three Business Reports domains in parallel. A domain that fails
- * (or times out) blanks only its own section and records a per-domain error —
- * the other two still render (Promise.allSettled, no all-or-nothing).
- *
- * Nothing runs on mount; the page calls `load()` on the Load/Refresh click.
+ * Loads every Business Reports section in parallel. Each one renders as soon
+ * as it lands and fails on its own (an error blanks only that section). A new
+ * load aborts the previous one. Nothing runs until `load()` is called.
  */
 export function useBusinessReports(): UseBusinessReportsResult {
-  const [data, setData] = useState<BusinessReportsData | null>(null);
-  const [errors, setErrors] = useState<BusinessReportsErrors>(NO_ERRORS);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [loadedParams, setLoadedParams] =
-    useState<BusinessReportsParams | null>(null);
-
+  const [sections, setSections] = useState<BusinessReportsState>(IDLE);
+  const [loadedParams, setLoadedParams] = useState<BusinessReportsParams | null>(null);
+  const [loadedAt, setLoadedAt] = useState<Date | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
-  const hasDataRef = useRef(false);
 
   const load = useCallback((params: BusinessReportsParams) => {
-    // Supersede any in-flight load.
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
     const { signal } = controller;
 
-    if (hasDataRef.current) setIsRefreshing(true);
-    else setIsLoading(true);
+    setSections(LOADING);
+    setLoadedParams(params);
+    setLoadedAt(new Date());
 
-    Promise.allSettled([
-      businessReportsService.getMultiDashboard(params, signal),
-      businessReportsService.getV1Reports(params, signal),
-      businessReportsService.getWbrBulk(params, signal),
-    ]).then(([sales, labor, feedback]) => {
-      if (signal.aborted) return; // a newer load took over
+    const settle = async <K extends SectionKey>(key: K, promise: Promise<BusinessReportsData[K]>) => {
+      try {
+        const data = await promise;
+        if (!signal.aborted) setSections((s) => ({ ...s, [key]: { data, error: null, loading: false } }));
+      } catch (err) {
+        if (!signal.aborted) {
+          setSections((s) => ({ ...s, [key]: { data: null, error: toMessage(err), loading: false } }));
+        }
+      }
+    };
 
-      const nextData: BusinessReportsData = {
-        sales: sales.status === "fulfilled" ? sales.value : null,
-        labor: labor.status === "fulfilled" ? labor.value : null,
-        feedback: feedback.status === "fulfilled" ? feedback.value : null,
-      };
-      const nextErrors: BusinessReportsErrors = {
-        sales:
-          sales.status === "rejected"
-            ? toMessage(sales.reason, "Failed to load sales data.")
-            : null,
-        labor:
-          labor.status === "rejected"
-            ? toMessage(labor.reason, "Failed to load labor data.")
-            : null,
-        feedback:
-          feedback.status === "rejected"
-            ? toMessage(feedback.reason, "Failed to load feedback data.")
-            : null,
-      };
-
-      hasDataRef.current = true;
-      setData(nextData);
-      setErrors(nextErrors);
-      setLoadedParams(params);
-      setIsLoading(false);
-      setIsRefreshing(false);
-    });
+    const svc = businessReportsService;
+    // Fire-and-forget: each settles into its own section.
+    void settle("sales", svc.getSales(params, signal));
+    void settle("operations", svc.getOperations(params, signal));
+    void settle("menu", svc.getMenu(params, signal));
+    void settle("orders", svc.getOrders(params, signal));
+    void settle("quality", svc.getQuality(params, signal));
+    void settle("debriefs", svc.getDebriefs(params, signal));
+    void settle("labor", svc.getLabor(params, signal));
+    void settle("feedback", svc.getFeedback(params, signal));
+    void settle("tickets", svc.getTickets(params, signal));
+    void settle("skills", svc.getSkills(params, signal));
+    void settle(
+      "storeScore",
+      // The grid fills in batch by batch; `loading` stays on until the last one.
+      svc.getStoreScore(params, signal, (partial) => {
+        if (!signal.aborted) {
+          setSections((s) => ({ ...s, storeScore: { data: partial, error: null, loading: true } }));
+        }
+      }),
+    );
   }, []);
 
-  // Abort any in-flight request on unmount.
   useEffect(() => () => controllerRef.current?.abort(), []);
 
-  return {
-    data,
-    errors,
-    isLoading,
-    isRefreshing,
-    hasLoaded: loadedParams !== null,
-    loadedParams,
-    load,
-  };
-}
+  const busy = SECTION_KEYS.some((k) => sections[k].loading);
 
-export { EMPTY_DATA };
+  return { sections, loadedParams, loadedAt, busy, load };
+}

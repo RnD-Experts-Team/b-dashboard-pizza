@@ -55,6 +55,7 @@ import {
   LifeBuoy,
   Activity,
   Route,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   Dialog,
@@ -286,6 +287,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const devToolsEnabled = useFeature("devTools");
   const i18nIntelligenceEnabled = useFeature("i18nIntelligence");
   const securityMonitorEnabled = useFeature("securityMonitor");
+  const reportBuilderEnabled = useFeature("reportBuilder");
 
   /* ---- Unread-notification → sidebar count mapping ----
    * Derived from the same `notifications` array the bell's badge count and
@@ -364,7 +366,10 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     title: "Business Reports",
     href: `/${locale}/dashboard/business-reports`,
     icon: BarChart3,
-    // No auth rule defined yet — always visible for stores the user can access.
+    // The page's main section; probed with no store (the rule allows an empty store list).
+    requirements: [
+      { service: "Data", method: "POST", path: "/reports/business/sales" },
+    ],
   };
 
   // const maintenanceItem: NavItem = {
@@ -638,6 +643,20 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           { service: "Data", method: "GET", path: "/stores/*/goals", storeId: effectiveStoreId }
         ],
       },
+      // Report Builder (behind the `reportBuilder` flag). Probed with NO storeId:
+      // the templates path carries none and its rule is unscoped.
+      ...(reportBuilderEnabled
+        ? [
+            {
+              title: t("reportBuilder"),
+              href: `/${locale}/dashboard/report-builder`,
+              icon: FileSpreadsheet,
+              requirements: [
+                { service: "Data", method: "GET", path: "/report-builder/templates" },
+              ],
+            },
+          ]
+        : []),
       // {
       //   title: t("employeeDebriefHistory"),
       //   href: `/${locale}/dashboard/employee-debrief-history`,

@@ -22,11 +22,16 @@ import {
   Coffee,
   MessageSquareWarning,
   Wrench,
+  FileBarChart,
 } from "lucide-react";
 import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
 import { useHiringActionStore, type HiringActionTab } from "@/lib/store/hiring-action.store";
 import { useCleaningActionStore } from "@/lib/store/cleaning-action.store";
 import type { PeriodType } from "@/types/cleaning.types";
+import {
+  getReportNotificationHref,
+  isReportNotification,
+} from "@/lib/notifications/notification-routing";
 
 /**
  * Parse a debrief action URL and extract keyId, date, and storeId.
@@ -188,6 +193,12 @@ function calendarReminderHref(locale: string, notification: Notification): strin
  * Common types: "announcement.created", "announcement.updated", etc.
  */
 function getTypeVisuals(type: string) {
+  if (type === "report_failed" || type === "report_delivery_failed") {
+    return { Icon: FileBarChart, bg: "bg-destructive/10 text-destructive" };
+  }
+  if (type.startsWith("report_")) {
+    return { Icon: FileBarChart, bg: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" };
+  }
   if (type.startsWith("maintenance_")) {
     return { Icon: Wrench, bg: "bg-sky-500/10 text-sky-600 dark:text-sky-400" };
   }
@@ -300,6 +311,7 @@ export function NotificationItem({
   const isTicketType = notification.type.startsWith("ticket_");
   const isMaintenanceType = notification.type.startsWith("maintenance_");
   const isCalendarType = notification.type.startsWith("calendar_");
+  const isReportType = isReportNotification(notification);
   // Only these explicitly-coded type families are clickable — an uncoded
   // type must never guess a navigation target, it just displays safely.
   const isClickable =
@@ -311,7 +323,8 @@ export function NotificationItem({
     isCleaningType ||
     isBreakType ||
     isTicketType ||
-    isMaintenanceType;
+    isMaintenanceType ||
+    isReportType;
 
   function handleClick() {
     if (!isClickable) return;
@@ -356,6 +369,11 @@ export function NotificationItem({
         openCleaningEvaluation(parsed.periodType, parsed.periodKey, parsed.store);
       }
       router.push(`/${locale}/dashboard/cleaning-chart`);
+      return;
+    }
+
+    if (isReportType) {
+      router.push(getReportNotificationHref(notification.action_url, locale));
       return;
     }
 
@@ -462,6 +480,8 @@ export function NotificationItem({
                   ? "Tickets"
                   : isMaintenanceType
                   ? "Maintenance ticket"
+                  : isReportType
+                  ? "Report Builder"
                   : "Cleaning Chart"}
               </span>
             </>

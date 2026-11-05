@@ -37,9 +37,6 @@ import { RankedBars, TOP_BARS, type RankedRow } from "./ranked-bars";
 import { SpendTrendChart } from "./spend-trend-chart";
 import type { AnalyticsFilters } from "./use-analytics-filters";
 
-/** The longest range the report accepts (FinanceAnalyticsService::MAX_RANGE_DAYS). */
-const MAX_RANGE_DAYS = 400;
-const MS_PER_DAY = 86_400_000;
 const KPI_SKELETONS = 5;
 const ESTIMATE_CHART_HEIGHT_PX = 320;
 const LABEL_MAX_PX = 160;
@@ -48,11 +45,6 @@ const MONEY_COLUMNS = [1, 2, 3];
 
 const FINANCE_TINT = "bg-rose-500/15 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400";
 const PEOPLE_TINT = "bg-violet-500/15 text-violet-600 dark:bg-violet-500/20 dark:text-violet-400";
-
-/** Inclusive day count of a "YYYY-MM-DD" range. */
-function daysIn(from: string, to: string): number {
-  return Math.round((Date.parse(to) - Date.parse(from)) / MS_PER_DAY) + 1;
-}
 
 function ticketHref(locale: string, ticketId: number, store: string | null): string {
   return `/${locale}/dashboard/maintenance-tickets/${ticketId}${store ? `?store=${encodeURIComponent(store)}` : ""}`;
@@ -66,31 +58,18 @@ function ticketHref(locale: string, ticketId: number, store: string | null): str
  */
 export function FinancesTab({ locale, filters }: { locale: string; filters: AnalyticsFilters }) {
   const t = useTranslations("maintenanceSystem");
-  const tooLong = daysIn(filters.from, filters.to) > MAX_RANGE_DAYS;
 
-  const params: FinancesParams | null = useMemo(
-    () =>
-      tooLong
-        ? null
-        : {
-            from: filters.from,
-            to: filters.to,
-            stores: filters.stores.length ? filters.stores : undefined,
-            categoryId: filters.categoryId ?? undefined,
-            technicianIds: filters.technicianIds.length ? filters.technicianIds : undefined,
-          },
-    [filters.from, filters.to, filters.stores, filters.categoryId, filters.technicianIds, tooLong],
+  const params: FinancesParams = useMemo(
+    () => ({
+      from: filters.from,
+      to: filters.to,
+      stores: filters.stores.length ? filters.stores : undefined,
+      categoryId: filters.categoryId ?? undefined,
+      technicianIds: filters.technicianIds.length ? filters.technicianIds : undefined,
+    }),
+    [filters.from, filters.to, filters.stores, filters.categoryId, filters.technicianIds],
   );
   const { finances, isLoading, isRefreshing, error, refresh } = useMaintenanceFinances(params);
-
-  if (tooLong) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed py-24 text-center">
-        <AlertCircle className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
-        <p className="max-w-sm text-sm text-muted-foreground">{t("analytics.rangeTooLong", { days: MAX_RANGE_DAYS })}</p>
-      </div>
-    );
-  }
 
   if (isLoading) {
     return (

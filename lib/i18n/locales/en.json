@@ -121,7 +121,8 @@
     "maintenanceTroubleshooting": "Troubleshooting",
     "maintenanceTechnicians": "Technicians & Suppliers",
     "maintenanceTrips": "Trips",
-    "maintenancePayments": "Payments"
+    "maintenancePayments": "Payments",
+    "reportBuilder": "Report Builder"
   },
   "breadcrumbs": {
     "dashboard": "Dashboard",
@@ -179,7 +180,10 @@
     "maintenance-troubleshooting": "Troubleshooting",
     "maintenance-technicians": "Technicians & Suppliers",
     "maintenance-trips": "Trips",
-    "maintenance-payments": "Payments"
+    "maintenance-payments": "Payments",
+    "report-builder": "Report Builder",
+    "runs": "Runs",
+    "new": "New"
   },
   "auth": {
     "login": {
@@ -7242,7 +7246,6 @@
       "noStores": "Pick at least one store to see its report.",
       "loading": "Loading the report",
       "nothingInRange": "Nothing in this range.",
-      "rangeTooLong": "Pick a range of at most {days} days.",
       "name": "Name",
       "linesCount": "{count, plural, one {# payment line} other {# payment lines}}",
       "nothingBefore": "Nothing spent in the period before",
@@ -7602,6 +7605,476 @@
       "totalPaidNote": "Total paid is every payment to the supplier so far; mistakes are left out.",
       "showDeleted": "Show deleted",
       "deletedBadge": "Deleted"
+    }
+  },
+  "reportBuilder": {
+    "title": "Report Builder",
+    "description": "Combine data from every system into one report, save it as a template and run it whenever you need it.",
+    "tabs": {
+      "mine": "My reports",
+      "shared": "Shared with me",
+      "runs": "Runs"
+    },
+    "actions": {
+      "new": "New report",
+      "runNow": "Run now",
+      "open": "Open",
+      "edit": "Edit",
+      "delete": "Delete",
+      "save": "Save",
+      "saveCopy": "Save as my copy",
+      "saveAndRun": "Save & run",
+      "refresh": "Refresh",
+      "back": "Back to reports",
+      "backToRuns": "Back to runs",
+      "retry": "Try again",
+      "openTemplate": "Open report",
+      "downloadCsv": "Download CSV",
+      "downloadXlsx": "Download XLSX"
+    },
+    "common": {
+      "search": "Search…",
+      "noResults": "No results.",
+      "cancel": "Cancel"
+    },
+    "visibility": {
+      "private": "Only me",
+      "org": "Everyone in the organisation",
+      "privateShort": "Private",
+      "orgShort": "Shared"
+    },
+    "templates": {
+      "name": "Report",
+      "visibility": "Visible to",
+      "columns": "Columns",
+      "updated": "Updated",
+      "actions": "Actions",
+      "emptyMine": {
+        "title": "No reports yet",
+        "description": "Build your first report: pick the data, add columns and formulas, then save it to run it any time."
+      },
+      "emptyShared": {
+        "title": "Nothing shared with you",
+        "description": "Reports that colleagues share with the whole organisation appear here."
+      },
+      "deleteTitle": "Delete this report?",
+      "deleteDescription": "“{name}” will be deleted together with its runs. This cannot be undone.",
+      "deleted": "Report deleted",
+      "runQueued": "Run started"
+    },
+    "runs": {
+      "report": "Report",
+      "status": "Status",
+      "period": "Period",
+      "periodRange": "{from} – {to}",
+      "rows": "Rows",
+      "started": "Started",
+      "requested": "Requested",
+      "finished": "Finished",
+      "expires": "Files kept until",
+      "open": "Open",
+      "unknownTemplate": "Report #{id}",
+      "empty": {
+        "title": "No runs yet",
+        "description": "Run a report and it shows up here. Files are kept for 7 days."
+      }
+    },
+    "status": {
+      "queued": "Queued",
+      "running": "Running",
+      "done": "Done",
+      "failed": "Failed"
+    },
+    "runPage": {
+      "description": "One run of a report. Sort or search the rows below, or download the files.",
+      "downloadHelp": "Large reports are streamed, so there is no row limit. An XLSX file continues on extra sheets after 1,048,575 rows; the CSV always holds every row.",
+      "untitled": "Report run",
+      "queuedTitle": "Waiting to start",
+      "runningTitle": "Building your report",
+      "activeDescription": "This page updates every few seconds. You can leave it; the run carries on.",
+      "failedTitle": "The run failed",
+      "expiredTitle": "This run has expired",
+      "expiredDescription": "Run files are kept for 7 days. Run the report again to get fresh results.",
+      "noXlsx": "This run has no XLSX file",
+      "skippedStores": "{count, plural, one {# store was} other {# stores were}} left out because you have no access there.",
+      "refreshFailed": "Could not refresh the status: {reason}"
+    },
+    "builder": {
+      "newTitle": "New report",
+      "editTitle": "Edit report",
+      "description": "Pick datasets, choose columns, add formulas and filters. The preview updates as you go.",
+      "name": "Name",
+      "namePlaceholder": "e.g. Weekly labor vs sales",
+      "nameRequired": "Give the report a name.",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "What this report is for (optional)",
+      "visibility": "Who can see it",
+      "sortBy": "Sort by",
+      "sortNone": "No sorting",
+      "direction": "Order",
+      "asc": "Ascending",
+      "desc": "Descending",
+      "limit": "Row limit",
+      "limitAll": "All rows",
+      "saved": "Report saved",
+      "notOwner": "This report belongs to someone else. Saving creates your own copy; the original stays as it is.",
+      "issuesTitle": "Fix these before saving",
+      "moreIssues": "{count, plural, one {and # more problem} other {and # more problems}}",
+      "sections": {
+        "details": "Details",
+        "datasets": "Data",
+        "datasetsHint": "Datasets are merged on the keys below.",
+        "grain": "One row per",
+        "columns": "Columns",
+        "columnsHint": "Drag to reorder. Each column is grouped by, broken down by or aggregated.",
+        "filters": "Filters",
+        "period": "Period",
+        "stores": "Stores"
+      }
+    },
+    "datasets": {
+      "add": "Add dataset",
+      "added": "Added",
+      "search": "Search datasets…",
+      "empty": "No dataset matches.",
+      "none": "No datasets yet. Add one to start.",
+      "noAccess": "You do not have access to any dataset.",
+      "heavy": "Heavy",
+      "keys": "Keys: {keys}",
+      "snapshot": "Current state only",
+      "missing": "This dataset is no longer offered.",
+      "unavailable": "Not reachable right now: {services}. Their datasets are missing until they answer.",
+      "retry": "Retry",
+      "remove": "Remove dataset"
+    },
+    "grain": {
+      "hint": "Pick what one row stands for, or nothing. Only keys that every chosen dataset has are offered. With no key, a single dataset is listed by its breakdown columns and several datasets give one totals row.",
+      "none": "The chosen datasets share no key, so the report has no grain.",
+      "store": "Store",
+      "date": "Date",
+      "employee": "Employee",
+      "missing": "Not available in: {datasets}"
+    },
+    "columns": {
+      "add": "Add column",
+      "addFormula": "Add formula",
+      "empty": "No columns yet.",
+      "search": "Search columns…",
+      "noColumns": "No columns match.",
+      "label": "Label",
+      "aggregation": "Aggregation",
+      "group": "Group by",
+      "breakdown": "Break down by",
+      "drag": "Drag to reorder",
+      "remove": "Remove column",
+      "editFormula": "Edit formula",
+      "filterOnly": "This column cannot be grouped or aggregated here; use it in a filter.",
+      "filterOnlyShort": "Filter only"
+    },
+    "agg": {
+      "count": "Count",
+      "count_distinct": "Count distinct",
+      "sum": "Sum",
+      "avg": "Average",
+      "min": "Minimum",
+      "max": "Maximum"
+    },
+    "formula": {
+      "titleNew": "Add formula column",
+      "titleEdit": "Edit formula column",
+      "description": "Calculate a value from the other columns of the same row. Empty cells and division by zero give an empty result.",
+      "label": "Label",
+      "labelPlaceholder": "e.g. Labor %",
+      "labelRequired": "Give the column a label.",
+      "displayAs": "Show as",
+      "expression": "Expression",
+      "expressionPlaceholder": "if(c1 > 0, c2 / c1 * 100, null)",
+      "hint": "Use column ids like c1, numbers, 'text', + - * / %, comparisons, and, or, not.",
+      "insert": "Insert a column",
+      "noReferences": "Add other columns first to use them here.",
+      "functions": "Functions",
+      "ok": "The expression is valid.",
+      "errorAt": "At character {position}: {message}",
+      "sample": "Sample (first preview row)",
+      "sampleEmpty": "Run the preview to see a sample value.",
+      "sampleNull": "(empty)",
+      "save": "Apply"
+    },
+    "formulaTypes": {
+      "number": "Number",
+      "integer": "Whole number",
+      "money": "Money",
+      "percent": "Percent",
+      "string": "Text",
+      "boolean": "Yes / No"
+    },
+    "filters": {
+      "add": "Add filter",
+      "empty": "No filters: every row of the period is included.",
+      "column": "Column",
+      "op": "Condition",
+      "value": "Value",
+      "date": "Date",
+      "from": "From",
+      "to": "To",
+      "pickValue": "Pick a value",
+      "pickValues": "Pick values",
+      "valuesPlaceholder": "Values separated by commas",
+      "true": "Yes",
+      "false": "No",
+      "formula": "formula",
+      "remove": "Remove filter"
+    },
+    "ops": {
+      "eq": "is",
+      "neq": "is not",
+      "in": "is any of",
+      "not_in": "is none of",
+      "gt": "greater than",
+      "gte": "at least",
+      "lt": "less than",
+      "lte": "at most",
+      "between": "between",
+      "contains": "contains",
+      "is_null": "is empty",
+      "not_null": "is not empty"
+    },
+    "periods": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "last_7_days": "Last 7 days",
+      "week_to_date": "This week so far",
+      "last_week": "Last week (Tue–Mon)",
+      "month_to_date": "This month so far",
+      "last_month": "Last month",
+      "fixed": "Custom range",
+      "from": "From",
+      "to": "To",
+      "resolved": "Covers {from} – {to}",
+      "resolvedHint": "As of today. A run works out the dates when it starts.",
+      "snapshotNote": "Current-state datasets ignore the period."
+    },
+    "stores": {
+      "mine": "My stores",
+      "mineHint": "The stores you work at, worked out when the report runs.",
+      "list": "Pick stores",
+      "listHint": "A fixed list of stores.",
+      "all": "All stores",
+      "allHint": "Every store, for head-office access.",
+      "allDisabled": "All stores needs head-office access to every dataset in the report.",
+      "allUsable": "Every store I can report on",
+      "count": "{count, plural, one {# store} other {# stores}}",
+      "noneUsable": "No store gives you access to all the chosen datasets."
+    },
+    "preview": {
+      "title": "Preview",
+      "description": "The first 200 rows, refreshed as you edit.",
+      "limitNote": "Preview shows the first 200 rows; the full run has no row limit.",
+      "idle": "Add a dataset and some columns, and fix any problems listed, to see a preview.",
+      "noPermission": "You do not have access to previews at this store.",
+      "rows": "{count, plural, one {# row} other {# rows}}",
+      "stale": "Out of date until the problems are fixed."
+    },
+    "grid": {
+      "search": "Search this page…",
+      "sortBy": "Sort by {name}",
+      "empty": "No rows.",
+      "noMatches": "No rows on this page match your search."
+    },
+    "pagination": {
+      "showing": "Showing {from}–{to} of {total}",
+      "page": "Page {current} of {total}",
+      "perPage": "Rows per page",
+      "first": "First page",
+      "previous": "Previous page",
+      "next": "Next page",
+      "last": "Last page"
+    },
+    "cell": {
+      "yes": "Yes",
+      "no": "No"
+    },
+    "errors": {
+      "forbidden": "You do not have access to this.",
+      "notFound": "Not found, or you do not have access to it.",
+      "expired": "This run has expired. Run the report again.",
+      "conflict": "You already have a report running. Wait for it to finish, then try again.",
+      "rateLimited": "Too many requests. Wait a moment and try again.",
+      "busy": "The server is busy. Try again in a moment.",
+      "timeout": "The server took too long to answer. Try a shorter period or fewer stores.",
+      "invalid": "The report is not valid.",
+      "network": "Cannot reach the server. Check your connection.",
+      "generic": "Something went wrong.",
+      "badRequest": "The request was not accepted. Check the report and try again.",
+      "unauthorized": "Your session has expired. Sign in again.",
+      "upstream": "The data service returned an error. Try again in a moment."
+    },
+    "validation": {
+      "shape": "Something is missing or not valid ({field}).",
+      "noDatasets": "Add at least one dataset.",
+      "noColumns": "Add at least one column.",
+      "noStores": "Pick at least one store.",
+      "unknownAlias": "Dataset {alias} is not in the report.",
+      "unknownColumn": "Column {id} is not in the report.",
+      "duplicateId": "Column id {id} is used twice.",
+      "duplicateAlias": "Dataset {alias} is used twice.",
+      "periodOrder": "The start date is after the end date.",
+      "unknownDataset": "Dataset {key} is no longer offered.",
+      "grainMissing": "{dataset} has no {grain} key.",
+      "unknownDatasetColumn": "{dataset} has no column {column}.",
+      "aggregationRequired": "{label}: choose an aggregation (this column cannot be listed as it is).",
+      "breakdownOneDataset": "Only one dataset can add breakdown columns; the others must match the report's grain.",
+      "aggregationNotAllowed": "{label}: {agg} is not available for this column.",
+      "notFilterable": "{column} cannot be filtered.",
+      "formula": {
+        "empty": "The expression is empty.",
+        "too_deep": "Brackets and functions are nested more than {max} levels deep.",
+        "unexpected_char": "Unexpected character {char}.",
+        "unterminated_string": "A text value is missing its closing quote.",
+        "unexpected_token": "Unexpected {found}.",
+        "unexpected_end": "The expression ends too early.",
+        "expected_token": "Expected {expected} but found {found}.",
+        "unknown_function": "Unknown function {name}.",
+        "bad_arity": "{name}() takes {expected} argument(s), not {got}.",
+        "unknown_column": "Unknown column {id}.",
+        "cycle": "Circular reference: {chain}."
+      }
+    },
+    "schedules": {
+      "tab": "Schedules",
+      "title": "Scheduled reports",
+      "description": "Reports that run on their own and are sent to the people you choose.",
+      "empty": {
+        "title": "No schedules yet",
+        "description": "Schedule a saved report to run every day, week or month and send it to your team."
+      },
+      "noTemplates": "Save a report first, then you can schedule it.",
+      "actions": {
+        "new": "New schedule",
+        "schedule": "Schedule",
+        "edit": "Edit schedule",
+        "pause": "Pause",
+        "resume": "Resume",
+        "delete": "Delete schedule",
+        "create": "Create schedule",
+        "saveChanges": "Save changes",
+        "retry": "Try again"
+      },
+      "columns": {
+        "report": "Report",
+        "runs": "Runs",
+        "recipients": "Recipients",
+        "delivery": "Format and delivery",
+        "nextRun": "Next run",
+        "lastRun": "Last run",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "status": {
+        "active": "Active",
+        "paused": "Paused"
+      },
+      "never": "Never",
+      "recipientsCount": "{count} recipients",
+      "unknownTemplate": "Report {id}",
+      "frequency": {
+        "daily": "Daily",
+        "weekly": "Weekly",
+        "monthly": "Monthly"
+      },
+      "summary": {
+        "daily": "Daily · {time} {timezone}",
+        "weekly": "Weekly · {day} {time} {timezone}",
+        "monthly": "Monthly · day {day} · {time} {timezone}"
+      },
+      "weekdays": {
+        "0": "Sunday",
+        "1": "Monday",
+        "2": "Tuesday",
+        "3": "Wednesday",
+        "4": "Thursday",
+        "5": "Friday",
+        "6": "Saturday"
+      },
+      "weekdaysShort": {
+        "0": "Sun",
+        "1": "Mon",
+        "2": "Tue",
+        "3": "Wed",
+        "4": "Thu",
+        "5": "Fri",
+        "6": "Sat"
+      },
+      "format": {
+        "csv": "CSV",
+        "xlsx": "Excel (XLSX)"
+      },
+      "delivery": {
+        "link": "Link",
+        "attachment": "Attachment",
+        "both": "Link and attachment"
+      },
+      "timezones": {
+        "newYork": "Eastern Time (New York)",
+        "chicago": "Central Time (Chicago)",
+        "denver": "Mountain Time (Denver)",
+        "losAngeles": "Pacific Time (Los Angeles)",
+        "damascus": "Damascus",
+        "utc": "UTC"
+      },
+      "dialog": {
+        "titleNew": "Schedule a report",
+        "titleEdit": "Edit schedule",
+        "description": "The report runs automatically at the time you set and is sent to the recipients.",
+        "template": "Report",
+        "templatePlaceholder": "Choose a report",
+        "frequency": "Repeat",
+        "weekday": "Day of the week",
+        "dayOfMonth": "Day of the month",
+        "dayOfMonthHint": "In a shorter month it runs on the last day of the month.",
+        "time": "Time",
+        "timePlaceholder": "Select time",
+        "timezone": "Time zone",
+        "recipients": "Recipients",
+        "recipientsPlaceholder": "Choose people",
+        "recipientsSearch": "Search by name or email…",
+        "recipientsEmpty": "No people found.",
+        "recipientsLoading": "Loading people…",
+        "recipientsSelected": "{count} selected",
+        "recipientsRemove": "Remove {name}",
+        "unknownUser": "User {id}",
+        "you": "you",
+        "usersForbidden": "Only administrators can pick recipients from the user list. The report goes to the people already shown.",
+        "usersError": "The list of people could not be loaded.",
+        "format": "File format",
+        "delivery": "Delivery",
+        "active": "Active",
+        "activeHint": "A paused schedule does not run until you resume it.",
+        "notice": "Recipients get an in-app notification and an email. Files are kept for 7 days, then the link stops working.",
+        "saving": "Saving…"
+      },
+      "toasts": {
+        "created": "Schedule created",
+        "updated": "Schedule saved",
+        "paused": "Schedule paused",
+        "resumed": "Schedule resumed",
+        "deleted": "Schedule deleted"
+      },
+      "delete": {
+        "title": "Delete this schedule?",
+        "description": "“{name}” will stop running and nobody will receive it any more. Reports already created stay available until they expire."
+      },
+      "errors": {
+        "tokenFailed": "The server could not set up access for this schedule. Try again in a moment."
+      },
+      "validation": {
+        "templateRequired": "Choose a report.",
+        "timeInvalid": "Choose a time.",
+        "weekdayInvalid": "Choose a day of the week.",
+        "dayOfMonthInvalid": "Choose a day between 1 and 31.",
+        "timezoneRequired": "Choose a time zone.",
+        "recipientsRequired": "Choose at least one recipient."
+      }
     }
   }
 }

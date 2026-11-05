@@ -1,4 +1,5 @@
 import type { CanAccessParams } from "@/lib/auth/can-access";
+import { isFeatureEnabled } from "@/lib/config/features.store";
 import { BOTTOM_NAV_ELIGIBLE_ITEMS, type BottomNavItem } from "./bottom-nav-items";
 
 interface BottomNavAuth {
@@ -19,6 +20,7 @@ export function isBottomNavItemEligible(
   auth: BottomNavAuth,
   storeId?: string
 ): boolean {
+  if (item.feature && !isFeatureEnabled(item.feature)) return false;
   if (item.requiredPermission) {
     return auth.hasPermission(item.requiredPermission);
   }

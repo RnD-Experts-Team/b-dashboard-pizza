@@ -21,7 +21,7 @@ export interface WeeklyLaborEntry {
 }
 
 /* Labor zones — symmetric around the 19–24% green target (0–50 scale). */
-const LABOR_ZONES: SpeedZone[] = [
+export const LABOR_ZONES: SpeedZone[] = [
   { from: 0,  to: 10, color: "#EF4444" },
   { from: 10, to: 15, color: "#EAB308" },
   { from: 15, to: 19, color: "#F97316" },
@@ -31,7 +31,7 @@ const LABOR_ZONES: SpeedZone[] = [
   { from: 39, to: 50, color: "#EF4444" },
 ];
 
-function laborLabel(v: number): string {
+export function laborLabel(v: number): string {
   if (v <= 10) return "Critical Low";
   if (v <= 15) return "Low";
   if (v <= 19) return "Below Target";
@@ -41,7 +41,7 @@ function laborLabel(v: number): string {
   return "Critical High";
 }
 
-function laborColor(v: number): string {
+export function laborColor(v: number): string {
   if (v <= 10) return "#EF4444";
   if (v <= 15) return "#EAB308";
   if (v <= 19) return "#F97316";

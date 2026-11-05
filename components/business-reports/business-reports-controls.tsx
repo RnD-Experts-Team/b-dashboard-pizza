@@ -1,88 +1,92 @@
 "use client";
 
+import { useMemo } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DatePicker } from "@/components/ui/date-picker";
+import { WeekSelect } from "@/components/shared/week-select";
+import { AnalyticsControls } from "@/components/maintenance-tickets/analytics/analytics-controls";
+import { RANGE_PRESETS, localDay } from "@/lib/maintenance-tickets/local-range";
+import {
+  businessWeekOptions,
+  businessWeekStart,
+  clampWeekEnd,
+  isWholeWeeks,
+  type BusinessWeek,
+} from "@/lib/utils/business-week";
 import { cn } from "@/lib/utils";
 import type { StoreSelection } from "@/types/business-reports.types";
-import { StoreMultiSelect, type StoreOption } from "./store-multi-select";
+import type { StoreOption } from "./store-multi-select";
+import type { DateRange } from "./range-presets";
 
-interface BusinessReportsControlsProps {
-  storeOptions: StoreOption[];
-  selection: StoreSelection;
-  onSelectionChange: (value: StoreSelection) => void;
-  startDate: string;
-  onStartDateChange: (value: string) => void;
-  endDate: string;
-  onEndDateChange: (value: string) => void;
-  onLoad: () => void;
-  isLoading: boolean;
-  /** True once the first load has completed — switches the button label. */
-  hasLoaded: boolean;
-}
+/** Quick ranges next to the week pickers (the screens analytics bar's pattern). */
+const PRESETS = RANGE_PRESETS.filter((p) => p.id === "yesterday" || p.id === "last7" || p.id === "last30");
 
 /**
- * Header controls for the Business Reports page: store multi-select, a
- * start/end date range, and a manual Load / Refresh trigger. Nothing fetches
- * until the button is clicked (this page is heavy).
+ * The filter bar, the same as Screen Monitoring's: quick ranges, any dates,
+ * From week → To week (Tue–Mon business weeks by week number), stores by store
+ * number — then Load (nothing is fetched until then; the page is heavy).
  */
 export function BusinessReportsControls({
   storeOptions,
   selection,
   onSelectionChange,
-  startDate,
-  onStartDateChange,
-  endDate,
-  onEndDateChange,
+  range,
+  onRangeChange,
   onLoad,
-  isLoading,
+  busy,
   hasLoaded,
-}: BusinessReportsControlsProps) {
-  const hasStores = selection === "all" || selection.length > 0;
-  const validRange =
-    !!startDate && !!endDate && startDate <= endDate;
-  const canLoad = hasStores && validRange && !isLoading;
+}: {
+  storeOptions: StoreOption[];
+  selection: StoreSelection;
+  onSelectionChange: (value: StoreSelection) => void;
+  range: DateRange;
+  onRangeChange: (range: DateRange) => void;
+  onLoad: () => void;
+  busy: boolean;
+  hasLoaded: boolean;
+}) {
+  const today = localDay(new Date());
+  const weekOptions = useMemo(() => businessWeekOptions(today), [today]);
+  const wholeWeeks = isWholeWeeks(range.start, range.end, today);
+  const fromWeek = wholeWeeks ? range.start : "";
+  const toWeek = wholeWeeks ? businessWeekStart(range.end) : "";
+
+  const pickFromWeek = (week: BusinessWeek) => {
+    const keepEnd = wholeWeeks && range.end >= week.start;
+    onRangeChange({ start: week.start, end: keepEnd ? range.end : clampWeekEnd(week, today) });
+  };
+  const pickToWeek = (week: BusinessWeek) => {
+    const end = clampWeekEnd(week, today);
+    onRangeChange({ start: !wholeWeeks || week.start < range.start ? week.start : range.start, end });
+  };
+
+  const hasStores = selection === "all" ? storeOptions.length > 0 : selection.length > 0;
+  const validRange = !!range.start && !!range.end && range.start <= range.end;
+  const blockedReason = [
+    { blocked: !hasStores, reason: "Select at least one store" },
+    { blocked: !validRange, reason: "Pick a valid date range" },
+  ].find((r) => r.blocked)?.reason;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <StoreMultiSelect
-        options={storeOptions}
-        value={selection}
-        onChange={onSelectionChange}
-        disabled={isLoading}
-      />
-
-      <DatePicker
-        value={startDate}
-        onChange={onStartDateChange}
-        placeholder="Start date"
-        disabled={isLoading}
-        className="w-40"
-      />
-      <DatePicker
-        value={endDate}
-        onChange={onEndDateChange}
-        placeholder="End date"
-        disabled={isLoading}
-        className="w-40"
-      />
-
-      <Button
-        type="button"
-        size="sm"
-        onClick={onLoad}
-        disabled={!canLoad}
-        title={
-          !hasStores
-            ? "Select at least one store"
-            : !validRange
-              ? "Pick a valid date range"
-              : undefined
-        }
-      >
-        <RefreshCw className={cn("me-2 h-4 w-4", isLoading && "animate-spin")} />
+    <AnalyticsControls
+      storeOptions={storeOptions}
+      selection={selection}
+      onSelectionChange={onSelectionChange}
+      startDate={range.start}
+      endDate={range.end}
+      onRangeChange={(start, end) => onRangeChange({ start, end })}
+      presets={PRESETS}
+      weekControls={
+        <>
+          <WeekSelect weeks={weekOptions} value={fromWeek} onChange={pickFromWeek} placeholder="From week" />
+          <WeekSelect weeks={weekOptions} value={toWeek} onChange={pickToWeek} placeholder="To week" />
+        </>
+      }
+    >
+      <Button type="button" onClick={onLoad} disabled={Boolean(blockedReason) || busy} title={blockedReason} className="ms-auto">
+        <RefreshCw className={cn("me-1.5 h-3.5 w-3.5", busy && "animate-spin")} />
         {hasLoaded ? "Refresh" : "Load"}
       </Button>
-    </div>
+    </AnalyticsControls>
   );
 }
