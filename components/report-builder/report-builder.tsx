@@ -393,6 +393,18 @@ function BuilderEditor({ template }: { template: ReportTemplate | null }) {
           <Section title={t("builder.sections.datasets")} description={t("builder.sections.datasetsHint")}>
             {catalog.isLoading && <Skeleton className="h-16 w-full" />}
             {catalog.error && <ErrorState message={errorText(catalog.error)} onRetry={catalog.reload} compact />}
+            {catalog.unavailable.length > 0 && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 dark:bg-amber-500/10" role="status">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-300" />
+                <p className="flex-1 text-xs text-foreground/80">
+                  {t("datasets.unavailable", { services: catalog.unavailable.join(", ") })}
+                </p>
+                <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={catalog.reload}>
+                  <RefreshCw className="h-3 w-3" />
+                  {t("datasets.retry")}
+                </Button>
+              </div>
+            )}
             {catalogReady && (
               <DatasetPicker
                 datasets={catalog.datasets}

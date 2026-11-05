@@ -56,14 +56,18 @@ export function V1Metric({
   return (
     <div
       className={cn(
-        "flex flex-col justify-center rounded-lg border border-border/50 bg-background/55 px-2.5 py-1.5 backdrop-blur-sm",
+        "flex min-w-0 flex-col justify-center rounded-lg border border-border/50 bg-background/55 px-2.5 py-1.5 backdrop-blur-sm",
         className,
       )}
     >
       <p className="truncate text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
-      <p className={cn("font-bold leading-tight tabular-nums", valueSize, accent)}>
+      {/* A long value never spills out of the tile: it ends in "…" and shows whole on hover. */}
+      <p
+        className={cn("truncate font-bold leading-tight tabular-nums", valueSize, accent)}
+        title={typeof value === "string" || typeof value === "number" ? String(value) : undefined}
+      >
         {value}
       </p>
       {sub && (

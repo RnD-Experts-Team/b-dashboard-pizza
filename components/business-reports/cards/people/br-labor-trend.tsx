@@ -7,14 +7,16 @@ import { V1Card } from "@/components/dashboard-v1/v1-card";
 import { V1Empty } from "@/components/dashboard-v1/v1-ui";
 import { DASH, TREND_METRICS, fmtDelta, type TrendMetricConfig } from "@/components/labor/labor-format";
 import { ApexChart, useChartTheme } from "@/components/business-reports/chart";
-import { pctChangeOrNull } from "@/components/business-reports/report-format";
+import { useFinalLabor } from "@/components/business-reports/final-labor";
+import { pctChangeOrNull, weekLabel } from "@/components/business-reports/report-format";
 import { cn } from "@/lib/utils";
 import type { LaborReport, LaborTrendWeek } from "@/types/business-reports.types";
-import { ROW_CARD_HEIGHT, peopleLineOptions, safeDay } from "./br-people-kit";
+import { ROW_CARD_HEIGHT, peopleLineOptions } from "./br-people-kit";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  Weekly Trend — the Labor report's trend chart over every week of the
- *  range, with the best / worst week and first-vs-last week change.
+ *  range (by week number), with the best / worst week and first-vs-last
+ *  week change. Labor % is Hiring's FINAL labor wherever a week has one.
  * ────────────────────────────────────────────────────────────────────────── */
 
 type TrendKey = Exclude<keyof LaborTrendWeek, "week_start" | "week_end">;
@@ -36,6 +38,7 @@ function isTrendKey(key: string): key is TrendKey {
 
 const METRICS = TREND_METRICS.filter((m) => isTrendKey(m.key));
 const CHART_PX = 190;
+const LABOR_KEY = "average_labor_percent";
 
 interface Point {
   week: LaborTrendWeek;
@@ -73,6 +76,12 @@ function Callout({
   );
 }
 
+/** Which weeks the labor line takes from Hiring's final labor. */
+function laborNote(isLabor: boolean, finalWeeks: number, totalWeeks: number): string | undefined {
+  if (!isLabor || totalWeeks === 0) return undefined;
+  return finalWeeks === totalWeeks ? "Final labor" : `Final ${finalWeeks}/${totalWeeks} wks · rest est.`;
+}
+
 function deltaTone(delta: number | null, config: TrendMetricConfig): "good" | "bad" | "neutral" {
   if (delta === null || delta === 0) return "neutral";
   return delta > 0 === config.higherIsBetter ? "good" : "bad";
@@ -88,14 +97,21 @@ export function BrLaborTrend({ data }: { data: LaborReport }) {
   const [metricKey, setMetricKey] = useState<string>("headcount_active_end");
   const config = METRICS.find((m) => m.key === metricKey) ?? METRICS[0];
   const weeks = data.combined.trend;
+  const final = useFinalLabor();
+  const isLabor = config.key === LABOR_KEY;
 
   const values = useMemo(
-    () => weeks.map((w) => (isTrendKey(config.key) ? w[config.key] : null)),
-    [weeks, config],
+    () =>
+      weeks.map((w) => {
+        if (isLabor) return final?.byWeek.get(w.week_start) ?? w.average_labor_percent;
+        return isTrendKey(config.key) ? w[config.key] : null;
+      }),
+    [weeks, config, isLabor, final],
   );
+  const finalWeeks = isLabor ? weeks.filter((w) => final?.byWeek.has(w.week_start)).length : 0;
 
   const options = useMemo(
-    () => peopleLineOptions(theme, weeks.map((w) => safeDay(w.week_start)), (v) => config.format(v)),
+    () => peopleLineOptions(theme, weeks.map((w) => weekLabel(w)), (v) => config.format(v)),
     [theme, weeks, config],
   );
   const series = useMemo(() => [{ name: config.label, data: values }], [config, values]);
@@ -122,6 +138,7 @@ export function BrLaborTrend({ data }: { data: LaborReport }) {
       period="R"
       span={2}
       height={ROW_CARD_HEIGHT}
+      headerNote={laborNote(isLabor, finalWeeks, weeks.length)}
       headerControl={
         weeks.length > 0 ? (
           <div className="ms-1.5" onClick={(e) => e.stopPropagation()}>
@@ -148,8 +165,8 @@ export function BrLaborTrend({ data }: { data: LaborReport }) {
           <ApexChart key={theme.key} options={options} series={series} type="line" height={CHART_PX} />
           {stats ? (
             <div className="grid grid-cols-3 gap-1">
-              <Callout label="Best week" value={config.format(stats.best.value)} sub={safeDay(stats.best.week.week_start)} tone="good" />
-              <Callout label="Worst week" value={config.format(stats.worst.value)} sub={safeDay(stats.worst.week.week_start)} tone="bad" />
+              <Callout label="Best week" value={config.format(stats.best.value)} sub={weekLabel(stats.best.week, true)} tone="good" />
+              <Callout label="Worst week" value={config.format(stats.worst.value)} sub={weekLabel(stats.worst.week, true)} tone="bad" />
               <Callout
                 label="First → last week"
                 value={stats.delta === null ? DASH : fmtDelta(stats.delta)}

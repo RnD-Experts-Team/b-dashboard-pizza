@@ -3,7 +3,10 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
-function SectionSkeleton({ height = 180 }: { height?: number }) {
+const DEFAULT_SECTION_PX = 180;
+const SUMMARY_TILES = 10;
+
+function SectionSkeleton({ height = DEFAULT_SECTION_PX }: { height?: number }) {
   return (
     <Card className="gap-0 py-3">
       <CardHeader className="px-3 pb-2">
@@ -21,7 +24,7 @@ export function LaborSkeleton() {
     <div className="space-y-3">
       {/* Summary strip */}
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5">
-        {Array.from({ length: 10 }).map((_, i) => (
+        {Array.from({ length: SUMMARY_TILES }).map((_, i) => (
           <Skeleton key={i} className="h-[58px] rounded-lg" />
         ))}
       </div>
@@ -40,6 +43,9 @@ export function LaborSkeleton() {
       </div>
 
       <SectionSkeleton height={320} />
+
+      {/* Skills & Coverage */}
+      <SectionSkeleton height={220} />
     </div>
   );
 }

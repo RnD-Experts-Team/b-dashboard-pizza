@@ -3,13 +3,25 @@
 import { useMemo, useState } from "react";
 import { Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { WbrDetailDialog } from "@/components/dspr/wbr-detail-dialog";
+import { CATEGORIES } from "@/components/dashboard-v1/category";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
-import { V1Empty, V1SubLabel, V1_NUM, V1_TBL, V1_TD, V1_TH } from "@/components/dashboard-v1/v1-ui";
+import { V1Empty, V1_NUM, V1_TBL, V1_TD, V1_TH } from "@/components/dashboard-v1/v1-ui";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
+import { ReportBlock, ReportDialog, type ReportTab } from "@/components/business-reports/report-dialog";
 import { fmtNum, fmtPct } from "@/components/business-reports/report-format";
-import type { HnrPlusTotals, OperationsSection } from "@/types/business-reports.types";
-import { scoreColor, useStoreFocus, useStoreRows, useWeekLabels, type StoreRow } from "./br-shared";
+import type { HnrPlusItemRow, HnrPlusTotals, OperationsSection } from "@/types/business-reports.types";
+import {
+  CountDelta,
+  DialogEmpty,
+  TrendChart,
+  scoreColor,
+  storeSearch,
+  useStoreFocus,
+  useStoreRows,
+  useWeekLabel,
+  withPrev,
+  type StoreRow,
+} from "./br-shared";
 
 interface Measure {
   key: string;
@@ -46,7 +58,7 @@ function scoreColumns<T>(get: (row: T) => HnrPlusTotals): PagedColumn<T>[] {
       sortValue: (r) => m.score(get(r)),
       render: (r) => (
         <span className="whitespace-nowrap">
-          {fmtPct(m.pct(get(r)))} <span className="text-[10px] text-muted-foreground">·</span> <Score value={m.score(get(r))} />
+          {fmtPct(m.pct(get(r)))} <span className="text-muted-foreground">·</span> <Score value={m.score(get(r))} />
         </span>
       ),
     })),
@@ -54,46 +66,135 @@ function scoreColumns<T>(get: (row: T) => HnrPlusTotals): PagedColumn<T>[] {
 }
 
 type StoreScoreRow = StoreRow<HnrPlusTotals>;
-type WeekScoreRow = { week_start: string; label: string } & HnrPlusTotals;
+type WeekScore = { week_start: string } & HnrPlusTotals;
+interface WeekScoreRow {
+  week: WeekScore;
+  prev: WeekScore | null;
+}
+type ItemRow = HnrPlusItemRow;
+
+const SCORE_COLOR = CATEGORIES.operations.chartColors[0];
+const fmtAxisScore = (v: number): string => v.toFixed(0);
 
 const STORE_COLUMNS: PagedColumn<StoreScoreRow>[] = [
   { key: "store", header: "Store", sortValue: (r) => r.name, render: (r) => r.name },
   ...scoreColumns<StoreScoreRow>((r) => r.data),
 ];
 
-const WEEK_COLUMNS: PagedColumn<WeekScoreRow>[] = [
-  { key: "week", header: "Week", sortValue: (r) => r.week_start, render: (r) => r.label, className: "whitespace-nowrap" },
-  ...scoreColumns<WeekScoreRow>((r) => r),
+const ITEM_COLUMNS: PagedColumn<ItemRow>[] = [
+  { key: "item", header: "Item", sortValue: (r) => r.item_name, render: (r) => r.item_name },
+  { key: "made", header: "Made", numeric: true, sortValue: (r) => r.made, render: (r) => fmtNum(r.made) },
+  { key: "sold", header: "Sold", numeric: true, sortValue: (r) => r.sold, render: (r) => fmtNum(r.sold) },
+  { key: "voided", header: "Voided", numeric: true, sortValue: (r) => r.voided, render: (r) => fmtNum(r.voided) },
+  { key: "wasted", header: "Wasted", numeric: true, sortValue: (r) => r.wasted, render: (r) => fmtNum(r.wasted) },
+  {
+    key: "variance",
+    header: "Variance",
+    numeric: true,
+    sortValue: (r) => r.variance,
+    render: (r) => (
+      <span className={cn(r.variance > 0 && "text-red-600 dark:text-red-400", r.variance < 0 && "text-emerald-600 dark:text-emerald-400")}>
+        {fmtVariance(r.variance)}
+      </span>
+    ),
+  },
+  { key: "noinv", header: "No Inventory", numeric: true, sortValue: (r) => r.no_inventory_available, render: (r) => fmtNum(r.no_inventory_available) },
 ];
+
+const itemSearch = (r: ItemRow) => r.item_name;
 
 function HnrPlusDialog({ data, onClose }: { data: OperationsSection; onClose: () => void }) {
   const stores = useStoreRows(data.hnr_plus.by_store);
   const focus = useStoreFocus<StoreScoreRow>();
-  const labelOf = useWeekLabels(data.meta.weeks);
-  const weeks = useMemo<WeekScoreRow[]>(
-    () => data.hnr_plus.by_week.map((w) => ({ ...w, label: labelOf(w.week_start) })),
-    [data.hnr_plus.by_week, labelOf],
+  const byWeek = data.hnr_plus.by_week;
+  const labelOf = useWeekLabel(byWeek);
+  const weeks = useMemo<WeekScoreRow[]>(() => withPrev(byWeek).map(({ row, prev }) => ({ week: row, prev })), [byWeek]);
+  const categories = useMemo(() => byWeek.map((w) => labelOf(w.week_start)), [byWeek, labelOf]);
+  const series = useMemo(
+    () => [{ name: "Total score", data: byWeek.map((w) => Number(w.total_score.toFixed(1))), color: SCORE_COLOR }],
+    [byWeek],
   );
+  const weekColumns = useMemo<PagedColumn<WeekScoreRow>[]>(
+    () => [
+      { key: "week", header: "Week", sortValue: (r) => r.week.week_start, render: (r) => labelOf(r.week.week_start) },
+      ...scoreColumns<WeekScoreRow>((r) => r.week).flatMap((c) =>
+        c.key === "total"
+          ? [c, { key: "total_d", header: "Δ Total", numeric: true, render: (r: WeekScoreRow) => <CountDelta curr={r.week.total_score} prev={r.prev?.total_score} format={fmtNum} /> }]
+          : [c],
+      ),
+    ],
+    [labelOf],
+  );
+  const t = data.hnr_plus.totals;
+
+  const tabs: ReportTab[] = [
+    {
+      key: "overview",
+      label: "Overview",
+      content: (
+        <ReportBlock title="Total score by week" description="80+ is good, under 50 is poor.">
+          <TrendChart categories={categories} series={series} format={fmtAxisScore} />
+        </ReportBlock>
+      ),
+    },
+    {
+      key: "weeks",
+      label: "By week",
+      content: <PagedTable size="lg" rows={weeks} columns={weekColumns} rowKey={(r) => r.week.week_start} initialSort="week" />,
+    },
+    {
+      key: "stores",
+      label: "By store",
+      content: (
+        <PagedTable
+          size="lg"
+          rows={stores}
+          columns={STORE_COLUMNS}
+          rowKey={(r) => r.store}
+          initialSort="total"
+          searchText={storeSearch}
+          onRowClick={focus.onRowClick}
+          footerNote={focus.footerNote}
+        />
+      ),
+    },
+    {
+      key: "items",
+      label: "Items",
+      content: data.hnr_plus.items.length ? (
+        <PagedTable
+          size="lg"
+          rows={data.hnr_plus.items}
+          columns={ITEM_COLUMNS}
+          rowKey={(r) => r.item_id}
+          initialSort="made"
+          searchText={itemSearch}
+          searchPlaceholder="Search items…"
+        />
+      ) : (
+        <DialogEmpty>No item breakdown in this range.</DialogEmpty>
+      ),
+    },
+  ];
+
   return (
-    <WbrDetailDialog open onOpenChange={(o) => !o && onClose()} title="HNR+ Scores" badgeText="By store · By week · % · score">
-      <div className="space-y-5">
-        <div>
-          <V1SubLabel className="mb-1">By store</V1SubLabel>
-          <PagedTable
-            rows={stores}
-            columns={STORE_COLUMNS}
-            rowKey={(r) => r.store}
-            initialSort="total"
-            onRowClick={focus.onRowClick}
-            footerNote={focus.footerNote}
-          />
-        </div>
-        <div>
-          <V1SubLabel className="mb-1">By week</V1SubLabel>
-          <PagedTable rows={weeks} columns={WEEK_COLUMNS} rowKey={(r) => r.week_start} initialSort="week" />
-        </div>
-      </div>
-    </WbrDetailDialog>
+    <ReportDialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title="HNR+ Scores"
+      category="operations"
+      stats={[
+        { label: "Total score", value: fmtPct(t.total_score), tone: scoreColor(t.total_score) },
+        { label: "Made", value: fmtNum(t.made) },
+        ...MEASURES.filter((m) => m.key !== "void").map((m) => ({
+          label: m.label,
+          value: fmtPct(m.pct(t)),
+          sub: `score ${fmtNum(m.score(t))}`,
+          tone: scoreColor(m.score(t)),
+        })),
+      ]}
+      tabs={tabs}
+    />
   );
 }
 
@@ -102,6 +203,16 @@ export function BrHnrPlusCard({ data }: { data: OperationsSection }) {
   const [open, setOpen] = useState(false);
   const t = data.hnr_plus.totals;
   const items = data.hnr_plus.items;
+
+  // Nothing made means no HNR+ export landed for the range: the scores would
+  // read as a near-perfect 92.5 from all-zero inputs, so say so instead.
+  if (t.made === 0 && items.length === 0) {
+    return (
+      <V1Card reportId="br-hnr-plus" title="HNR+" category="operations" period="R" span={4}>
+        <V1Empty icon={Flame}>No HNR+ data for these stores in this range.</V1Empty>
+      </V1Card>
+    );
+  }
 
   return (
     <V1Card reportId="br-hnr-plus" title="HNR+" category="operations" period="R" span={4} onExpand={() => setOpen(true)}>

@@ -1,6 +1,9 @@
 import axios from "axios";
 import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
-import type { TicketsAnalytics } from "@/types/maintenance-tickets.types";
+import { schedulingService } from "@/lib/api/services/scheduling.service";
+import { daysToInstants } from "@/lib/maintenance-tickets/local-range";
+import type { AnalyticsSummary } from "@/types/maintenance-analytics.types";
+import type { StoreSkillsOverview } from "@/types/skills.types";
 import type {
   BusinessReportsParams,
   DebriefsSection,
@@ -141,11 +144,15 @@ export const businessReportsService = {
     return data;
   },
 
-  /** Maintenance tickets opened in the range (analytics over the same stores). */
-  getTickets(params: BusinessReportsParams, signal?: AbortSignal): Promise<TicketsAnalytics> {
-    return maintenanceTicketsService.getGlobalTicketsAnalytics(
-      { stores: params.stores, created_from: params.startDate, created_to: params.endDate },
-      signal,
-    );
+  /** Maintenance analytics summary for the range: tickets, recurring issues, statuses, per store. */
+  getTickets(params: BusinessReportsParams, signal?: AbortSignal): Promise<AnalyticsSummary> {
+    const range = daysToInstants(params.startDate, params.endDate);
+    if (!range) throw new Error("Invalid date range.");
+    return maintenanceTicketsService.getAnalyticsSummary({ stores: params.stores, ...range }, signal);
+  },
+
+  /** Skills and their coverage by employees (Operations) for every loaded store, in one call. */
+  getSkills(params: BusinessReportsParams, signal?: AbortSignal): Promise<StoreSkillsOverview> {
+    return schedulingService.getSkillsOverview(params.stores, signal);
   },
 };

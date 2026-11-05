@@ -2,19 +2,24 @@
 
 import { useMemo, useState } from "react";
 import { MessageSquareHeart, Star } from "lucide-react";
-import { DetailField } from "@/components/dspr/wbr-detail-dialog";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import { V1Empty, V1Metric, V1MetricGrid } from "@/components/dashboard-v1/v1-ui";
 import type { PagedColumn } from "@/components/business-reports/paged-table";
-import { fmtDate, fmtNumD } from "@/components/business-reports/report-format";
-import type { WbrBulkFeedback, WbrBulkResponse } from "@/types/business-reports.types";
-import { CARD_LIST_LIMIT, NO_VALUE, meanOf } from "@/components/business-reports/cards/operations/br-shared";
-import { RecordsDialog, useWbrRecords } from "./br-records";
-import { compareText } from "../../report-format";
+import { compareText, fmtDate, fmtNumD } from "@/components/business-reports/report-format";
+import type { WbrBulkResponse } from "@/types/business-reports.types";
+import { CARD_LIST_LIMIT, NO_VALUE, meanOf, plural } from "@/components/business-reports/cards/operations/br-shared";
+import { DetailItem, RecordsDialog, useWbrRecords, type RecordStore, type WbrRecord } from "./br-records";
 
 const RATING_MAX = 5;
+/** A rating at or under this counts as low. */
+const LOW_RATING = 2;
 
-const fullName = (f: WbrBulkFeedback) => `${f.first_name} ${f.last_name}`.trim();
+type Feedback = WbrRecord<"feedbacks">;
+
+const fullName = (f: Feedback) => `${f.first_name} ${f.last_name}`.trim();
+const dateOf = (f: Feedback) => f.submitted_at;
+const isLow = (f: Feedback) =>
+  f.valued_respected_appreciated_rating <= LOW_RATING || f.work_schedule_satisfaction_rating <= LOW_RATING;
 
 function rating(value: number | null | undefined): string {
   return value === null || value === undefined ? NO_VALUE : `${fmtNumD(value)}/${RATING_MAX}`;
@@ -30,28 +35,97 @@ function StarRating({ label, value }: { label: string; value: number | null }) {
   );
 }
 
-const COLUMNS: PagedColumn<WbrBulkFeedback>[] = [
-  { key: "date", header: "Date", sortValue: (f) => f.submitted_at, render: (f) => fmtDate(f.submitted_at), className: "whitespace-nowrap" },
-  { key: "store", header: "Store", sortValue: (f) => f.store_label, render: (f) => f.store_label },
+const COLUMNS: PagedColumn<Feedback>[] = [
+  { key: "date", header: "Date", sortValue: dateOf, render: (f) => fmtDate(f.submitted_at), className: "whitespace-nowrap" },
+  { key: "store", header: "Store", sortValue: (f) => f.storeDisplay, render: (f) => f.storeDisplay },
   { key: "name", header: "Employee", sortValue: fullName, render: fullName },
   { key: "valued", header: "Valued", numeric: true, sortValue: (f) => f.valued_respected_appreciated_rating, render: (f) => rating(f.valued_respected_appreciated_rating) },
   { key: "schedule", header: "Schedule", numeric: true, sortValue: (f) => f.work_schedule_satisfaction_rating, render: (f) => rating(f.work_schedule_satisfaction_rating) },
   {
     key: "feedback",
     header: "Feedback",
-    render: (f) => <span className="line-clamp-2 min-w-[220px] whitespace-normal">{f.improvement_feedback || NO_VALUE}</span>,
+    render: (f) => <span className="line-clamp-2 min-w-[260px] whitespace-normal">{f.improvement_feedback || NO_VALUE}</span>,
   },
 ];
 
-function FeedbackDetail({ f }: { f: WbrBulkFeedback }) {
+const STORE_COLUMNS: PagedColumn<RecordStore<Feedback>>[] = [
+  {
+    key: "valued",
+    header: "Avg Valued",
+    numeric: true,
+    sortValue: (s) => meanOf(s.rows.map((f) => f.valued_respected_appreciated_rating)),
+    render: (s) => rating(meanOf(s.rows.map((f) => f.valued_respected_appreciated_rating))),
+  },
+  {
+    key: "schedule",
+    header: "Avg Schedule",
+    numeric: true,
+    sortValue: (s) => meanOf(s.rows.map((f) => f.work_schedule_satisfaction_rating)),
+    render: (s) => rating(meanOf(s.rows.map((f) => f.work_schedule_satisfaction_rating))),
+  },
+  { key: "low", header: "Low ratings", numeric: true, sortValue: (s) => s.rows.filter(isLow).length, render: (s) => s.rows.filter(isLow).length.toLocaleString() },
+];
+
+const searchText = (f: Feedback) => `${fullName(f)} ${f.storeDisplay} ${f.improvement_feedback ?? ""}`;
+
+function FeedbackDetail({ f }: { f: Feedback }) {
   return (
     <>
-      <DetailField label="Store" value={f.store_label} />
-      <DetailField label="Submitted" value={fmtDate(f.submitted_at)} />
-      <DetailField label="Valued / Respected" value={rating(f.valued_respected_appreciated_rating)} />
-      <DetailField label="Work Schedule" value={rating(f.work_schedule_satisfaction_rating)} />
-      <DetailField label="Feedback" value={f.improvement_feedback} wrap />
+      <DetailItem label="Store" value={f.storeDisplay} />
+      <DetailItem label="Submitted" value={fmtDate(f.submitted_at)} />
+      <DetailItem label="Valued / Respected" value={rating(f.valued_respected_appreciated_rating)} />
+      <DetailItem label="Work Schedule" value={rating(f.work_schedule_satisfaction_rating)} />
+      <DetailItem label="Feedback" value={f.improvement_feedback} wide />
     </>
+  );
+}
+
+function useAverages(records: Feedback[]) {
+  return useMemo(
+    () => ({
+      valued: meanOf(records.map((f) => f.valued_respected_appreciated_rating)),
+      schedule: meanOf(records.map((f) => f.work_schedule_satisfaction_rating)),
+      low: records.filter(isLow).length,
+    }),
+    [records],
+  );
+}
+
+function FeedbackDialog({ records, onClose }: { records: Feedback[]; onClose: () => void }) {
+  const averages = useAverages(records);
+  return (
+    <RecordsDialog
+      title="Employee Feedback"
+      category="quality"
+      noun="response"
+      rows={records}
+      dateOf={dateOf}
+      stats={[
+        { label: "Avg Valued", value: rating(averages.valued), sub: "valued / respected" },
+        { label: "Avg Schedule", value: rating(averages.schedule), sub: "work schedule" },
+        {
+          label: "Low ratings",
+          value: averages.low.toLocaleString(),
+          sub: `a rating of ${LOW_RATING} or less`,
+          tone: averages.low > 0 ? "text-red-600 dark:text-red-400" : undefined,
+        },
+      ]}
+      storeColumns={STORE_COLUMNS}
+      columns={COLUMNS}
+      rowKey={(f) => f.id}
+      initialSort="date"
+      searchText={searchText}
+      detailTitle={(f) => (
+        <span className="flex flex-wrap items-baseline justify-between gap-2">
+          <span>{fullName(f) || "Feedback"}</span>
+          <span className="text-sm font-normal text-muted-foreground">
+            {f.storeDisplay} · {fmtDate(f.submitted_at)}
+          </span>
+        </span>
+      )}
+      renderDetail={(f) => <FeedbackDetail f={f} />}
+      onClose={onClose}
+    />
   );
 }
 
@@ -63,13 +137,7 @@ export function BrFeedbacksCard({ data }: { data: WbrBulkResponse }) {
     () => [...records].sort((a, b) => compareText(b.submitted_at, a.submitted_at)),
     [records],
   );
-  const averages = useMemo(
-    () => ({
-      valued: meanOf(records.map((f) => f.valued_respected_appreciated_rating)),
-      schedule: meanOf(records.map((f) => f.work_schedule_satisfaction_rating)),
-    }),
-    [records],
-  );
+  const averages = useAverages(records);
   const empty = records.length === 0;
 
   return (
@@ -79,6 +147,7 @@ export function BrFeedbacksCard({ data }: { data: WbrBulkResponse }) {
       category="quality"
       period="R"
       span={2}
+      headerNote={empty ? undefined : plural(records.length, "response")}
       onExpand={empty ? undefined : () => setOpen(true)}
     >
       {empty ? (
@@ -96,7 +165,7 @@ export function BrFeedbacksCard({ data }: { data: WbrBulkResponse }) {
                 <div className="flex items-center justify-between gap-2">
                   <span className="min-w-0 truncate text-[11px] font-semibold">
                     {fullName(f)}
-                    <span className="ms-1.5 text-[10px] font-normal text-muted-foreground">{f.store_label}</span>
+                    <span className="ms-1.5 text-[10px] font-normal text-muted-foreground">{f.storeDisplay}</span>
                   </span>
                   <span className="shrink-0 text-[10px] text-muted-foreground">{fmtDate(f.submitted_at)}</span>
                 </div>
@@ -117,24 +186,7 @@ export function BrFeedbacksCard({ data }: { data: WbrBulkResponse }) {
           </div>
         </div>
       )}
-      {open && (
-        <RecordsDialog
-          title="Employee Feedback"
-          noun="record"
-          rows={records}
-          columns={COLUMNS}
-          rowKey={(f) => f.id}
-          initialSort="date"
-          detailTitle={(f) => (
-            <span className="flex items-center justify-between gap-2">
-              <span>{fullName(f)}</span>
-              <span className="text-[11px] font-normal text-muted-foreground">{fmtDate(f.submitted_at)}</span>
-            </span>
-          )}
-          renderDetail={(f) => <FeedbackDetail f={f} />}
-          onClose={() => setOpen(false)}
-        />
-      )}
+      {open && <FeedbackDialog records={records} onClose={() => setOpen(false)} />}
     </V1Card>
   );
 }

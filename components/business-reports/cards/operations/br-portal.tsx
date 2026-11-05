@@ -3,13 +3,27 @@
 import { useMemo, useState } from "react";
 import { SpeedometerGauge } from "@/components/dspr/speedometer-gauge";
 import { PERFORMANCE_ZONES, getPerformanceLabel } from "@/components/dspr/portal-meter-utils";
-import { WbrDetailDialog } from "@/components/dspr/wbr-detail-dialog";
+import { CATEGORIES } from "@/components/dashboard-v1/category";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
-import { V1Metric, V1MetricGrid, V1SubLabel } from "@/components/dashboard-v1/v1-ui";
+import { V1Metric, V1MetricGrid } from "@/components/dashboard-v1/v1-ui";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
-import { fmtNum, fmtPct, weekLabel } from "@/components/business-reports/report-format";
+import { ReportBlock, ReportDialog, type ReportTab } from "@/components/business-reports/report-dialog";
+import { fmtNum, fmtPct } from "@/components/business-reports/report-format";
 import type { OperationsMetrics, OperationsSection, ReportWeek } from "@/types/business-reports.types";
-import { useStoreFocus, useStoreRows, type StoreRow } from "./br-shared";
+import {
+  Count,
+  PpDelta,
+  TrendChart,
+  storeSearch,
+  useStoreFocus,
+  useStoreRows,
+  useWeekLabel,
+  withPrev,
+  type StoreRow,
+} from "./br-shared";
+
+const [PUT_COLOR, ONTIME_COLOR] = CATEGORIES.operations.chartColors;
+const fmtAxisPct = (v: number): string => `${v.toFixed(0)}%`;
 
 type PortalFields = Pick<
   OperationsMetrics,
@@ -31,12 +45,11 @@ function portalColumns<T>(get: (row: T) => PortalFields): PagedColumn<T>[] {
   ];
 }
 
-type WeekRow = ReportWeek & OperationsMetrics;
-
-const WEEK_COLUMNS: PagedColumn<WeekRow>[] = [
-  { key: "week", header: "Week", sortValue: (w) => w.week_start, render: (w) => weekLabel(w), className: "whitespace-nowrap" },
-  ...portalColumns<WeekRow>((w) => w),
-];
+type Week = ReportWeek & OperationsMetrics;
+interface WeekRow {
+  week: Week;
+  prev: Week | null;
+}
 
 const STORE_COLUMNS: PagedColumn<StoreRow<OperationsMetrics>>[] = [
   { key: "store", header: "Store", sortValue: (r) => r.name, render: (r) => r.name },
@@ -46,26 +59,79 @@ const STORE_COLUMNS: PagedColumn<StoreRow<OperationsMetrics>>[] = [
 function PortalDialog({ data, onClose }: { data: OperationsSection; onClose: () => void }) {
   const stores = useStoreRows(data.by_store);
   const focus = useStoreFocus<StoreRow<OperationsMetrics>>();
+  const labelOf = useWeekLabel(data.by_week);
+  const weeks = useMemo<WeekRow[]>(() => withPrev(data.by_week).map(({ row, prev }) => ({ week: row, prev })), [data.by_week]);
+  const categories = useMemo(() => data.by_week.map((w) => labelOf(w.week_start)), [data.by_week, labelOf]);
+  const series = useMemo(
+    () => [
+      { name: "Put into portal %", data: data.by_week.map((w) => Number(w.put_into_portal_percent.toFixed(1))), color: PUT_COLOR },
+      { name: "On-time %", data: data.by_week.map((w) => Number(w.in_portal_on_time_percent.toFixed(1))), color: ONTIME_COLOR },
+    ],
+    [data.by_week],
+  );
+  const weekColumns = useMemo<PagedColumn<WeekRow>[]>(
+    () => [
+      { key: "week", header: "Week", sortValue: (r) => r.week.week_start, render: (r) => labelOf(r.week.week_start) },
+      { key: "put", header: "Put %", numeric: true, sortValue: (r) => r.week.put_into_portal_percent, render: (r) => fmtPct(r.week.put_into_portal_percent) },
+      { key: "put_d", header: "Δ Put", numeric: true, render: (r) => <PpDelta curr={r.week.put_into_portal_percent} prev={r.prev?.put_into_portal_percent} /> },
+      { key: "ontime_pct", header: "On-Time %", numeric: true, sortValue: (r) => r.week.in_portal_on_time_percent, render: (r) => fmtPct(r.week.in_portal_on_time_percent) },
+      { key: "ontime_d", header: "Δ On-Time", numeric: true, render: (r) => <PpDelta curr={r.week.in_portal_on_time_percent} prev={r.prev?.in_portal_on_time_percent} /> },
+      { key: "eligible", header: "Eligible", numeric: true, sortValue: (r) => r.week.portal_eligible_orders, render: (r) => fmtNum(r.week.portal_eligible_orders) },
+      { key: "used", header: "Used", numeric: true, sortValue: (r) => r.week.portal_used_orders, render: (r) => fmtNum(r.week.portal_used_orders) },
+      { key: "ontime", header: "On Time", numeric: true, sortValue: (r) => r.week.portal_on_time_orders, render: (r) => fmtNum(r.week.portal_on_time_orders) },
+    ],
+    [labelOf],
+  );
+  const t = data.totals;
+
+  const tabs: ReportTab[] = [
+    {
+      key: "overview",
+      label: "Overview",
+      content: (
+        <ReportBlock title="Portal % by week" description="Put into portal and in-portal on time, each week of the range.">
+          <TrendChart categories={categories} series={series} format={fmtAxisPct} />
+        </ReportBlock>
+      ),
+    },
+    {
+      key: "weeks",
+      label: "By week",
+      content: <PagedTable size="lg" rows={weeks} columns={weekColumns} rowKey={(r) => r.week.week_start} initialSort="week" />,
+    },
+    {
+      key: "stores",
+      label: "By store",
+      content: (
+        <PagedTable
+          size="lg"
+          rows={stores}
+          columns={STORE_COLUMNS}
+          rowKey={(r) => r.store}
+          initialSort="put"
+          searchText={storeSearch}
+          onRowClick={focus.onRowClick}
+          footerNote={focus.footerNote}
+        />
+      ),
+    },
+  ];
+
   return (
-    <WbrDetailDialog open onOpenChange={(o) => !o && onClose()} title="Portal Performance" badgeText="By week · By store">
-      <div className="space-y-5">
-        <div>
-          <V1SubLabel className="mb-1">By week</V1SubLabel>
-          <PagedTable rows={data.by_week} columns={WEEK_COLUMNS} rowKey={(w) => w.week_start} initialSort="week" />
-        </div>
-        <div>
-          <V1SubLabel className="mb-1">By store</V1SubLabel>
-          <PagedTable
-            rows={stores}
-            columns={STORE_COLUMNS}
-            rowKey={(r) => r.store}
-            initialSort="put"
-            onRowClick={focus.onRowClick}
-            footerNote={focus.footerNote}
-          />
-        </div>
-      </div>
-    </WbrDetailDialog>
+    <ReportDialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title="Portal Performance"
+      category="operations"
+      stats={[
+        { label: "Put into portal", value: fmtPct(t.put_into_portal_percent), sub: getPerformanceLabel(t.put_into_portal_percent) },
+        { label: "On time", value: fmtPct(t.in_portal_on_time_percent), tone: "text-emerald-600 dark:text-emerald-400" },
+        { label: "Eligible", value: fmtNum(t.portal_eligible_orders), sub: "orders" },
+        { label: "Used", value: fmtNum(t.portal_used_orders), sub: "orders" },
+        { label: "On-time orders", value: fmtNum(t.portal_on_time_orders) },
+      ]}
+      tabs={tabs}
+    />
   );
 }
 
@@ -108,9 +174,9 @@ export function BrPortalCard({ data }: { data: OperationsSection }) {
           </span>
         </div>
         <V1MetricGrid cols={3}>
-          <V1Metric size="sm" label="Eligible" value={fmtNum(t.portal_eligible_orders)} />
-          <V1Metric size="sm" label="Used" value={fmtNum(t.portal_used_orders)} />
-          <V1Metric size="sm" label="On Time" value={fmtNum(t.portal_on_time_orders)} />
+          <V1Metric size="sm" label="Eligible" value={<Count value={t.portal_eligible_orders} />} />
+          <V1Metric size="sm" label="Used" value={<Count value={t.portal_used_orders} />} />
+          <V1Metric size="sm" label="On Time" value={<Count value={t.portal_on_time_orders} />} />
         </V1MetricGrid>
       </div>
       {open && <PortalDialog data={data} onClose={() => setOpen(false)} />}

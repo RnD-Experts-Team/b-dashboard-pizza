@@ -3,10 +3,11 @@
 import { useMemo, useState } from "react";
 import { Loader2, Star } from "lucide-react";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
-import { V1Empty, V1Metric, V1MetricGrid, V1SubLabel } from "@/components/dashboard-v1/v1-ui";
-import { WbrDetailDialog } from "@/components/dspr/wbr-detail-dialog";
+import { V1Empty } from "@/components/dashboard-v1/v1-ui";
 import { DASH } from "@/components/labor/labor-format";
+import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
 import { useReport, useSection } from "@/components/business-reports/report-context";
+import { ReportBlock, ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
 import { fmtNumD, weekLabel } from "@/components/business-reports/report-format";
 import { cn } from "@/lib/utils";
 import type { ReportWeek, StoreScoreSection, StoreScoreWeek } from "@/types/business-reports.types";
@@ -70,49 +71,144 @@ interface Selection {
   score: StoreScoreWeek;
 }
 
-function WeekDetail({ score }: { score: StoreScoreWeek }) {
+interface WeekRow {
+  week: ReportWeek;
+  score: StoreScoreWeek;
+}
+
+function penaltyText(penalty: number): string {
+  return penalty === 0 ? "0" : `-${fmtNumD(Math.abs(penalty))}`;
+}
+
+function WeekDetail({
+  data,
+  weeks,
+  selection,
+  onSelect,
+  onClose,
+}: {
+  data: StoreScoreSection;
+  weeks: ReportWeek[];
+  selection: Selection;
+  onSelect: (s: Selection) => void;
+  onClose: () => void;
+}) {
+  const { storeName } = useReport();
+  const { store, week, score } = selection;
   const max = weekMax(score);
   const t = tone(score.score, max);
+  const storeBlock = data.by_store[store];
+
+  const rows = useMemo<WeekRow[]>(
+    () => weeks.flatMap((w) => (storeBlock?.weeks[w.week_start] ? [{ week: w, score: storeBlock.weeks[w.week_start] }] : [])),
+    [weeks, storeBlock],
+  );
+  const columns = useMemo<PagedColumn<WeekRow>[]>(
+    () => [
+      { key: "week", header: "Week", render: (r) => <span className="font-medium">{weekLabel(r.week, true)}</span>, sortValue: (r) => r.week.week_start },
+      {
+        key: "score",
+        header: "Score",
+        numeric: true,
+        render: (r) => {
+          const rt = tone(r.score.score, weekMax(r.score));
+          return <span className={cn("font-semibold", TONE_TEXT[rt])}>{fmtNumD(r.score.score)}</span>;
+        },
+        sortValue: (r) => r.score.score,
+      },
+      { key: "label", header: "Rating", render: (r) => r.score.label, sortValue: (r) => r.score.label },
+      { key: "raw", header: "Before penalty", numeric: true, render: (r) => fmtNumD(r.score.raw_score), sortValue: (r) => r.score.raw_score },
+      {
+        key: "penalty",
+        header: "Penalty",
+        numeric: true,
+        render: (r) => (
+          <span className={r.score.non_negotiable.penalty === 0 ? undefined : TONE_TEXT.red}>{penaltyText(r.score.non_negotiable.penalty)}</span>
+        ),
+        sortValue: (r) => r.score.non_negotiable.penalty,
+      },
+    ],
+    [],
+  );
+
+  const stats: ReportStat[] = [
+    { label: "Score", value: `${fmtNumD(score.score)} / ${fmtNumD(max)}`, tone: TONE_TEXT[t] },
+    { label: "Rating", value: score.label, tone: TONE_TEXT[t] },
+    { label: "Before penalty", value: fmtNumD(score.raw_score) },
+    {
+      label: "Non-negotiable penalty",
+      value: penaltyText(score.non_negotiable.penalty),
+      sub: `${score.non_negotiable.entries} entries · ${score.non_negotiable.downtime} downtime · ${score.non_negotiable.other} other`,
+      tone: score.non_negotiable.penalty === 0 ? undefined : TONE_TEXT.red,
+    },
+    {
+      label: "Store average",
+      value: storeBlock ? fmtNumD(storeBlock.average_score) : DASH,
+      sub: storeBlock?.average_label,
+    },
+    { label: "Week", value: weekLabel(week), sub: `${week.start} → ${week.end}` },
+  ];
+
   return (
-    <div className="space-y-4">
-      <V1MetricGrid cols={4}>
-        <V1Metric label="Score" value={`${fmtNumD(score.score)} / ${fmtNumD(max)}`} accent={TONE_TEXT[t]} />
-        <V1Metric label="Rating" value={score.label} accent={TONE_TEXT[t]} size="sm" />
-        <V1Metric label="Before Penalty" value={fmtNumD(score.raw_score)} />
-        <V1Metric
-          label="Non-Negotiable Penalty"
-          value={score.non_negotiable.penalty === 0 ? "0" : `-${fmtNumD(Math.abs(score.non_negotiable.penalty))}`}
-          sub={`${score.non_negotiable.entries} entries · ${score.non_negotiable.downtime} downtime · ${score.non_negotiable.other} other`}
-          accent={score.non_negotiable.penalty === 0 ? undefined : TONE_TEXT.red}
-        />
-      </V1MetricGrid>
-      <div>
-        <V1SubLabel className="mb-1">Categories</V1SubLabel>
-        <div className="space-y-1">
-          {score.details.map((d) => {
-            const dt = d.score >= d.max ? "emerald" : tone(d.score, d.max);
-            const width = d.max > 0 ? Math.min(PERCENT, (d.score / d.max) * PERCENT) : 0;
-            return (
-              <div key={d.key} className="flex items-center gap-2">
-                <span className="w-44 shrink-0 truncate text-[12px] text-muted-foreground">
-                  {d.label}
-                  {d.actual_percent !== null && d.actual_percent !== undefined && (
-                    <span className="ms-1 text-[10px] text-muted-foreground/70">({fmtNumD(d.actual_percent)}%)</span>
-                  )}
-                </span>
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                  <div className={cn("h-full rounded-full", TONE_BAR[dt])} style={{ width: `${width}%` }} />
-                </div>
-                <span className={cn("w-16 shrink-0 text-end text-[12px] font-semibold tabular-nums", TONE_TEXT[dt])}>
-                  {fmtNumD(d.score)}/{fmtNumD(d.max)}
-                </span>
+    <ReportDialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      title={`${storeName(store)} — Store Score`}
+      category="sales"
+      subtitle={`${weekLabel(week, true)} · scored as of ${score.as_of}`}
+      stats={stats}
+      tabs={[
+        {
+          key: "categories",
+          label: "Categories",
+          content: (
+            <ReportBlock title={`Categories · ${weekLabel(week)}`}>
+              <div className="space-y-2">
+                {score.details.map((d) => {
+                  const dt = d.score >= d.max ? "emerald" : tone(d.score, d.max);
+                  const width = d.max > 0 ? Math.min(PERCENT, (d.score / d.max) * PERCENT) : 0;
+                  return (
+                    <div key={d.key} className="flex items-center gap-3">
+                      <span className="w-60 shrink-0 truncate text-[13px] text-muted-foreground">
+                        {d.label}
+                        {d.actual_percent !== null && d.actual_percent !== undefined && (
+                          <span className="ms-1 text-xs text-muted-foreground/70">({fmtNumD(d.actual_percent)}%)</span>
+                        )}
+                      </span>
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                        <div className={cn("h-full rounded-full", TONE_BAR[dt])} style={{ width: `${width}%` }} />
+                      </div>
+                      <span className={cn("w-20 shrink-0 text-end text-[13px] font-semibold tabular-nums", TONE_TEXT[dt])}>
+                        {fmtNumD(d.score)}/{fmtNumD(d.max)}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
-      </div>
-      <p className="text-[11px] text-muted-foreground">Scored as of {score.as_of}.</p>
-    </div>
+            </ReportBlock>
+          ),
+        },
+        {
+          key: "weeks",
+          label: `Every week (${rows.length})`,
+          content: (
+            <PagedTable
+              size="lg"
+              rows={rows}
+              columns={columns}
+              rowKey={(r) => r.week.week_start}
+              initialSort="week"
+              initialDir="asc"
+              onRowClick={(r) => onSelect({ store, week: r.week, score: r.score })}
+              rowClassName={(r) => (r.week.week_start === week.week_start ? "bg-primary/10" : undefined)}
+              footerNote="click a week to open its breakdown"
+            />
+          ),
+        },
+      ]}
+    />
   );
 }
 
@@ -159,7 +255,7 @@ export function BrStoreScoreWeeks({ data }: { data: StoreScoreSection }) {
         <button
           type="button"
           onClick={() => setSelected({ store, week, score })}
-          title={`${score.label} — click for the breakdown`}
+          title={`${weekLabel(week)} · ${score.label} — click for the breakdown`}
           className={cn("h-6 w-full rounded font-bold transition-opacity hover:opacity-80", TONE_BG[t], TONE_TEXT[t])}
         >
           {fmtNumD(score.score)}
@@ -199,17 +295,7 @@ export function BrStoreScoreWeeks({ data }: { data: StoreScoreSection }) {
       )}
 
       {selected && (
-        <WbrDetailDialog
-          open={selected !== null}
-          onOpenChange={(o) => {
-            if (!o) setSelected(null);
-          }}
-          title={`${storeName(selected.store)} — Store Score`}
-          badgeText={weekLabel(selected.week)}
-          className="sm:max-w-2xl"
-        >
-          <WeekDetail score={selected.score} />
-        </WbrDetailDialog>
+        <WeekDetail data={data} weeks={weeks} selection={selected} onSelect={setSelected} onClose={() => setSelected(null)} />
       )}
     </V1Card>
   );

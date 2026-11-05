@@ -1,20 +1,36 @@
 "use client";
 
-import { useState, type ComponentType } from "react";
+import { useMemo, useState, type ComponentType } from "react";
 import { Car, DoorOpen, Smile, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { WbrDetailDialog } from "@/components/dspr/wbr-detail-dialog";
+import { CATEGORIES } from "@/components/dashboard-v1/category";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
-import { V1Empty, V1SubLabel } from "@/components/dashboard-v1/v1-ui";
+import { V1Empty } from "@/components/dashboard-v1/v1-ui";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
+import {
+  RD_NUM,
+  RD_TBL,
+  RD_TD,
+  RD_TH,
+  ReportBlock,
+  ReportDialog,
+  type ReportTab,
+} from "@/components/business-reports/report-dialog";
 import { fmtNum, fmtNumD, fmtPct } from "@/components/business-reports/report-format";
 import type { CustomerServiceAverages, QualitySection } from "@/types/business-reports.types";
 import {
+  DialogEmpty,
   NO_VALUE,
+  ScoreBars,
+  storeSearch,
   useStoreFocus,
   useStoreRows,
   type StoreRow,
 } from "@/components/business-reports/cards/operations/br-shared";
+
+const BAR_COLOR = CATEGORIES.quality.chartColors[0];
+/** Rows each Overview list shows. */
+const OVERVIEW_ROWS = 10;
 
 type Row = StoreRow<CustomerServiceAverages>;
 
@@ -60,25 +76,113 @@ const STORE_COLUMNS: PagedColumn<Row>[] = [
   { key: "store", header: "Store", sortValue: (r) => r.name, render: (r) => r.name },
   { key: "entries", header: "Entries", numeric: true, sortValue: (r) => r.data.entries, render: (r) => fmtNum(r.data.entries) },
   { key: "guest", header: "Guest Service", numeric: true, sortValue: (r) => r.data.guest_service, render: (r) => pctOrDash(r.data.guest_service) },
-  { key: "lobby", header: "Lobby (min)", numeric: true, sortValue: (r) => r.data.lobby_points, render: (r) => minutesOrDash(r.data.lobby_points) },
-  { key: "drive", header: "Drive-Thru (min)", numeric: true, sortValue: (r) => r.data.drive_thru_points, render: (r) => minutesOrDash(r.data.drive_thru_points) },
+  { key: "lobby", header: "Lobby", numeric: true, sortValue: (r) => r.data.lobby_points, render: (r) => minutesOrDash(r.data.lobby_points) },
+  { key: "drive", header: "Drive-Thru", numeric: true, sortValue: (r) => r.data.drive_thru_points, render: (r) => minutesOrDash(r.data.drive_thru_points) },
 ];
 
-function CustomerServiceDialog({ data, onClose }: { data: QualitySection; onClose: () => void }) {
-  const rows = useStoreRows(data.customer_service.by_store);
-  const focus = useStoreFocus<Row>();
+/** The stores with the most minutes for one measure, slowest first. */
+function slowest(rows: Row[], read: (a: CustomerServiceAverages) => number | null): Array<{ row: Row; minutes: number }> {
+  return rows
+    .flatMap((row) => {
+      const minutes = read(row.data);
+      return minutes === null ? [] : [{ row, minutes }];
+    })
+    .sort((a, b) => b.minutes - a.minutes)
+    .slice(0, OVERVIEW_ROWS);
+}
+
+function SlowestTable({ rows }: { rows: Array<{ row: Row; minutes: number }> }) {
+  if (rows.length === 0) return <DialogEmpty>No times recorded.</DialogEmpty>;
   return (
-    <WbrDetailDialog open onOpenChange={(o) => !o && onClose()} title="Customer Service" badgeText="By store · lobby & drive-thru: lower is better">
-      <V1SubLabel className="mb-1">By store</V1SubLabel>
-      <PagedTable
-        rows={rows}
-        columns={STORE_COLUMNS}
-        rowKey={(r) => r.store}
-        initialSort="guest"
-        onRowClick={focus.onRowClick}
-        footerNote={focus.footerNote}
-      />
-    </WbrDetailDialog>
+    <table className={RD_TBL}>
+      <thead>
+        <tr>
+          <th className={RD_TH}>Store</th>
+          <th className={cn(RD_TH, "text-end")}>Minutes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(({ row, minutes }) => (
+          <tr key={row.store}>
+            <td className={cn(RD_TD, "max-w-[260px] truncate")} title={row.name}>
+              {row.name}
+            </td>
+            <td className={cn(RD_TD, RD_NUM, "font-semibold text-red-600 dark:text-red-400")}>{fmtNumD(minutes)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function CustomerServiceDialog({ data, onClose }: { data: QualitySection; onClose: () => void }) {
+  const cs = data.customer_service;
+  const rows = useStoreRows(cs.by_store);
+  const focus = useStoreFocus<Row>();
+  const guest = useMemo(
+    () =>
+      rows
+        .flatMap((r) => (r.data.guest_service === null ? [] : [{ r, score: r.data.guest_service }]))
+        .sort((a, b) => a.score - b.score)
+        .slice(0, OVERVIEW_ROWS)
+        .map(({ r, score }) => ({ key: r.store, label: r.name, score, sub: `${fmtNum(r.data.entries)} entries`, title: r.name })),
+    [rows],
+  );
+  const lobby = useMemo(() => slowest(rows, (a) => a.lobby_points), [rows]);
+  const drive = useMemo(() => slowest(rows, (a) => a.drive_thru_points), [rows]);
+  const reporting = rows.filter((r) => r.data.entries > 0).length;
+
+  const tabs: ReportTab[] = [
+    {
+      key: "overview",
+      label: "Overview",
+      content: (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <ReportBlock title="Guest service" description="Lowest first." className="lg:col-span-2">
+            {guest.length ? <ScoreBars rows={guest} color={BAR_COLOR} /> : <DialogEmpty>No guest service scores.</DialogEmpty>}
+          </ReportBlock>
+          <ReportBlock title="Slowest lobby" description="Average minutes, lower is better.">
+            <SlowestTable rows={lobby} />
+          </ReportBlock>
+          <ReportBlock title="Slowest drive-thru" description="Average minutes, lower is better.">
+            <SlowestTable rows={drive} />
+          </ReportBlock>
+        </div>
+      ),
+    },
+    {
+      key: "stores",
+      label: "By store",
+      content: (
+        <PagedTable
+          size="lg"
+          rows={rows}
+          columns={STORE_COLUMNS}
+          rowKey={(r) => r.store}
+          initialSort="guest"
+          searchText={storeSearch}
+          onRowClick={focus.onRowClick}
+          footerNote={focus.footerNote ? `lobby & drive-thru: lower is better · ${focus.footerNote}` : "lobby & drive-thru: lower is better"}
+        />
+      ),
+    },
+  ];
+
+  return (
+    <ReportDialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title="Customer Service"
+      category="quality"
+      stats={[
+        { label: "Guest service", value: pctOrDash(cs.guest_service), tone: "text-emerald-600 dark:text-emerald-400" },
+        { label: "Lobby", value: minutesOrDash(cs.lobby_points), sub: "lower is better" },
+        { label: "Drive-thru", value: minutesOrDash(cs.drive_thru_points), sub: "lower is better" },
+        { label: "Entries", value: fmtNum(cs.entries) },
+        { label: "Stores", value: fmtNum(reporting), sub: "with entries" },
+      ]}
+      tabs={tabs}
+    />
   );
 }
 

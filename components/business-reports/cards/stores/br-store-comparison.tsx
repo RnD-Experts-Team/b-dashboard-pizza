@@ -4,14 +4,15 @@ import { useMemo } from "react";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import { DASH } from "@/components/labor/labor-format";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
+import { preferFinal, useFinalLabor } from "@/components/business-reports/final-labor";
 import { useReport, useSection } from "@/components/business-reports/report-context";
+import { LaborPctValue } from "@/components/business-reports/cards/people/br-people-kit";
 import {
   fmt$,
   fmt$2,
   fmtNum,
   fmtNumD,
   fmtPct,
-  laborColor,
   perStoreDay,
 } from "@/components/business-reports/report-format";
 import { cn } from "@/lib/utils";
@@ -20,7 +21,9 @@ import type { OperationsMetrics, SalesMetrics, SalesSection } from "@/types/busi
 /* ──────────────────────────────────────────────────────────────────────────
  *  Store Comparison — one row per loaded store with the range's headline
  *  figures side by side. Sales drives it; operations (portal / HnR) and the
- *  store score fill in when those sections land. A row focuses that store.
+ *  store score fill in when those sections land. Labor % is Hiring's FINAL
+ *  labor (mean of the store's weeks) where it exists, else the derived
+ *  labor cost ÷ sales ("Est."). A row focuses that store.
  * ────────────────────────────────────────────────────────────────────────── */
 
 const CARD_HEIGHT = 460;
@@ -33,6 +36,7 @@ interface Row {
   ops: OperationsMetrics | null;
   score: number | null;
   scoreLabel: string | null;
+  labor: { value: number | null; isFinal: boolean };
 }
 
 /** A sales figure, or null when the store had no sales rows in the range. */
@@ -50,6 +54,7 @@ export function BrStoreComparison({ data }: { data: SalesSection }) {
   const { params, storeName, focusStore } = useReport();
   const operations = useSection("operations");
   const storeScore = useSection("storeScore");
+  const final = useFinalLabor();
   const opsByStore = operations.data?.by_store;
   const scoreByStore = storeScore.data?.by_store;
   const multiStore = params.stores.length > 1;
@@ -59,15 +64,21 @@ export function BrStoreComparison({ data }: { data: SalesSection }) {
       .filter((s) => (data.by_store[s]?.store_days ?? 0) > 0)
       .sort((a, b) => data.by_store[b].sales - data.by_store[a].sales);
     const rankOf = new Map(ranked.map((s, i) => [s, i + 1]));
-    return params.stores.map((store) => ({
+    return params.stores.map((store) => {
+      const m = data.by_store[store];
+      const fin = final?.byStore.get(store);
+      const derived = m && m.store_days > 0 && m.sales > 0 ? m.labor_percent : null;
+      return {
       store,
       rank: rankOf.get(store) ?? null,
       sales: data.by_store[store] ?? null,
       ops: opsByStore?.[store] ?? null,
       score: scoreByStore?.[store]?.average_score ?? null,
       scoreLabel: scoreByStore?.[store]?.average_label ?? null,
-    }));
-  }, [params.stores, data.by_store, opsByStore, scoreByStore]);
+      labor: derived === null ? { value: fin ?? null, isFinal: fin !== undefined } : preferFinal(fin, derived),
+      };
+    });
+  }, [params.stores, data.by_store, opsByStore, scoreByStore, final]);
 
   const columns = useMemo<PagedColumn<Row>[]>(() => {
     const opsPending = (r: Row) => (operations.loading && !r.ops ? PENDING : DASH);
@@ -118,17 +129,8 @@ export function BrStoreComparison({ data }: { data: SalesSection }) {
         key: "labor",
         header: "Labor %",
         numeric: true,
-        render: (r) => {
-          const v = salesValue(r, (m) => m.labor_percent);
-          return v === null || !r.sales || r.sales.sales <= 0 ? (
-            DASH
-          ) : (
-            <span className="font-semibold" style={{ color: laborColor(v) }}>
-              {fmtPct(v)}
-            </span>
-          );
-        },
-        sortValue: (r) => (r.sales && r.sales.sales > 0 ? r.sales.labor_percent : null),
+        render: (r) => <LaborPctValue value={r.labor.value} isFinal={r.labor.isFinal} />,
+        sortValue: (r) => r.labor.value,
       },
       {
         key: "portal",

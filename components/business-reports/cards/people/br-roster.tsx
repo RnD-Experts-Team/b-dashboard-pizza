@@ -7,25 +7,25 @@ import { Search, UserRound, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
-import { V1Empty, V1SubLabel } from "@/components/dashboard-v1/v1-ui";
-import { WbrDetailDialog, DetailField } from "@/components/dspr/wbr-detail-dialog";
+import { V1Empty } from "@/components/dashboard-v1/v1-ui";
 import { DASH, fmtColumnValue, fmtDecimalString, fmtTenure } from "@/components/labor/labor-format";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
 import { useReport } from "@/components/business-reports/report-context";
+import { ReportBlock, ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
+import { StoreChecklist, inStores } from "@/components/business-reports/store-checklist";
 import type { LaborReport, LaborRosterRow } from "@/types/business-reports.types";
-import { StoreTag, safeDay } from "./br-people-kit";
-import { compareText } from "../../report-format";
+import { ActiveToggle, StoreTag, matchesActive, safeDay, type ActiveFilter } from "./br-people-kit";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  Employee Roster — everyone on the loaded stores' rosters over the range,
- *  with their aggregated metrics. Filter by status / store / name; a row
- *  opens every metric; the icon opens the employee profile.
+ *  with their aggregated metrics. Filter by status (Active by default) /
+ *  stores (checklist) / name; a row opens every metric; the icon opens the
+ *  employee profile.
  * ────────────────────────────────────────────────────────────────────────── */
 
-const ALL = "__all__";
 const CARD_HEIGHT = 420;
+const ACTIVE = "active";
 
 function metricSum(row: LaborRosterRow, key: string): number | null {
   return row.metrics[key]?.sum ?? null;
@@ -52,38 +52,57 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function EmployeeDetail({ row, profileHref }: { row: LaborRosterRow; profileHref: string }) {
+function EmployeeDetail({
+  row,
+  profileHref,
+  onClose,
+}: {
+  row: LaborRosterRow;
+  profileHref: string;
+  onClose: () => void;
+}) {
   const { storeName } = useReport();
   const entries = Object.entries(row.metrics);
+  const stats: ReportStat[] = [
+    { label: "Status", value: <span className="capitalize">{row.status}</span>, sub: row.position ?? undefined },
+    { label: "Tenure", value: fmtTenure(row.tenure_days), sub: `hired ${safeDay(row.hire_date)}` },
+    { label: "Base pay", value: fmtDecimalString(row.base_pay) },
+    { label: "Performance pay", value: fmtDecimalString(row.performance_pay) },
+    { label: "Hours", value: fmtColumnValue("total_hours", metricSum(row, "total_hours")) },
+    { label: "Gross pay", value: fmtColumnValue("gross_pay", metricSum(row, "gross_pay")) },
+  ];
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1.5">
-          <DetailField label="Store" value={storeName(row.store)} />
-          <DetailField label="Position" value={row.position ?? DASH} />
-          <DetailField label="Status" value={<StatusBadge status={row.status} />} />
-          <DetailField label="Hired" value={safeDay(row.hire_date)} />
-          <DetailField label="Tenure" value={fmtTenure(row.tenure_days)} />
-          <DetailField label="Base pay" value={fmtDecimalString(row.base_pay)} />
-          <DetailField label="Performance pay" value={fmtDecimalString(row.performance_pay)} />
-        </div>
-        <Button asChild variant="outline" size="sm" className="h-7 text-xs">
-          <Link href={profileHref}>
-            <UserRound className="h-3.5 w-3.5" />
-            View profile
-          </Link>
-        </Button>
-      </div>
-      <div>
-        <V1SubLabel className="mb-1">Metrics over the range ({entries.length})</V1SubLabel>
+    <ReportDialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      title={row.name}
+      category="people"
+      subtitle={`${storeName(row.store)} · ${row.position ?? "No position"}`}
+      stats={stats}
+    >
+      <ReportBlock
+        title={`Metrics over the range (${entries.length})`}
+        description="Sum over the range; the average per reading in brackets where it differs."
+        action={
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs">
+            <Link href={profileHref}>
+              <UserRound className="h-3.5 w-3.5" />
+              View profile
+            </Link>
+          </Button>
+        }
+      >
         {entries.length === 0 ? (
-          <p className="text-[12px] text-muted-foreground">No metrics recorded for this employee in this range.</p>
+          <p className="py-4 text-sm text-muted-foreground">No metrics recorded for this employee in this range.</p>
         ) : (
-          <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-x-6 sm:grid-cols-2 lg:grid-cols-3">
             {entries.map(([key, m]) => (
-              <div key={key} className="flex items-center justify-between gap-2 border-b border-border/30 py-1">
-                <span className="min-w-0 truncate text-[11px] text-muted-foreground">{m.label}</span>
-                <span className="shrink-0 text-[11px] font-semibold tabular-nums">
+              <div key={key} className="flex items-center justify-between gap-2 border-b border-border/40 py-1.5">
+                <span className="min-w-0 truncate text-[13px] text-muted-foreground">{m.label}</span>
+                <span className="shrink-0 text-[13px] font-semibold tabular-nums">
                   {fmtColumnValue(key, m.sum)}
                   {m.avg !== null && m.avg !== m.sum && (
                     <span className="ms-1 font-normal text-muted-foreground">(avg {fmtColumnValue(key, m.avg)})</span>
@@ -93,38 +112,8 @@ function EmployeeDetail({ row, profileHref }: { row: LaborRosterRow; profileHref
             ))}
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function FilterSelect({
-  value,
-  onChange,
-  allLabel,
-  options,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  allLabel: string;
-  options: { value: string; label: string }[];
-}) {
-  return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger size="sm" className="h-7! w-36 text-xs">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent position="popper">
-        <SelectItem value={ALL} className="text-xs">
-          {allLabel}
-        </SelectItem>
-        {options.map((o) => (
-          <SelectItem key={o.value} value={o.value} className="text-xs capitalize">
-            {o.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+      </ReportBlock>
+    </ReportDialog>
   );
 }
 
@@ -133,37 +122,24 @@ export function BrRoster({ data }: { data: LaborReport }) {
   const profileHref = useProfileHref();
   const roster = useMemo(() => data.combined.roster ?? [], [data.combined.roster]);
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState(ALL);
-  const [store, setStore] = useState(ALL);
+  const [status, setStatus] = useState<ActiveFilter>("active");
+  const [stores, setStores] = useState<string[]>([]);
   const [selected, setSelected] = useState<LaborRosterRow | null>(null);
 
-  const statusOptions = useMemo(
-    () => [...new Set(roster.map((r) => r.status))].sort().map((s) => ({ value: s, label: s })),
-    [roster],
-  );
-  const storeOptions = useMemo(
-    () =>
-      [...new Set(roster.map((r) => r.store))]
-        .map((s) => ({ value: s, label: storeName(s) }))
-        .sort((a, b) => compareText(a.label, b.label)),
-    [roster, storeName],
-  );
+  const rosterStores = useMemo(() => [...new Set(roster.map((r) => r.store))].sort(), [roster]);
   const hasPerformance = useMemo(() => roster.some((r) => metricAvg(r, "performance_score") !== null), [roster]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return roster.filter(
-      (r) =>
-        (!q || r.name.toLowerCase().includes(q)) &&
-        (status === ALL || r.status === status) &&
-        (store === ALL || r.store === store),
+    return inStores(roster, stores, (r) => r.store).filter(
+      (r) => (!q || r.name.toLowerCase().includes(q)) && matchesActive(r.status === ACTIVE, status),
     );
-  }, [roster, query, status, store]);
+  }, [roster, query, status, stores]);
 
   const columns = useMemo<PagedColumn<LaborRosterRow>[]>(() => {
     const base: PagedColumn<LaborRosterRow>[] = [
       { key: "name", header: "Employee", render: (r) => <span className="font-medium">{r.name}</span>, sortValue: (r) => r.name },
-      { key: "store", header: "Store", render: (r) => <StoreTag className="text-[11px]">{storeName(r.store)}</StoreTag>, sortValue: (r) => storeName(r.store) },
+      { key: "store", header: "Store", render: (r) => <StoreTag store={r.store} className="text-[11px]" />, sortValue: (r) => storeName(r.store) },
       { key: "position", header: "Position", render: (r) => <span className="text-muted-foreground">{r.position ?? DASH}</span>, sortValue: (r) => r.position },
       { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} />, sortValue: (r) => r.status },
       { key: "tenure", header: "Tenure", numeric: true, render: (r) => fmtTenure(r.tenure_days), sortValue: (r) => r.tenure_days },
@@ -203,7 +179,7 @@ export function BrRoster({ data }: { data: LaborReport }) {
     return [...base, ...performance, profile];
   }, [storeName, hasPerformance, profileHref]);
 
-  const filterKey = `${query}|${status}|${store}`;
+  const filterKey = `${query}|${status}|${stores.join(",")}`;
 
   return (
     <V1Card
@@ -220,14 +196,13 @@ export function BrRoster({ data }: { data: LaborReport }) {
       ) : (
         <div className="flex h-full flex-col gap-1.5">
           <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-            <FilterSelect value={status} onChange={setStatus} allLabel="All statuses" options={statusOptions} />
-            {storeOptions.length > 1 && (
-              <FilterSelect value={store} onChange={setStore} allLabel="All stores" options={storeOptions} />
-            )}
-            <div className="relative w-full max-w-56 sm:w-48">
+            <ActiveToggle value={status} onChange={setStatus} />
+            {rosterStores.length > 1 && <StoreChecklist value={stores} onChange={setStores} stores={rosterStores} />}
+            <div className="relative w-full max-w-56 sm:w-48" onClick={(e) => e.stopPropagation()}>
               <Search className="absolute start-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name…" className="h-7 ps-7 text-xs" />
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name…" className="h-8 ps-7 text-xs" />
             </div>
+            <span className="ms-auto text-[10px] text-muted-foreground">{filtered.length.toLocaleString()} shown</span>
           </div>
           {filtered.length === 0 ? (
             <p className="py-4 text-center text-[11px] text-muted-foreground">No employees match the current filters</p>
@@ -248,17 +223,7 @@ export function BrRoster({ data }: { data: LaborReport }) {
       )}
 
       {selected && (
-        <WbrDetailDialog
-          open={selected !== null}
-          onOpenChange={(o) => {
-            if (!o) setSelected(null);
-          }}
-          title={selected.name}
-          badgeText={storeName(selected.store)}
-          className="sm:max-w-3xl"
-        >
-          <EmployeeDetail row={selected} profileHref={profileHref(selected)} />
-        </WbrDetailDialog>
+        <EmployeeDetail row={selected} profileHref={profileHref(selected)} onClose={() => setSelected(null)} />
       )}
     </V1Card>
   );
