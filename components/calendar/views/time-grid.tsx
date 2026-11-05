@@ -19,7 +19,7 @@ import {
 } from "@/lib/calendar/layout";
 import type { CalendarEvent } from "@/lib/calendar/types";
 import { useCalendarClock } from "../calendar-clock";
-import { AvatarStack, EVENT_FOCUS, EventBar, EventDot, LaneCell, MoreButton } from "../event-parts";
+import { AvatarStack, EVENT_FOCUS, EventBar, EventDot, LaneCell, MoreButton, PrivateMark } from "../event-parts";
 import { usePeek } from "../event-peek";
 import { StoreLabel } from "../store-label";
 import { useCalendarFormat } from "../use-calendar-format";
@@ -164,6 +164,7 @@ function EventBlock({
           <span className="flex min-w-0 items-center gap-1.5">
             <EventDot category={ev.category} />
             <StoreLabel ev={ev} />
+            <PrivateMark ev={ev} />
             <span dir="auto" className="truncate text-start font-medium text-foreground">
               {title}
             </span>
@@ -206,6 +207,7 @@ function EventBlock({
             >
               {/* Several stores: lead with the store's badge so equal titles stay apart. */}
               <StoreLabel ev={ev} className="me-1.5 align-[1px]" />
+              <PrivateMark ev={ev} className="me-1 align-[-1px]" />
               {title}
             </span>
             {rich && height >= 84 && (

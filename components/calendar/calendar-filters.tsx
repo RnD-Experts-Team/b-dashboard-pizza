@@ -46,7 +46,16 @@ function useScrollEdges(ref: React.RefObject<HTMLElement | null>) {
  * search + Filter): edges fade only while there is more to see, the selected
  * tab scrolls into view, and ←/→ move focus between tabs.
  */
-export function CategoryTabs({ counts, total }: { counts: Record<CategoryKey, number>; total: number }) {
+export function CategoryTabs({
+  counts,
+  total,
+  hideCounts = false,
+}: {
+  counts: Record<CategoryKey, number>;
+  total: number;
+  /** The Year view counts by status, not by type: its tabs carry no numbers. */
+  hideCounts?: boolean;
+}) {
   const t = useTranslations("calendar");
   const rtl = useLocale() === "ar";
   const filters = useCalendarStore((s) => s.filters);
@@ -136,15 +145,17 @@ export function CategoryTabs({ counts, total }: { counts: Record<CategoryKey, nu
             <EventDot category={it.key} className={cn("transition-opacity duration-200", !it.active && "opacity-60")} />
           )}
           {it.label}
-          <span
-            className={cn(
-              "ms-0.5 min-w-4.5 rounded-full px-1 py-px text-center text-[10px] font-semibold tabular-nums transition-colors duration-200",
-              // Inactive counts only where the row has room for all of them.
-              it.active ? "bg-foreground text-background" : "hidden bg-muted text-muted-foreground 2xl:inline",
-            )}
-          >
-            {it.count}
-          </span>
+          {!hideCounts && (
+            <span
+              className={cn(
+                "ms-0.5 min-w-4.5 rounded-full px-1 py-px text-center text-[10px] font-semibold tabular-nums transition-colors duration-200",
+                // Inactive counts only where the row has room for all of them.
+                it.active ? "bg-foreground text-background" : "hidden bg-muted text-muted-foreground 2xl:inline",
+              )}
+            >
+              {it.count}
+            </span>
+          )}
         </button>
       ))}
     </div>

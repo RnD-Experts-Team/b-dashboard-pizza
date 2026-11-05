@@ -21,6 +21,7 @@ import {
   useCalendarMutations,
   useCalendarNow,
   useCalendarStores,
+  useCalendarYear,
 } from "@/lib/hooks/use-calendar-events";
 import { CalendarClockProvider } from "./calendar-clock";
 import { CategoryTabs, FilterPopover } from "./calendar-filters";
@@ -29,7 +30,7 @@ import { DeleteEventDialog } from "./delete-event-dialog";
 import { EventDialog, type EditorTarget } from "./event-dialog";
 import { FeedNotice, ManyStoresNote } from "./feed-notice";
 import { CalendarPeekProvider, usePeek, type PeekTarget } from "./event-peek";
-import { DayPeekCard, EventPeekCard, GroupPeekCard } from "./peek-cards";
+import { DayCountsPeekCard, DayPeekCard, EventPeekCard, GroupPeekCard } from "./peek-cards";
 import { ShowStoreProvider } from "./store-label";
 import { StorePicker } from "./store-picker";
 import { useCalendarFormat } from "./use-calendar-format";
@@ -193,11 +194,16 @@ function CalendarPageInner({ now }: { now: number }) {
 
   /* ── Data ── */
   const range = useMemo(() => viewRange(view, cursor), [view, cursor]);
-  const { events, loading, showSkeleton, error, retry, failed, truncated, notice } = useCalendarEvents(range);
+  const { events, loading, showSkeleton, error, retry, failed, truncated } = useCalendarEvents(range);
+  // The Year view reads daily counts (`group=day`) instead of events.
+  const isYear = view === "year";
+  const year = useCalendarYear(range, { enabled: isYear });
   const filters = useCalendarStore((s) => s.filters);
   // Several stores on screen: chips lead with their store name (store-label.tsx).
-  const storeCount = useCalendarStores().length;
+  const shownStores = useCalendarStores();
+  const storeCount = shownStores.length;
   const showStore = storeCount > 1;
+  const storeNames = useMemo(() => new Map(shownStores.map((s) => [s.code, s.name])), [shownStores]);
 
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
@@ -302,10 +308,16 @@ function CalendarPageInner({ now }: { now: number }) {
           <GroupPeekCard events={members} onOpenDay={go} onDone={close} remindersByTarget={remindersByTarget} />
         ) : null;
       }
+      if (target.type === "counts") {
+        const day = year.days.get(target.id);
+        return day ? (
+          <DayCountsPeekCard date={fromKey(target.id)} day={day} storeNames={storeNames} showStores={storeCount > 1} onOpenDay={go} />
+        ) : null;
+      }
       const list = grouped.get(target.id) ?? [];
       return list.length ? <DayPeekCard date={fromKey(target.id)} events={list} onOpenDay={go} /> : null;
     },
-    [index, grouped, openDay, remindersByTarget],
+    [index, grouped, openDay, remindersByTarget, year.days, storeNames, storeCount],
   );
 
   /* ── Keyboard: D W M Y · T · ← → · / ── */
@@ -351,9 +363,12 @@ function CalendarPageInner({ now }: { now: number }) {
   const initial =
     a === "fade" ? { opacity: 0, y: -4 } : a === "next" ? { opacity: 0, x: locale === "ar" ? -10 : 10 } : a === "prev" ? { opacity: 0, x: locale === "ar" ? 10 : -10 } : false;
 
+  // The Year view has its own request (daily counts), so its own error/skeleton/notes.
+  const viewError = isYear ? year.error : error;
+  const viewRetry = isYear ? year.retry : retry;
   let body: React.ReactNode;
-  if (error) body = <CalendarError onRetry={retry} />;
-  else if (showSkeleton) body = <CalendarSkeleton />;
+  if (viewError) body = <CalendarError onRetry={viewRetry} />;
+  else if (isYear ? year.showSkeleton : showSkeleton) body = <CalendarSkeleton />;
   else if (view === "month")
     body = compact ? (
       <CompactMonthView cursor={cursor} events={viewEvents} onSelectDay={selectDay} />
@@ -383,11 +398,11 @@ function CalendarPageInner({ now }: { now: number }) {
         scrollMemory={scrollMemory}
       />
     );
-  else body = <YearView cursor={cursor} events={viewEvents} onOpenDay={openDay} onOpenMonth={openMonth} />;
+  else body = <YearView cursor={cursor} events={viewEvents} counts={year.days} onOpenDay={openDay} onOpenMonth={openMonth} />;
 
-  // "Nothing scheduled" would be a lie when the feeds were skipped (the year view): the notice says why.
+  // The Year view draws counts, not events: an empty event list says nothing there.
   const emptyNote =
-    !loading && !error && !viewEvents.length && !notice
+    !loading && !error && !viewEvents.length && !isYear
       ? query
         ? t("search.noMatches", { q: search.trim() })
         : t("emptyRange")
@@ -412,7 +427,7 @@ function CalendarPageInner({ now }: { now: number }) {
             their underline stays on the divider. */}
         <div className="flex flex-col gap-3 border-b xl:flex-row xl:items-end xl:justify-between xl:gap-6">
           <div className="min-w-0">
-            <CategoryTabs counts={counts} total={viewAll.length} />
+            <CategoryTabs counts={counts} total={viewAll.length} hideCounts={isYear} />
           </div>
           <div className="order-first flex items-center justify-between gap-2 xl:order-none xl:shrink-0 xl:pb-2.5">
             {/* The label carries the width, so the clear button and "/" hint stay inside the field. */}
@@ -471,7 +486,14 @@ function CalendarPageInner({ now }: { now: number }) {
             onView={setView}
             onPick={(k) => moveTo(k, "keep")}
           />
-          {!error && <FeedNotice failed={failed} truncated={truncated} notice={notice} onRetry={retry} />}
+          {!viewError && (
+            <FeedNotice
+              failed={isYear ? year.failed : failed}
+              truncated={isYear ? year.truncated : truncated}
+              note={isYear ? t("year.note") : undefined}
+              onRetry={viewRetry}
+            />
+          )}
           {!error && isHeavyMonth(view, storeCount) && <ManyStoresNote count={storeCount} onWeek={() => setView("week")} />}
           <div className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
             <motion.div

@@ -678,7 +678,7 @@ function ReportCell({ cell, first }: { cell?: WeekCell; first?: boolean }) {
     case "missing":
       return na("bg-amber-500/15 !text-amber-700 !font-bold dark:!text-amber-400", t("neverCounted"));
     case "awaiting":
-      return na(undefined, t("awaiting"));
+      return na(undefined, t(cell.reason === "base" ? "awaitingBase" : "awaiting"));
     case "no-plan":
       if (cell.ok == null || cell.counted == null || cell.base == null) return na(undefined, t("noPlan"));
       return (

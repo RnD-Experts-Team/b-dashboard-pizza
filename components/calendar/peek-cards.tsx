@@ -12,9 +12,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Globe,
   History,
   Layers,
   ListChecks,
+  Lock,
   MapPin,
   Pencil,
   Trash2,
@@ -28,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { categoryOf } from "@/lib/calendar/categories";
 import { dayKey, fromKey, isDayKey, startOfDay } from "@/lib/calendar/dates";
 import { feedHref } from "@/lib/calendar/feed-links";
+import { COUNT_STATUSES, storesNeedingAttention, type DayCount } from "@/lib/calendar/day-counts";
 import { commonCategory, groupStats, needsAction } from "@/lib/calendar/grouping";
 import { isMultiDay, lastDay, spanDays } from "@/lib/calendar/layout";
 import { EVENT_STATUSES, type CalendarEvent, type EventStatus } from "@/lib/calendar/types";
@@ -155,7 +158,9 @@ export function EventPeekCard({
           )}
         </Row>
         {movedFrom && <Row icon={History}>{movedFrom}</Row>}
-        {ev.layer === "mine" ? (
+        {ev.scope === "private" ? (
+          <Row icon={Lock}>{t("feed.privateOnlyYou")}</Row>
+        ) : ev.layer === "mine" ? (
           <Row icon={User}>{t("feed.onlyYou")}</Row>
         ) : ev.companyWide ? (
           <Row icon={Building2}>{t("feed.companyWide")}</Row>
@@ -164,6 +169,8 @@ export function EventPeekCard({
             {ev.store.name} <span className="tabular-nums text-muted-foreground">{ev.store.code}</span>
           </Row>
         )}
+        {/* A public item is one copy per store: say it went to every store, not just this one. */}
+        {ev.scope === "public" && <Row icon={Globe}>{t("feed.public")}</Row>}
         {countsLine && (
           <Row icon={ListChecks}>
             <span className="tabular-nums">{countsLine}</span>
@@ -407,6 +414,79 @@ export function GroupPeekCard({
 
       <div className="-mx-1 -mb-1 mt-1 flex items-center border-t pt-2">
         <Button variant="ghost" size="sm" className="ms-auto h-7 gap-1 px-2 text-xs" onClick={() => onOpenDay(target)}>
+          {t("pop.openDay")}
+          <ArrowRight className="size-3 rtl:rotate-180" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** At most this many stores are named on a Year-view day; the rest are "+N". */
+const ATTENTION_NAMES = 8;
+
+/**
+ * A Year-view day's numbers (`group=day`): the tally by status, and — with
+ * several stores — which stores have something overdue or missed. The events
+ * themselves load when the day is opened.
+ */
+export function DayCountsPeekCard({
+  date,
+  day,
+  storeNames,
+  showStores,
+  onOpenDay,
+}: {
+  date: Date;
+  day: DayCount;
+  /** store number → name, for the attention list. */
+  storeNames: ReadonlyMap<string, string>;
+  showStores: boolean;
+  onOpenDay: (key: string) => void;
+}) {
+  const t = useTranslations("calendar");
+  const f = useCalendarFormat();
+  const attention = useMemo(() => (showStores ? storesNeedingAttention(day) : []), [day, showStores]);
+  const shown = attention.slice(0, ATTENTION_NAMES);
+  const rest = attention.length - shown.length;
+
+  return (
+    <div className="w-72 max-w-full space-y-2.5 p-3" aria-label={f.shortDate(date)}>
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="font-heading text-sm font-semibold">{f.shortDate(date)}</h3>
+        <span className="text-xs tabular-nums text-muted-foreground">{t("year.total", { n: day.total })}</span>
+      </div>
+
+      <p className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs tabular-nums">
+        {COUNT_STATUSES.filter((s) => day.byStatus[s]).map((s) => (
+          <span key={s} className={cn(needsAction(s) ? "font-medium text-destructive" : "text-muted-foreground")}>
+            {day.byStatus[s]} {t(`status.${s}`)}
+          </span>
+        ))}
+      </p>
+
+      {shown.length > 0 && (
+        <div className="space-y-1 border-t pt-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("year.needAttention")}</p>
+          <ul className="space-y-0.5">
+            {shown.map((s) => (
+              <li key={s.store} className="flex items-center justify-between gap-2 text-xs">
+                <span dir="auto" className="min-w-0 truncate text-start">
+                  {storeNames.get(s.store) ?? s.store}
+                </span>
+                <span className="inline-flex shrink-0 items-center gap-1 font-medium tabular-nums text-destructive">
+                  <TriangleAlert className="size-3" />
+                  {s.count}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {rest > 0 && <p className="text-xs text-muted-foreground">{t("year.moreStores", { n: rest })}</p>}
+        </div>
+      )}
+
+      <div className="-mx-1 -mb-1 flex items-center border-t pt-2">
+        <Button variant="ghost" size="sm" className="ms-auto h-7 gap-1 px-2 text-xs" onClick={() => onOpenDay(dayKey(date))}>
           {t("pop.openDay")}
           <ArrowRight className="size-3 rtl:rotate-180" />
         </Button>

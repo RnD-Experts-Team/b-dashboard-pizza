@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { BellRing, CalendarPlus, ListChecks, Loader2, type LucideIcon } from "lucide-react";
+import { BellRing, CalendarPlus, Globe, ListChecks, Loader2, Lock, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -15,7 +15,8 @@ import { TimePicker } from "@/components/ui/time-picker";
 import { cn } from "@/lib/utils";
 import { MINUTE, addDays, dayKey, fromKey, isDayKey } from "@/lib/calendar/dates";
 import { FEED_MAX_STORES } from "@/lib/calendar/feed-types";
-import { PRIORITIES, type CreateItemInput, type Priority } from "@/lib/calendar/toolbox-write";
+import { PRIORITIES, SCOPES, type CreateItemInput, type Priority, type Scope } from "@/lib/calendar/toolbox-write";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import { CalendarWriteError } from "@/lib/api/services/calendar-toolbox.service";
 import { useCalendarStoreOptions, useCalendarStores, useCalendarToolbox } from "@/lib/hooks/use-calendar-events";
 import { StepLabel } from "./step-label";
@@ -42,6 +43,8 @@ const CATEGORY_MAX = 40;
 interface FormState {
   kind: Kind;
   title: string;
+  /** Events and tasks: chosen stores (everyone), every store or only me (super admin). */
+  scope: Scope;
   stores: string[];
   /** "YYYY-MM-DD" */
   date: string;
@@ -79,6 +82,7 @@ function initialState(start: Date, allDay: boolean, stores: string[]): FormState
   return {
     kind: "event",
     title: "",
+    scope: "custom",
     stores,
     date: dayKey(start),
     allDay,
@@ -171,6 +175,9 @@ export function NewItemForm({
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((s) => ({ ...s, [k]: v }));
 
   const withStores = form.kind !== "reminder";
+  const isAdmin = useAuthStore((s) => s.isSuperAdmin());
+  /** Proof + approval apply to store tasks only. */
+  const hasTaskRules = form.kind === "task" && form.scope !== "private";
 
   /** The payload, or the reasons it can't be built yet. */
   const result = useMemo((): { input: CreateItemInput | null; landed: Date | null; errors: Errors } => {
@@ -198,8 +205,11 @@ export function NewItemForm({
       return { input, landed, errors: e };
     }
 
-    if (!form.stores.length) e.stores = t("errors.stores");
-    else if (form.stores.length > FEED_MAX_STORES) e.stores = t("errors.storesMax", { n: FEED_MAX_STORES });
+    // Only chosen stores need a pick; public goes to every store, private to none.
+    if (form.scope === "custom") {
+      if (!form.stores.length) e.stores = t("errors.stores");
+      else if (form.stores.length > FEED_MAX_STORES) e.stores = t("errors.storesMax", { n: FEED_MAX_STORES });
+    }
     if (!isDayKey(form.date)) e.date = t("errors.date");
 
     if (!e.date) {
@@ -214,6 +224,7 @@ export function NewItemForm({
 
     const shared = {
       title,
+      scope: form.scope,
       stores: form.stores,
       date: form.date,
       description: form.notes,
@@ -263,7 +274,18 @@ export function NewItemForm({
     } catch (err) {
       const e = err instanceof CalendarWriteError ? err : null;
       // Toolbox's own 422 text says what is wrong ("Unknown store: …"); the rest get a plain sentence.
-      setServerError(e?.kind === "invalid" && e.message ? e.message : t(`saveFailed.${e?.kind ?? "other"}`));
+      // A 403 on "all stores" / "only me" means the right to make those is missing.
+      const kind = e?.kind === "forbidden" && form.scope !== "custom" ? "forbiddenScope" : (e?.kind ?? "other");
+      // On a 403 also show Toolbox's own words (the service falls back to "Not allowed." when it sent none),
+      // so the exact missing permission is visible instead of only our summary.
+      const said = e?.kind === "forbidden" && e.message && e.message !== "Not allowed." ? e.message : null;
+      setServerError(
+        e?.kind === "invalid" && e.message
+          ? e.message
+          : said
+            ? `${t(`saveFailed.${kind}`)} ${t("saveFailed.serverSaid", { message: said })}`
+            : t(`saveFailed.${kind}`),
+      );
       setSaving(false);
     }
   };
@@ -328,7 +350,24 @@ export function NewItemForm({
             {fieldError(errors.title)}
           </div>
 
-          {withStores && (
+          {/* "All stores" and "Only me" exist for super admins only (Toolbox answers 403 to anyone else). */}
+          {withStores && isAdmin && (
+            <Segmented
+              label={t("fields.scope")}
+              value={form.scope}
+              items={SCOPES.map((s) => ({ value: s, label: t(`scope.${s}`) }))}
+              onChange={(v) => set("scope", v)}
+            />
+          )}
+
+          {withStores && form.scope !== "custom" && (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              {form.scope === "private" ? <Lock className="size-3.5 shrink-0" /> : <Globe className="size-3.5 shrink-0" />}
+              {t(`scopeHint.${form.scope}`)}
+            </p>
+          )}
+
+          {withStores && form.scope === "custom" && (
             <div className="space-y-1.5">
               <Label htmlFor={`${ids}-stores`}>{t("fields.stores")}</Label>
               {storeLine != null ? (
@@ -447,8 +486,8 @@ export function NewItemForm({
           )}
         </section>
 
-        {/* Step 3: how (tasks), details (events, tasks) */}
-        {form.kind === "task" && (
+        {/* Step 3: how (store tasks — a private task is only done or not), details (events, tasks) */}
+        {hasTaskRules && (
           <section className="space-y-4">
             <StepLabel n={3} label={t("steps.task")} />
             <Segmented
@@ -472,7 +511,7 @@ export function NewItemForm({
 
         {form.kind !== "reminder" && (
           <section className="space-y-3">
-            <StepLabel n={form.kind === "task" ? 4 : 3} label={tc("editor.steps.details")} optional={tc("editor.optional")} />
+            <StepLabel n={hasTaskRules ? 4 : 3} label={tc("editor.steps.details")} optional={tc("editor.optional")} />
             <Textarea
               aria-label={tc("editor.fields.notes")}
               dir="auto"

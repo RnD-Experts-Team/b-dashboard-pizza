@@ -97,6 +97,13 @@ export interface CalendarEvent {
    * never stored and never reaches the feeds or the editor.
    */
   members?: readonly CalendarEvent[];
+  /** Toolbox events and tasks: who they are for (`extra.scope` — custom, public or private). */
+  scope?: "custom" | "public" | "private";
+  /**
+   * The feed's `people` of kind `user`, with their ids (`people` above keeps only
+   * the names). Toolbox lists the item's creator here; `canCancel` reads it.
+   */
+  users?: readonly { id: string; name: string }[];
   notes?: string;
   meta?: { age?: number; years?: number; role?: string };
   /**

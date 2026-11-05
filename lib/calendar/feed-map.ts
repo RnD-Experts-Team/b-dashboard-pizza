@@ -1,5 +1,6 @@
 import { addDays, fromKey, isDayKey, MINUTE } from "./dates";
 import type { FeedEvent, FeedSource } from "./feed-types";
+import { isScope } from "./toolbox-write";
 import { EVENT_STATUSES, type CalendarEvent, type CategoryKey, type EventStatus } from "./types";
 
 /**
@@ -107,6 +108,11 @@ export function toCalendarEvent(ev: FeedEvent, origin: FeedSource, ctx: FeedMapC
   // of the generic category, like a user event's `typeLabel`.
   const kind = ev.type === "calendar_event" && typeof extra?.category === "string" ? extra.category : null;
 
+  // People that are dashboard users (not employees/technicians), keeping their ids.
+  const users = (ev.people ?? []).flatMap((p) =>
+    p?.kind === "user" && p.id != null && typeof p.name === "string" ? [{ id: String(p.id), name: p.name }] : [],
+  );
+
   return {
     id: ev.id,
     category,
@@ -124,6 +130,8 @@ export function toCalendarEvent(ev: FeedEvent, origin: FeedSource, ctx: FeedMapC
     // A summary stops being routine the moment it carries an overdue/missed item.
     routine: ev.type === "daily_sales" || status === "done" || (SUMMARY_TYPES.has(ev.type) && !needsAction) || undefined,
     typeLabel: kind ? humanize(kind) : undefined,
+    scope: isScope(extra?.scope) ? extra.scope : undefined,
+    users: users.length ? users : undefined,
     source: "system",
     origin,
     feedType: ev.type,

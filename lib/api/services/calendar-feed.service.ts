@@ -2,7 +2,9 @@ import axios, { isAxiosError } from "axios";
 import { chunkStores } from "@/lib/calendar/feed-plan";
 import {
   FEED_SOURCES,
+  YEAR_SOURCES,
   isFeedSource,
+  type FeedDay,
   type FeedEvent,
   type FeedResponse,
   type FeedSource,
@@ -33,6 +35,11 @@ import {
 
 const TIMEOUT_MS = 20_000;
 const CACHE_TTL_MS = 60_000;
+/**
+ * Daily counts (the Year view) are kept longer: past days don't change, and the
+ * guide asks to re-ask only when the stores or the year change (YEAR.md §5).
+ */
+const GROUP_CACHE_TTL_MS = 15 * 60_000;
 
 /** `NEXT_PUBLIC_CALENDAR_SOURCES=inventory,maintenance` → only those feeds. Default: all 8. */
 export const ENABLED_FEED_SOURCES: readonly FeedSource[] = (() => {
@@ -50,10 +57,12 @@ export interface FeedQuery {
   /** Inclusive `YYYY-MM-DD` bounds. */
   from: string;
   to: string;
+  /** "day": counts per store and day instead of events (up to 371 days). */
+  group?: "day";
 }
 
 type Outcome =
-  | { state: "ok"; events: FeedEvent[]; truncated: boolean }
+  | { state: "ok"; events: FeedEvent[]; days: FeedDay[]; truncated: boolean }
   | { state: "forbidden" }
   | { state: "unauthorized" }
   /** `unknownStores`: a 422 naming store numbers this source doesn't know. */
@@ -113,13 +122,18 @@ function unknownStoresOf(body: unknown): string[] {
 async function requestFeed(source: FeedSource, stores: readonly string[], q: FeedQuery, token: string): Promise<Outcome> {
   try {
     const { data } = await axios.get<FeedResponse>(`/api/calendar/feed/${source}`, {
-      params: { stores: stores.join(","), from: q.from, to: q.to },
+      params: { stores: stores.join(","), from: q.from, to: q.to, ...(q.group ? { group: q.group } : {}) },
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       timeout: TIMEOUT_MS,
     });
     // A 200 that isn't the contract (an HTML error page, a proxy banner) is a failure.
-    if (!data || !Array.isArray(data.events)) return { state: "failed" };
-    return { state: "ok", events: data.events, truncated: !!data.meta?.truncated };
+    if (!data) return { state: "failed" };
+    if (q.group) {
+      if (!Array.isArray(data.days)) return { state: "failed" };
+      return { state: "ok", events: [], days: data.days, truncated: !!data.meta?.truncated };
+    }
+    if (!Array.isArray(data.events)) return { state: "failed" };
+    return { state: "ok", events: data.events, days: [], truncated: !!data.meta?.truncated };
   } catch (err) {
     const status = isAxiosError(err) ? (err.response?.status ?? null) : null;
     if (status === 403) return { state: "forbidden" };
@@ -157,7 +171,12 @@ async function loadSource(source: FeedSource, q: FeedQuery, token: string): Prom
     if (parts.some((p) => p.state === state)) return { state };
   }
   const ok = parts as Extract<Outcome, { state: "ok" }>[];
-  return { state: "ok", events: ok.flatMap((p) => p.events), truncated: ok.some((p) => p.truncated) };
+  return {
+    state: "ok",
+    events: ok.flatMap((p) => p.events),
+    days: ok.flatMap((p) => p.days),
+    truncated: ok.some((p) => p.truncated),
+  };
 }
 
 /* ── Cache ── */
@@ -167,7 +186,10 @@ interface CacheEntry {
   stores: string;
   from: string;
   to: string;
+  /** "" for events, "day" for daily counts: never served for each other. */
+  group: string;
   at: number;
+  ttl: number;
   promise: Promise<Outcome>;
   /** Set once the request settled with a keepable answer. */
   settled?: Outcome;
@@ -194,14 +216,16 @@ function cached(source: FeedSource, stores: string, q: FeedQuery, reuse: boolean
   if (!reuse) {
     const now = Date.now();
     for (let i = cache.length - 1; i >= 0; i--) {
-      if (now - cache[i].at > CACHE_TTL_MS) cache.splice(i, 1);
+      if (now - cache[i].at > cache[i].ttl) cache.splice(i, 1);
     }
   }
+  const group = q.group ?? "";
   // In flight for exactly this request, or a settled answer that covers it.
   const hit = cache.find(
     (e) =>
       e.source === source &&
       e.stores === stores &&
+      e.group === group &&
       ((e.from === q.from && e.to === q.to) || (e.settled && e.from <= q.from && e.to >= q.to)),
   );
   return hit ? hit.promise : null;
@@ -213,7 +237,16 @@ function load(source: FeedSource, q: FeedQuery, token: string, force: boolean, r
     const hit = cached(source, stores, q, reuse);
     if (hit) return hit;
   }
-  const entry: CacheEntry = { source, stores, from: q.from, to: q.to, at: Date.now(), promise: loadSource(source, q, token) };
+  const entry: CacheEntry = {
+    source,
+    stores,
+    from: q.from,
+    to: q.to,
+    group: q.group ?? "",
+    at: Date.now(),
+    ttl: q.group ? GROUP_CACHE_TTL_MS : CACHE_TTL_MS,
+    promise: loadSource(source, q, token),
+  };
   cache.push(entry);
   entry.promise.then((o) => {
     if (keepable(o)) {
@@ -249,40 +282,50 @@ function untilAborted<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> 
 /* ── Public ── */
 
 /**
- * Every enabled feed for `q`, merged. Events are de-duplicated by `id` (a
- * company-wide announcement comes back once, not once per chunk).
- *
  * `force` skips the cache (the user pressed Retry). `reuse` serves every cached
  * answer however old: after a write only the written source was dropped from the
  * cache, so only it is asked again (FRONTEND_CALENDAR_REQUESTS.md §4).
  */
-export async function fetchFeeds(
-  q: FeedQuery,
-  opts: { force?: boolean; reuse?: boolean; signal?: AbortSignal } = {},
-): Promise<FeedsResult> {
-  const empty: FeedsResult = { events: [], loaded: [], failed: [], truncated: false };
-  if (!q.stores.length || !ENABLED_FEED_SOURCES.length) return empty;
+type FetchOpts = { force?: boolean; reuse?: boolean; signal?: AbortSignal };
 
+/**
+ * Asks `sources` in parallel and sorts their answers into ok / failed. Null when
+ * there is nothing to ask, no token, or every source said 401 (the session then
+ * ends — see the header).
+ */
+async function askAll(
+  sources: readonly FeedSource[],
+  q: FeedQuery,
+  opts: FetchOpts,
+): Promise<{ source: FeedSource; outcome: Outcome }[] | null> {
+  if (!q.stores.length || !sources.length) return null;
   const token = getToken();
   if (!token) {
     endSession();
-    return empty;
+    return null;
   }
-
   const outcomes = await untilAborted(
-    Promise.all(ENABLED_FEED_SOURCES.map((s) => load(s, q, token, !!opts.force, !!opts.reuse))),
+    Promise.all(sources.map((s) => load(s, q, token, !!opts.force, !!opts.reuse))),
     opts.signal,
   );
-
   if (outcomes.every((o) => o.state === "unauthorized")) {
     endSession();
-    return empty;
+    return null;
   }
+  return outcomes.map((outcome, i) => ({ source: sources[i], outcome }));
+}
 
-  const result: FeedsResult = { ...empty, events: [], loaded: [], failed: [] };
+/**
+ * Every enabled feed for `q`, merged. Events are de-duplicated by `id` (a
+ * company-wide announcement comes back once, not once per chunk).
+ */
+export async function fetchFeeds(q: FeedQuery, opts: FetchOpts = {}): Promise<FeedsResult> {
+  const result: FeedsResult = { events: [], loaded: [], failed: [], truncated: false };
+  const answers = await askAll(ENABLED_FEED_SOURCES, { ...q, group: undefined }, opts);
+  if (!answers) return result;
+
   const seen = new Set<string>();
-  outcomes.forEach((o, i) => {
-    const source = ENABLED_FEED_SOURCES[i];
+  for (const { source, outcome: o } of answers) {
     if (o.state === "ok") {
       result.loaded.push(source);
       if (o.truncated) result.truncated = true;
@@ -294,6 +337,37 @@ export async function fetchFeeds(
     } else if (o.state === "failed" || o.state === "unauthorized") {
       result.failed.push(source);
     }
-  });
+  }
+  return result;
+}
+
+export interface DayCountsResult {
+  days: FeedDay[];
+  loaded: FeedSource[];
+  failed: FeedSource[];
+  truncated: boolean;
+}
+
+/**
+ * Daily counts for the Year view (`group=day`, FRONTEND_CALENDAR_YEAR.md): ONE
+ * request per counting source for the whole year and every store — never split
+ * into months. Hiring and Notifications are not asked (nothing they send is
+ * counted). Same per-source rules as `fetchFeeds`; answers are cached longer.
+ */
+export async function fetchDayCounts(q: FeedQuery, opts: FetchOpts = {}): Promise<DayCountsResult> {
+  const result: DayCountsResult = { days: [], loaded: [], failed: [], truncated: false };
+  const sources = ENABLED_FEED_SOURCES.filter((s) => YEAR_SOURCES.includes(s));
+  const answers = await askAll(sources, { ...q, group: "day" }, opts);
+  if (!answers) return result;
+
+  for (const { source, outcome: o } of answers) {
+    if (o.state === "ok") {
+      result.loaded.push(source);
+      if (o.truncated) result.truncated = true;
+      result.days.push(...o.days);
+    } else if (o.state === "failed" || o.state === "unauthorized") {
+      result.failed.push(source);
+    }
+  }
   return result;
 }

@@ -37,8 +37,11 @@ import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
  *   scrolls out of view
  */
 
-/** "group": a roll-up or "+N" stack; its id carries the members' ids (`groupPeekId`). */
-export type PeekTarget = { type: "event" | "day" | "group"; id: string };
+/**
+ * "group": a roll-up or "+N" stack; its id carries the members' ids (`groupPeekId`).
+ * "counts": a Year-view day's numbers; its id is the day ("YYYY-MM-DD").
+ */
+export type PeekTarget = { type: "event" | "day" | "group" | "counts"; id: string };
 export type PeekSide = "block" | "inline";
 
 interface PeekOptions {

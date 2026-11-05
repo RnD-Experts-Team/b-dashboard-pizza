@@ -2,7 +2,7 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { Ban, CalendarX2, Check, ChevronLeft, ChevronRight, CircleDashed, TriangleAlert, X } from "lucide-react";
+import { Ban, CalendarX2, Check, ChevronLeft, ChevronRight, CircleDashed, Lock, TriangleAlert, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { categoryOf } from "@/lib/calendar/categories";
@@ -72,6 +72,21 @@ export function StatusBadge({ status }: { status?: EventStatus }) {
       {entry.icon}
       {t(status)}
     </Badge>
+  );
+}
+
+/**
+ * A lock before the title of a private event or task: only its creator sees it
+ * (guide §8.1). Neutral, like everything but overdue/missed.
+ */
+export function PrivateMark({ ev, className }: { ev: CalendarEvent; className?: string }) {
+  const t = useTranslations("calendar.feed");
+  if (ev.scope !== "private") return null;
+  return (
+    <span title={t("private")} className={cn("inline-flex shrink-0 text-muted-foreground", className)}>
+      <Lock aria-hidden className="size-3" />
+      <span className="sr-only">{t("private")}</span>
+    </span>
   );
 }
 
@@ -179,6 +194,7 @@ export function EventPill({ ev }: { ev: CalendarEvent }) {
     >
       <EventDot category={ev.category} />
       <StoreLabel ev={ev} />
+      <PrivateMark ev={ev} />
       <span dir="auto" className={cn("min-w-0 flex-1 truncate text-start font-medium", struck(ev))}>
         {f.title(ev)}
       </span>
@@ -218,6 +234,7 @@ export function EventBar({ item, day }: { item: LaneItem; day?: Date }) {
         <EventDot category={ev.category} />
       )}
       <StoreLabel ev={ev} />
+      <PrivateMark ev={ev} />
       <span dir="auto" className={cn("min-w-0 truncate text-start", struck(ev))}>
         {f.title(ev)}
       </span>
@@ -242,7 +259,7 @@ function GroupBar({ item }: { item: LaneItem }) {
   const { ev, before, after } = item;
   const members = ev.members ?? [];
   const { stores, action } = groupStats(members);
-  const label = ev.typeLabel ?? t(`categories.${ev.category}`);
+  const label = ev.title ?? ev.typeLabel ?? t(`categories.${ev.category}`);
   const radius = before && after ? "" : before ? "rounded-e-sm" : after ? "rounded-s-sm" : "rounded-sm";
   return (
     <button
@@ -353,6 +370,7 @@ export function AgendaRow({
       <span className="min-w-0 border-s ps-3">
         <span className="flex min-w-0 items-center gap-2">
           <EventDot category={ev.category} />
+          <PrivateMark ev={ev} />
           <span dir="auto" className={cn("truncate text-start text-sm font-medium leading-snug", struck(ev))}>
             {f.title(ev)}
           </span>

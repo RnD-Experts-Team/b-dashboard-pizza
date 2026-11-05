@@ -1,5 +1,11 @@
 import axios from "axios";
-import { toCreatePayload, type CreateItemInput, type ReminderAction, type TaskAction } from "@/lib/calendar/toolbox-write";
+import {
+  isPrivateTaskAction,
+  toCreatePayload,
+  type CreateItemInput,
+  type ReminderAction,
+  type TaskAction,
+} from "@/lib/calendar/toolbox-write";
 import { invalidateFeedSource } from "./calendar-feed.service";
 
 /**
@@ -86,14 +92,23 @@ export const calendarToolboxService = {
     return post("/events", toCreatePayload(input));
   },
 
-  /** Creator only. */
-  cancelEvent(id: number): Promise<void> {
-    return post(`/events/${id}/cancel`, {});
+  /**
+   * Creator only. Without `store` the whole item is cancelled in every store it was
+   * sent to (guide §8.2). With `store` (`?stores=`, the same query the task actions
+   * use for "the ONE store") only that store's copy should be — NOT in the guide:
+   * if the backend ignores it, the item is cancelled everywhere, as without it.
+   */
+  cancelEvent(id: number, store?: string): Promise<void> {
+    return post(`/events/${id}/cancel`, {}, store ? { stores: store } : undefined);
   },
 
-  /** `store` is the ONE store the task is worked in. `note` is required when the task asks for proof; `reason` when returning. */
+  /**
+   * `store` is the ONE store the task is worked in. `note` is required when the
+   * task asks for proof; `reason` when returning. A private task's `done` /
+   * `reopen` go without a store (guide §8.3.1).
+   */
   taskAction(id: number, action: TaskAction, store: string, body: { note?: string; reason?: string } = {}): Promise<void> {
-    return post(`/tasks/${id}/${action}`, body, { stores: store });
+    return post(`/tasks/${id}/${action}`, body, isPrivateTaskAction(action) ? undefined : { stores: store });
   },
 
   reminderAction(id: number, action: ReminderAction, body: { minutes?: number } = {}): Promise<void> {
