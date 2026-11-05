@@ -27,7 +27,12 @@ type CanAccess = (params: CanAccessParams) => boolean;
 /** Every dataset of the catalog, tagged with its service, in catalog order. */
 export function flattenCatalog(catalog: ReportCatalog | null): CatalogDatasetRef[] {
   if (!catalog) return [];
-  return catalog.services.flatMap((s) => s.datasets.map((d) => ({ ...d, service: s.service })));
+  return catalog.services.flatMap((s) => (s.datasets ?? []).map((d) => ({ ...d, service: s.service })));
+}
+
+/** Services Data could not reach (no answer, an error status, another contract version). */
+export function unavailableServices(catalog: ReportCatalog | null): string[] {
+  return (catalog?.services ?? []).filter((s) => s.error).map((s) => s.service);
 }
 
 export function catalogIndex(datasets: CatalogDatasetRef[]): Map<string, CatalogDatasetRef> {

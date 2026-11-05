@@ -57,9 +57,11 @@ interface CatalogDataset {
 interface CatalogService {
   /** pizzasys auth-rule service name ("Data", "Maintenance", …). */
   service: string;
-  contract_version: number;
+  contract_version?: number;
   contract_sha1?: string;
-  datasets: CatalogDataset[];
+  /** Absent when the service did not answer: then `error` says why. */
+  datasets?: CatalogDataset[];
+  error?: string;
 }
 
 export interface ReportCatalog {

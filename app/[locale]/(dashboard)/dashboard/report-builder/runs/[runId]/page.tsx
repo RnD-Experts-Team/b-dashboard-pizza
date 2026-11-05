@@ -140,7 +140,11 @@ function RunScreen() {
             <Fact label={t("runs.period")} value={t("runs.periodRange", { from: date(run.period_from), to: date(run.period_to) })} />
           )}
           {run.row_count != null && <Fact label={t("runs.rows")} value={formatCell(run.row_count, { type: "integer" }, locale, NO_LABELS)} />}
-          {(run.started_at || run.created_at) && <Fact label={t("runs.started")} value={when(run.started_at ?? run.created_at)} />}
+          {run.started_at ? (
+            <Fact label={t("runs.started")} value={when(run.started_at)} />
+          ) : (
+            run.created_at && <Fact label={t("runs.requested")} value={when(run.created_at)} />
+          )}
           {run.finished_at && <Fact label={t("runs.finished")} value={when(run.finished_at)} />}
           {run.expires_at && <Fact label={t("runs.expires")} value={when(run.expires_at)} />}
         </CardContent>

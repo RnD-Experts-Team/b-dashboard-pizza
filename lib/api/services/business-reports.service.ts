@@ -31,9 +31,6 @@ const CLIENT_TIMEOUT_MS = CLIENT_TIMEOUT_SECONDS * MS_PER_SECOND;
 const STORE_SCORE_BATCH = 25;
 const STORE_SCORE_PARALLEL = 4;
 
-/** Operations takes at most this many stores per skills-overview call, so bigger lists are split and merged. */
-const SKILLS_STORES_PER_CALL = 100;
-
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
   const raw = localStorage.getItem("auth-token");
@@ -154,17 +151,8 @@ export const businessReportsService = {
     return maintenanceTicketsService.getAnalyticsSummary({ stores: params.stores, ...range }, signal);
   },
 
-  /** Skills and their coverage by employees (Operations), split into calls of 100 stores and merged. */
-  async getSkills(params: BusinessReportsParams, signal?: AbortSignal): Promise<StoreSkillsOverview> {
-    const parts = await Promise.all(
-      chunk(params.stores, SKILLS_STORES_PER_CALL).map((stores) => schedulingService.getSkillsOverview(stores, signal)),
-    );
-    // An employee of stores in two calls appears in both: keep one, with every store.
-    const employees = new Map<string, StoreSkillsOverview["employees"][number]>();
-    parts.flatMap((p) => p.employees).forEach((e) => {
-      const seen = employees.get(e.id);
-      employees.set(e.id, seen ? { ...seen, store_numbers: [...new Set([...seen.store_numbers, ...e.store_numbers])] } : e);
-    });
-    return { skills: parts[0]?.skills ?? [], employees: [...employees.values()] };
+  /** Skills and their coverage by employees (Operations) for every loaded store, in one call. */
+  getSkills(params: BusinessReportsParams, signal?: AbortSignal): Promise<StoreSkillsOverview> {
+    return schedulingService.getSkillsOverview(params.stores, signal);
   },
 };

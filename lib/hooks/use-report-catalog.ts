@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { reportBuilderService } from "@/lib/api/services/report-builder.service";
-import { catalogIndex, flattenCatalog } from "@/lib/report-builder/access";
+import { catalogIndex, flattenCatalog, unavailableServices } from "@/lib/report-builder/access";
 import { isCancelled, readReportError, type ReportError } from "@/lib/report-builder/errors";
 import type { CatalogDatasetRef, ReportCatalog } from "@/types/report-builder.types";
 
@@ -20,6 +20,8 @@ interface UseReportCatalogResult {
   datasets: CatalogDatasetRef[];
   /** By dataset key. */
   index: Map<string, CatalogDatasetRef>;
+  /** Services Data could not reach: their datasets are missing from `datasets`. */
+  unavailable: string[];
   isLoading: boolean;
   error: ReportError | null;
   reload: () => void;
@@ -64,6 +66,7 @@ export function useReportCatalog(): UseReportCatalogResult {
 
   const datasets = useMemo(() => flattenCatalog(catalog), [catalog]);
   const index = useMemo(() => catalogIndex(datasets), [datasets]);
+  const unavailable = useMemo(() => unavailableServices(catalog), [catalog]);
 
-  return { catalog, datasets, index, isLoading, error, reload };
+  return { catalog, datasets, index, unavailable, isLoading, error, reload };
 }

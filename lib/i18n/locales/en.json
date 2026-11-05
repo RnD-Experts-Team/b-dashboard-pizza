@@ -7204,7 +7204,6 @@
       "noStores": "Pick at least one store to see its report.",
       "loading": "Loading the report",
       "nothingInRange": "Nothing in this range.",
-      "rangeTooLong": "Pick a range of at most {days} days.",
       "name": "Name",
       "linesCount": "{count, plural, one {# payment line} other {# payment lines}}",
       "nothingBefore": "Nothing spent in the period before",
@@ -7628,6 +7627,7 @@
       "periodRange": "{from} – {to}",
       "rows": "Rows",
       "started": "Started",
+      "requested": "Requested",
       "finished": "Finished",
       "expires": "Files kept until",
       "open": "Open",
@@ -7701,6 +7701,8 @@
       "keys": "Keys: {keys}",
       "snapshot": "Current state only",
       "missing": "This dataset is no longer offered.",
+      "unavailable": "Not reachable right now: {services}. Their datasets are missing until they answer.",
+      "retry": "Retry",
       "remove": "Remove dataset"
     },
     "grain": {
