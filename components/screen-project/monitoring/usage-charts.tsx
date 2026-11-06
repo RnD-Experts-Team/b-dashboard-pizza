@@ -166,6 +166,55 @@ export function HoursHeatmap({ present, away }: { present: number[][]; away: num
   );
 }
 
+/** Height of one screen's pair of bars, and the room for the legend and axis around them. */
+const SCREEN_ROW_PX = 34;
+const SCREEN_CHART_CHROME_PX = 90;
+const PERCENT_MAX = 100;
+const BAR_RADIUS_PX = 3;
+const LEGEND_MARKER_PX = 6;
+
+/**
+ * Present % and talking % per screen, side by side, highest presence first. The shares
+ * are worked out by the caller (of open hours or of connected time); every screen is drawn.
+ */
+export function ScreenSharesChart({ rows }: { rows: { label: string; present: number; talking: number }[] }) {
+  const t = useTranslations("screenMonitoring");
+  const sorted = useMemo(() => [...rows].sort((a, b) => b.present - a.present), [rows]);
+
+  const options: ApexOptions = useMemo(
+    () => ({
+      chart: { type: "bar", toolbar: { show: false }, fontFamily: "inherit", animations: { enabled: false } },
+      colors: [USAGE_COLORS.good, USAGE_COLORS.info],
+      plotOptions: { bar: { horizontal: true, barHeight: "70%", borderRadius: BAR_RADIUS_PX, borderRadiusApplication: "end" } },
+      dataLabels: { enabled: false },
+      xaxis: {
+        categories: sorted.map((r) => r.label),
+        min: 0,
+        max: Math.max(PERCENT_MAX, ...sorted.map((r) => Math.ceil(r.present))),
+        labels: { formatter: (v: string) => `${Math.round(Number(v))}%` },
+      },
+      grid: { strokeDashArray: 0, yaxis: { lines: { show: false } } },
+      legend: { position: "top", horizontalAlign: "left", fontSize: "12px", markers: { size: LEGEND_MARKER_PX } },
+      tooltip: { shared: true, intersect: false, y: { formatter: (v: number) => `${Math.round(v ?? 0)}%` } },
+    }),
+    [sorted],
+  );
+  const series = useMemo(
+    () => [
+      { name: t("legend.present"), data: sorted.map((r) => r.present) },
+      { name: t("legend.talking"), data: sorted.map((r) => r.talking) },
+    ],
+    [sorted, t],
+  );
+
+  return (
+    <figure className={CHART_INK}>
+      <ReactApexChart type="bar" height={SCREEN_CHART_CHROME_PX + sorted.length * SCREEN_ROW_PX} series={series} options={options} />
+      <figcaption className="sr-only">{t("charts.screenSharesCaption")}</figcaption>
+    </figure>
+  );
+}
+
 export interface BreakdownSlice {
   label: string;
   seconds: number;

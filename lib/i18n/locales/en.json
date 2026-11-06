@@ -2044,6 +2044,9 @@
       "managersHint": "Every number per manager. Click a row for the full picture and any day minute by minute.",
       "topScreens": "Most watched screens",
       "topScreensHint": "Hours each screen spent in the big main tile.",
+      "screenShares": "Presence and talking by screen",
+      "screenSharesHintOpen": "Present and talking while each screen was in the main tile, as a share of its store's open hours.",
+      "screenSharesHintConnected": "Present and talking while each screen was in the main tile, as a share of that connected time.",
       "stores": "By store",
       "screens": "Screens",
       "screensHint": "{watched} of {total} screens were in the main tile at least once.",
@@ -2085,7 +2088,10 @@
       "talkingOfTarget": "Talking % of {target}",
       "openHoursSoFar": "Open hours so far",
       "presentOpenShare": "Present % of open",
-      "talkingOpenShare": "Talking % of open"
+      "talkingOpenShare": "Talking % of open",
+      "presentConnectedShare": "Present % of connected",
+      "talkingConnectedShare": "Talking % of connected",
+      "connectedInMain": "Connected (main tile)"
     },
     "legend": {
       "present": "Present",
@@ -2104,7 +2110,8 @@
       "dailyCaption": "Hours present, away and talking per day.",
       "hourOfDay": "Hour of day",
       "heatmapMode": "Show present or away",
-      "heatmapCaption": "Minutes per weekday and hour."
+      "heatmapCaption": "Minutes per weekday and hour.",
+      "screenSharesCaption": "Present and talking share per screen."
     },
     "days": {
       "mon": "Mon",

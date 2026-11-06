@@ -2043,6 +2043,9 @@
       "managersHint": "كل الأرقام لكل مدير. اضغط على صف لرؤية الصورة الكاملة وأي يوم دقيقة بدقيقة.",
       "topScreens": "الشاشات الأكثر مشاهدة",
       "topScreensHint": "الساعات التي قضتها كل شاشة في المربع الرئيسي الكبير.",
+      "screenShares": "الحضور والتحدث حسب الشاشة",
+      "screenSharesHintOpen": "الحضور والتحدث أثناء وجود كل شاشة في المربع الرئيسي، كنسبة من ساعات عمل متجرها.",
+      "screenSharesHintConnected": "الحضور والتحدث أثناء وجود كل شاشة في المربع الرئيسي، كنسبة من وقت الاتصال ذلك.",
       "stores": "حسب المتجر",
       "screens": "الشاشات",
       "screensHint": "{watched} من {total} شاشات كانت في المربع الرئيسي مرة واحدة على الأقل.",
@@ -2084,7 +2087,10 @@
       "talkingOfTarget": "يتحدث % من هدف {target}",
       "openHoursSoFar": "ساعات العمل حتى الآن",
       "presentOpenShare": "حاضر % من ساعات العمل",
-      "talkingOpenShare": "يتحدث % من ساعات العمل"
+      "talkingOpenShare": "يتحدث % من ساعات العمل",
+      "presentConnectedShare": "حاضر % من وقت الاتصال",
+      "talkingConnectedShare": "يتحدث % من وقت الاتصال",
+      "connectedInMain": "متصل (المربع الرئيسي)"
     },
     "legend": {
       "present": "حاضر",
@@ -2103,7 +2109,8 @@
       "dailyCaption": "ساعات الحضور والغياب والتحدث لكل يوم.",
       "hourOfDay": "ساعة اليوم",
       "heatmapMode": "عرض الحضور أو الغياب",
-      "heatmapCaption": "الدقائق لكل يوم وساعة."
+      "heatmapCaption": "الدقائق لكل يوم وساعة.",
+      "screenSharesCaption": "نسبة الحضور والتحدث لكل شاشة."
     },
     "days": {
       "mon": "الإثنين",

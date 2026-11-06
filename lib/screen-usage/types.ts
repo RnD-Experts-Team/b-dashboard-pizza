@@ -72,6 +72,10 @@ export interface UsageScreenRow {
   mic: number;
   camera: number;
   managers: number;
+  /** Managers' time while this screen was in their main tile: connected, a face on camera, talking. */
+  connected: number;
+  present: number;
+  talking: number;
 }
 
 export interface UsageDayRow {
