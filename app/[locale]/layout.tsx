@@ -65,9 +65,13 @@ export const metadata: Metadata = {
 // out, so the shell shrinks to a corner or its fixed buttons leave the screen. Android
 // Chrome honours maximumScale/userScalable; iOS keeps pinch but stops zooming into
 // fields; globals.css adds touch-action for browsers that ignore the meta.
+// minimumScale too: without it Android Chrome zooms the page OUT on its own whenever
+// anything is wider than the screen (a dropdown at the right edge, a wide report) and
+// back in when it goes, so the page jumped size every time a filter changed.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  minimumScale: 1,
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
