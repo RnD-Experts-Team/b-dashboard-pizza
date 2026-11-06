@@ -285,7 +285,14 @@ html[data-secondary-font="instrumentSans"] body {
   body {
     @apply bg-background text-foreground;
     height: 100%;
-    overflow: hidden;
+    /* The page is exactly the screen, whatever the app draws. Anything position: absolute
+       outside a positioned parent (a widget, a measuring box) is placed against the page
+       itself, and overflow on html/body does not cut it off: it widened the page, so
+       Android Chrome zoomed out to fit, even before any click. A positioned body becomes
+       their box and clip cuts them off; clip also makes body impossible to scroll, even
+       by scrollIntoView, which slid the whole app up on tablets. */
+    position: relative;
+    overflow: clip;
   }
   
   * {
