@@ -28,6 +28,8 @@ const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 const MIN_ON_SCREEN_FOR_RANKING = 30 * 60;
 /** Same page size as the managers table above it. */
 const STORES_PAGE_SIZE = 10;
+/** Screens per page of the presence-by-screen chart, so it never needs a long scroll. */
+const SCREEN_CHART_PAGE_SIZE = 10;
 
 /**
  * The monitoring report, laid out like the maintenance analytics page: the
@@ -230,6 +232,21 @@ export function MonitoringReport({
 
   const onScreen = k.on_screen;
   const byOpen = chartBasis === "open";
+
+  // The per-screen chart: screens that were in a main tile, highest presence first, a page at a time.
+  const shareRows = useMemo(
+    () =>
+      screenRows
+        .filter((s) => s.connected > 0)
+        .map((s) => ({
+          label: `${s.name} · ${s.store ?? ""}`,
+          present: (byOpen ? s.present_open_share : s.present_connected_share) ?? 0,
+          talking: (byOpen ? s.talking_open_share : s.talking_connected_share) ?? 0,
+        }))
+        .sort((a, b) => b.present - a.present),
+    [screenRows, byOpen],
+  );
+  const sharesPaged = usePaged(shareRows, shareRows.length, SCREEN_CHART_PAGE_SIZE);
   // Of open hours, the donuts gain the open time nobody was connected for, so they add up to the open hours.
   const notConnected = byOpen
     ? [{ label: t("legend.notConnected"), seconds: Math.max(0, openTotal - onScreen), color: USAGE_COLORS.gap }]
@@ -360,16 +377,18 @@ export function MonitoringReport({
         title={t("sections.screenShares")}
         description={t(byOpen ? "sections.screenSharesHintOpen" : "sections.screenSharesHintConnected")}
       >
-        {screenRows.some((s) => s.connected > 0) ? (
-          <ScreenSharesChart
-            rows={screenRows
-              .filter((s) => s.connected > 0)
-              .map((s) => ({
-                label: `${s.name} · ${s.store ?? ""}`,
-                present: (byOpen ? s.present_open_share : s.present_connected_share) ?? 0,
-                talking: (byOpen ? s.talking_open_share : s.talking_connected_share) ?? 0,
-              }))}
-          />
+        {sharesPaged.total > 0 ? (
+          <>
+            <ScreenSharesChart rows={sharesPaged.rows} />
+            <Pager
+              page={sharesPaged.page}
+              pages={sharesPaged.pages}
+              from={sharesPaged.from}
+              to={sharesPaged.to}
+              total={sharesPaged.total}
+              onPage={sharesPaged.setPage}
+            />
+          </>
         ) : (
           <CardEmpty icon={MonitorOff}>{t("noScreenTime")}</CardEmpty>
         )}
