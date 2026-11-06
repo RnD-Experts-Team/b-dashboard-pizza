@@ -17,7 +17,7 @@ import type { UsageReport, UsageScreenRow, UsageStoreRow, UsageUserRow } from "@
 import { MANAGER_DAILY_TARGET_S, openSeconds, startedDays, storeOpenHours } from "@/lib/screen-usage/open-hours";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { daysToInstants } from "@/lib/maintenance-tickets/local-range";
-import { BreakdownChart, DailyPresenceChart, HoursHeatmap, SegmentedToggle, type ChartBasis } from "./usage-charts";
+import { BreakdownChart, DailyPresenceChart, HoursHeatmap, ScreenSharesChart, SegmentedToggle, type ChartBasis } from "./usage-charts";
 import { SplitKpiTile, type SplitKpi, type SplitKpiHalf } from "./split-kpi-tile";
 import { ManagersTable } from "./managers-table";
 import { ManagerSheet } from "./manager-sheet";
@@ -210,6 +210,24 @@ export function MonitoringReport({
     return out;
   }, [report, k, t]);
 
+  // Each screen's present and talking time, out of its store's open hours and out of its own connected time.
+  const screenRows = useMemo<ScreenRowView[]>(
+    () =>
+      report.screens.map((s) => {
+        const open = s.store === null ? null : (openByStore[s.store] ?? null);
+        const ofOpen = (seconds: number) => (open === null ? null : share(seconds, open));
+        return {
+          ...s,
+          open_hours: open,
+          present_open_share: ofOpen(s.present),
+          talking_open_share: ofOpen(s.talking),
+          present_connected_share: share(s.present, s.connected),
+          talking_connected_share: share(s.talking, s.connected),
+        };
+      }),
+    [report.screens, openByStore],
+  );
+
   const onScreen = k.on_screen;
   const byOpen = chartBasis === "open";
   // Of open hours, the donuts gain the open time nobody was connected for, so they add up to the open hours.
@@ -336,7 +354,28 @@ export function MonitoringReport({
         )}
       </AnalyticsCard>
 
-      <ScreensTable report={report} />
+      <AnalyticsCard
+        id="screen-shares"
+        icon={UserCheck}
+        title={t("sections.screenShares")}
+        description={t(byOpen ? "sections.screenSharesHintOpen" : "sections.screenSharesHintConnected")}
+      >
+        {screenRows.some((s) => s.connected > 0) ? (
+          <ScreenSharesChart
+            rows={screenRows
+              .filter((s) => s.connected > 0)
+              .map((s) => ({
+                label: `${s.name} · ${s.store ?? ""}`,
+                present: (byOpen ? s.present_open_share : s.present_connected_share) ?? 0,
+                talking: (byOpen ? s.talking_open_share : s.talking_connected_share) ?? 0,
+              }))}
+          />
+        ) : (
+          <CardEmpty icon={MonitorOff}>{t("noScreenTime")}</CardEmpty>
+        )}
+      </AnalyticsCard>
+
+      <ScreensTable report={report} rows={screenRows} openSoFar={openSoFar} />
 
       <ManagerSheet
         key={openUser?.user_id ?? "none"}
@@ -398,8 +437,17 @@ type StoreRowView = UsageStoreRow & {
   talking_open_share: number | null;
 };
 
+/** A screen row with present and talking as shares of its store's open hours (null: none set) and of its connected time. */
+type ScreenRowView = UsageScreenRow & {
+  open_hours: number | null;
+  present_open_share: number | null;
+  talking_open_share: number | null;
+  present_connected_share: number;
+  talking_connected_share: number;
+};
+
 const STORE_TEXT_KEYS: (keyof StoreRowView)[] = ["store"];
-const SCREEN_TEXT_KEYS: (keyof UsageScreenRow & string)[] = ["name", "store"];
+const SCREEN_TEXT_KEYS: (keyof ScreenRowView & string)[] = ["name", "store"];
 
 function StoresCard({
   report,
@@ -471,11 +519,21 @@ function StoresCard({
   );
 }
 
-function ScreensTable({ report }: { report: UsageReport }) {
+function ScreensTable({
+  report,
+  rows: screenRows,
+  openSoFar,
+}: {
+  report: UsageReport;
+  rows: ScreenRowView[];
+  /** The range runs past now: open hours count only up to now. */
+  openSoFar: boolean;
+}) {
   const t = useTranslations("screenMonitoring");
-  const { rows, head } = useSortable(report.screens, "main", SCREEN_TEXT_KEYS);
+  const { rows, head } = useSortable(screenRows, "present_open_share", SCREEN_TEXT_KEYS);
   const paged = usePaged(rows, rows.length, 10);
   const maxMain = Math.max(1, ...report.screens.map((s) => s.main));
+  const ofOpen = (seconds: number, open: number | null) => (open === null ? "—" : percent(seconds, open));
   return (
     <ReportTable
       id="screens"
@@ -489,7 +547,15 @@ function ScreensTable({ report }: { report: UsageReport }) {
           <tr>
             {head("name", t("columns.screen"))}
             {head("store", t("columns.store"))}
-            {head("main", t("columns.mainTile"), "w-1/3")}
+            {head("present_open_share", t("columns.presentOpenShare"), "text-end")}
+            {head("talking_open_share", t("columns.talkingOpenShare"), "text-end")}
+            {head("present_connected_share", t("columns.presentConnectedShare"), "text-end")}
+            {head("talking_connected_share", t("columns.talkingConnectedShare"), "text-end")}
+            {head("present", t("columns.present"), "text-end")}
+            {head("talking", t("columns.talking"), "text-end")}
+            {head("connected", t("columns.connectedInMain"), "text-end")}
+            {head("open_hours", t(openSoFar ? "columns.openHoursSoFar" : "columns.openHours"), "text-end")}
+            {head("main", t("columns.mainTile"), "min-w-48")}
             {head("mic", t("columns.micOpen"), "text-end")}
             {head("camera", t("columns.camera"), "text-end")}
             {head("managers", t("columns.managers"), "text-end")}
@@ -507,6 +573,14 @@ function ScreensTable({ report }: { report: UsageReport }) {
                 )}
               </td>
               <td className={cn(TD, "text-muted-foreground")}>{s.store}</td>
+              <td className={cn(TD, "text-end font-semibold tabular-nums")}>{ofOpen(s.present, s.open_hours)}</td>
+              <td className={cn(TD, "text-end font-semibold tabular-nums")}>{ofOpen(s.talking, s.open_hours)}</td>
+              <td className={cn(TD, "text-end tabular-nums")}>{percent(s.present, s.connected)}</td>
+              <td className={cn(TD, "text-end tabular-nums")}>{percent(s.talking, s.connected)}</td>
+              <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(s.present)}</td>
+              <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(s.talking)}</td>
+              <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(s.connected)}</td>
+              <td className={cn(TD, "text-end tabular-nums")}>{s.open_hours === null ? "—" : formatDuration(s.open_hours)}</td>
               <td className={TD}>
                 <div className="flex items-center gap-2">
                   <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
