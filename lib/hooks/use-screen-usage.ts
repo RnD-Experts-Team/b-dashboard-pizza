@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { screenUsageService } from "@/lib/api/services/screen-usage.service";
-import type { UsageReport, UsageReportParams, UsageTimelineSegment } from "@/lib/screen-usage/types";
+import type { BootsOnTheGround, UsageReport, UsageReportParams, UsageTimelineSegment } from "@/lib/screen-usage/types";
 
 interface Loaded<T> {
   key: string;
@@ -53,5 +53,12 @@ export function useScreenUsageReport(params: UsageReportParams | null) {
 export function useScreenUsageTimeline(params: { stores: string[]; userId: number; from: string; to: string } | null) {
   return useKeyedLoad<UsageTimelineSegment[]>(params ? JSON.stringify(params) : null, (signal) =>
     screenUsageService.getTimeline(params!, signal),
+  );
+}
+
+/** Boots on the Ground (DSPR V1, Business Reports); null params = nothing to load yet. */
+export function useBootsOnTheGround(params: { stores: string[]; from: string; to: string; tz: string } | null) {
+  return useKeyedLoad<BootsOnTheGround>(params ? JSON.stringify(params) : null, (signal) =>
+    screenUsageService.getBootsOnTheGround(params!, signal),
   );
 }

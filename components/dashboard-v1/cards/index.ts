@@ -5,11 +5,11 @@ export { V1SalesHistoryCard } from "./v1-sales-history";
 // export { V1ChannelMixCard } from "./v1-channel-mix";
 export { V1HourlyChannelsCard } from "./v1-hourly-channels";
 export { V1StoreScoreCard } from "./v1-store-score";
-export { V1CustomerSalesCard } from "./v1-customer-sales";
-export { V1PhoneSalesCard } from "./v1-phone-sales";
+export { V1SalesGuestsChannelsCard } from "./v1-sales-guests-channels";
 export { V1ChannelSalesWeeklyCard } from "./v1-channel-sales";
 export { V1OrdersVsSalesCard } from "./v1-orders-vs-sales";
 export { V1ManagerTasksCard } from "./v1-manager-tasks";
+export { V1BootsOnTheGroundCard } from "./v1-boots-on-the-ground";
 
 // Operations
 export { V1PortalGaugeCard } from "./v1-portal-gauge";
@@ -40,7 +40,6 @@ export { V1MoneyOwedCard } from "./v1-money-owed";
 // Quality
 export { V1ComplaintsCard } from "./v1-complaints";
 export { V1FeedbacksCard } from "./v1-feedbacks";
-export { V1QaRatingsCard } from "./v1-qa-ratings";
 export { V1MaintenanceCard } from "./v1-maintenance";
 export { V1CleaningReviewCard } from "./v1-cleaning-review";
 export { V1CustomerServiceCard } from "./v1-customer-service";

@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { format, subDays, formatDistanceToNow, getISOWeek, parseISO } from "date-fns";
 import html2canvas from "html2canvas-pro";
 import { useWbrCard } from "@/lib/hooks/use-wbr-card";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import { useManagerDashboard } from "@/lib/hooks/use-manager-dashboard";
 import { useHooksWbr } from "@/lib/hooks/use-hooks-wbr";
 import { StoreGoals, DaySummaryStats } from "@/components/dspr";
@@ -69,9 +70,9 @@ import {
   // V1ChannelMixCard — merged into V1HourlyChannelsCard's "By Channel" tab.
   V1HourlyChannelsCard,
   V1ManagerTasksCard,
+  V1BootsOnTheGroundCard,
   V1StoreScoreCard,
-  V1CustomerSalesCard,
-  V1PhoneSalesCard,
+  V1SalesGuestsChannelsCard,
   V1ChannelSalesWeeklyCard,
   V1OrdersVsSalesCard,
   V1PortalGaugeCard,
@@ -94,7 +95,6 @@ import {
   V1MoneyOwedCard,
   V1ComplaintsCard,
   V1FeedbacksCard,
-  V1QaRatingsCard,
   V1MaintenanceCard,
   V1CleaningReviewCard,
   V1CustomerServiceCard,
@@ -208,6 +208,13 @@ export function DashboardV1({
   }, [storeId, refetch]);
 
   const managerDashboard = useManagerDashboard(storeId, toApiDate(selectedDate));
+
+  // Complaints and employee feedback: `view complaints`, held globally or at this store.
+  const canSeeComplaints = useAuthStore(
+    (s) =>
+      s.hasPermission("view complaints") ||
+      (storeNumericId !== null && (s.storePermissions[String(storeNumericId)]?.has("view complaints") ?? false)),
+  );
   const hooksWbr = useHooksWbr(storeId, toApiDate(selectedDate));
 
   const handleRefreshAll = useCallback(() => {
@@ -686,9 +693,15 @@ export function DashboardV1({
           span={1}
         />
         */}
+        {/* Top priority: where Manager Tasks used to be. */}
+        <V1BootsOnTheGroundCard stores={storeId ? [storeId] : []} day={toApiDate(selectedDate)} span={1} />
+        <V1SalesGuestsChannelsCard
+          customers={wbrData?.["customer-count-and-sales"]}
+          channels={wbrData?.["phone-and-adjusted-sales"]}
+          isLoading={isLoading}
+          span={1}
+        />
         <V1ManagerTasksCard span={1} />
-        <V1CustomerSalesCard data={wbrData?.["customer-count-and-sales"]} isLoading={isLoading} span={1} />
-        <V1PhoneSalesCard data={wbrData?.["phone-and-adjusted-sales"]} isLoading={isLoading} span={1} />
         <V1HourlyChannelsCard
           hourly={day.hourly_sales_and_channels}
           weekly={day.hourly_sales_and_channels_week_to_date_avg}
@@ -784,20 +797,14 @@ export function DashboardV1({
 
       {/* ── Quality & Voice of Customer ──────────────────────────────────── */}
       <V1Section category="quality" weekLabel={weekLabel} gridClassName="gap-[7px]" guideId="v1-quality">
-        <V1QaRatingsCard
-          requirements={[
-            {
-              service: "QA",
-              method: "GET",
-              path: "/audits/ratings-summary/overview",
-              storeId: storeNumericId ? String(storeNumericId) : undefined,
-            },
-          ]}
-          span={2}
-        />
-        <V1MaintenanceCard span={2} />
-        <V1ComplaintsCard data={hooksWbr.data?.complaints} isLoading={hooksWbr.isLoading} span={2} />
-        <V1FeedbacksCard data={hooksWbr.data?.feedbacks} isLoading={hooksWbr.isLoading} span={2} />
+        {/* The QA ratings card was removed here (2026-11-07). Full width keeps the rows even. */}
+        <V1MaintenanceCard span={4} />
+        {canSeeComplaints && (
+          <>
+            <V1ComplaintsCard data={hooksWbr.data?.complaints} isLoading={hooksWbr.isLoading} span={2} />
+            <V1FeedbacksCard data={hooksWbr.data?.feedbacks} isLoading={hooksWbr.isLoading} span={2} />
+          </>
+        )}
         <V1CleaningReviewCard data={wbrData?.["cleaning-review"]} isLoading={isLoading} span={2} />
         <V1CustomerServiceCard data={wbrData?.["customer-service"]} isLoading={isLoading} span={2} />
         <V1PortioningCard data={wbrData?.portioning} isLoading={isLoading} span={4} />

@@ -1,5 +1,11 @@
 import axios from "axios";
-import type { UsageReport, UsageReportParams, UsageSegmentReport, UsageTimelineSegment } from "@/lib/screen-usage/types";
+import type {
+  BootsOnTheGround,
+  UsageReport,
+  UsageReportParams,
+  UsageSegmentReport,
+  UsageTimelineSegment,
+} from "@/lib/screen-usage/types";
 
 /* Reads the Zustand-persisted token, same as screen-project.service.ts */
 function getToken(): string | null {
@@ -81,5 +87,23 @@ export const screenUsageService = {
       signal,
     });
     return data.segments;
+  },
+
+  /**
+   * Boots on the Ground for the store dashboards: the stores' managers, per station.
+   * Proxied through GET /api/screen-project/usage/boots-on-the-ground
+   */
+  async getBootsOnTheGround(
+    params: { stores: string[]; from: string; to: string; tz: string },
+    signal?: AbortSignal,
+  ): Promise<BootsOnTheGround> {
+    const query = new URLSearchParams({ from: params.from, to: params.to, tz: params.tz });
+    params.stores.forEach((s) => query.append("stores[]", s));
+    const { data } = await axios.get<BootsOnTheGround>(`/api/screen-project/usage/boots-on-the-ground?${query}`, {
+      headers: buildHeaders(),
+      timeout: 60_000,
+      signal,
+    });
+    return data;
   },
 };
