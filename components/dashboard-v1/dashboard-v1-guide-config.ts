@@ -130,7 +130,8 @@ export const DASHBOARD_V1_GUIDE_STEPS: GuideStep[] = [
     bullets: [
       "Sales Trend charts the week with labor overlaid day by day",
       "Store Score covers the scorecard ranking, goal metrics and upselling score",
-      "Manager Tasks, Customer Count & Sales, and Phone & Adjusted Sales sit alongside it",
+      "Boots on the Ground shows Screen Project presence and talking time, yours and your partners', per station",
+      "Sales, Guests & Channels compares sales, guests, phone and in-store by week, period, quarter and YTD; Manager Tasks sits beside it",
       "Hourly Sales has a “By Channel” tab for the daily channel mix",
       "Orders vs Sales, weekly Channel Sales and Sales History fill out the section",
     ],
@@ -192,8 +193,8 @@ export const DASHBOARD_V1_GUIDE_STEPS: GuideStep[] = [
     description:
       "How the store is judged — from the inside and the outside.",
     bullets: [
-      "QA ratings overview and open maintenance tickets",
-      "Customer complaints and feedbacks for the week",
+      "Open maintenance tickets",
+      "Customer complaints and feedbacks for the week, for those allowed to see them",
       "Cleaning review and customer service scores",
       "Portioning accuracy across the full width of the section",
     ],

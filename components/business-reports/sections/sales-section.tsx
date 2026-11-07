@@ -1,6 +1,7 @@
 "use client";
 
 import { V1Section } from "@/components/dashboard-v1/v1-section";
+import { V1BootsOnTheGroundCard } from "@/components/dashboard-v1/cards/v1-boots-on-the-ground";
 import { SectionSlot } from "@/components/business-reports/section-slot";
 import { useReport, useSection } from "@/components/business-reports/report-context";
 import { BR_SALES_TREND_SPAN, BrSalesTrendCard } from "@/components/business-reports/cards/sales/br-sales-trend";
@@ -33,13 +34,15 @@ const SALES_SPANS = [
 ];
 
 export function SalesSection() {
-  const { rangeLabel } = useReport();
+  const { rangeLabel, params } = useReport();
   const sales = useSection("sales");
   const operations = useSection("operations");
   const orders = useSection("orders");
 
   return (
     <V1Section category="sales" weekLabel={rangeLabel} gridClassName="gap-[7px]">
+      {/* Top priority: Screen Project usage, loaded on its own (ScreensPizza), first in the band. */}
+      <V1BootsOnTheGroundCard stores={params.stores} startDate={params.startDate} endDate={params.endDate} span={2} />
       <SectionSlot state={sales} spans={SALES_SPANS} label="Sales">
         {(data) => (
           <>

@@ -16,11 +16,13 @@ const UPSTREAM_TIMEOUT_MS = 60_000;
 const SECTIONS: Record<string, string[]> = {
   report: ["stores[]", "from", "to", "tz", "users[]"],
   timeline: ["stores[]", "user_id", "from", "to"],
+  // The store dashboards' slice (DSPR V1, Business Reports), under their report permission.
+  "boots-on-the-ground": ["stores[]", "from", "to", "tz"],
 };
 
 /**
- * GET /api/screen-project/usage/{report|timeline}?stores[]=…
- * Proxy → GET {SCREEN_PROJECT_BASE_URL}/usage/{report|timeline}
+ * GET /api/screen-project/usage/{report|timeline|boots-on-the-ground}?stores[]=…
+ * Proxy → GET {SCREEN_PROJECT_BASE_URL}/usage/{section}
  * Screen Project monitoring across stores (store NUMBERS in stores[]).
  */
 export async function GET(

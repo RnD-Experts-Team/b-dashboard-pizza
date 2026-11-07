@@ -141,3 +141,29 @@ export interface UsageTimelineSegment {
   talking_seconds: number;
   end_reason: string | null;
 }
+
+/* ── Boots on the Ground (GET /usage/boots-on-the-ground) — the store dashboards' slice ─ */
+
+/** Connected / present (a face on camera) / talking, in SECONDS. */
+export interface BootsTimes {
+  connected: number;
+  present: number;
+  talking: number;
+}
+
+export interface BootsManager extends BootsTimes {
+  user_id: number;
+  name: string;
+  /** Store numbers the manager was seen in. */
+  stores: string[];
+  /** Their time per station in their main tile; stations they never watched are left out. */
+  stations: (BootsTimes & { station_id: number })[];
+}
+
+export interface BootsOnTheGround {
+  range: { from: string; to: string; tz: string };
+  totals: BootsTimes;
+  managers: BootsManager[];
+  /** Every standard station of the stores, watched or not. */
+  stations: { station_id: number; name: string; store: string | null }[];
+}
