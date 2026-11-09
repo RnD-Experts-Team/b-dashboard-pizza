@@ -22,7 +22,12 @@ export function BrHeadcount({ data }: { data: LaborReport }) {
   const theme = useChartTheme();
   const h = data.combined.headcount;
   const positions = h.by_position;
-  const net = h.net_change;
+  // Net is the real change in active employees (end − start), the same as the
+  // Labor Summary. Hires − separations misses people who moved between the
+  // selected stores and these, or changed status without a hire/separation —
+  // that difference is shown as "Other moves".
+  const net = h.active_end - h.active_start;
+  const otherMoves = net - (h.new_hires - h.separations);
 
   const options = useMemo(
     () => peopleBarOptions(theme, positions.map((p) => p.position || "Unassigned"), (v) => fmtNumber(v), true),
@@ -51,16 +56,17 @@ export function BrHeadcount({ data }: { data: LaborReport }) {
               net < 0 && "bg-rose-500/15 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400",
               net === 0 && "bg-muted text-muted-foreground",
             )}
-            title="New hires minus separations over the range"
+            title="Active employees at the end minus at the start"
           >
             {net > 0 ? "+" : ""}
             {fmtNumber(net)} net
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-1">
-          <V1Metric label="New Hires" value={fmtNumber(h.new_hires)} size="sm" />
-          <V1Metric label="Separations" value={fmtNumber(h.separations)} size="sm" />
+        <div className="grid grid-cols-3 gap-1">
+          <V1Metric label="New Hires" value={`+${fmtNumber(h.new_hires)}`} size="sm" />
+          <V1Metric label="Separations" value={`−${fmtNumber(h.separations)}`} size="sm" />
+          <V1Metric label="Other Moves" value={`${otherMoves > 0 ? "+" : ""}${fmtNumber(otherMoves)}`} size="sm" />
         </div>
 
         <V1SubLabel>By Position · end of range</V1SubLabel>

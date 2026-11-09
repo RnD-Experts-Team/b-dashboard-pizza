@@ -363,13 +363,17 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   };
 
   const businessReportsItem: NavItem = {
-    title: "Business Reports",
+    title: t("businessReports"),
     href: `/${locale}/dashboard/business-reports`,
     icon: BarChart3,
-    // The page's main section; probed with no store (the rule allows an empty store list).
-    requirements: [
-      { service: "Data", method: "POST", path: "/reports/business/sales" },
-    ],
+    // Its own permission (`business reports`, Upper MGMT), held per store: shown
+    // when the page's main section is allowed at any of the user's stores.
+    requirements: (overviewStores ?? []).map((s) => ({
+      service: "Data",
+      method: "POST",
+      path: "/reports/business/sales",
+      storeId: s.id,
+    })),
   };
 
   // const maintenanceItem: NavItem = {
@@ -1083,7 +1087,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           )}
 
           {/* 1a·1. Business Reports (flat link, right under Dashboard) */}
-           {/* {isNavItemVisible(businessReportsItem) && renderNavLink(businessReportsItem)}  */}
+          {isNavItemVisible(businessReportsItem) && renderNavLink(businessReportsItem)}
 
           {/* 1·V1. Dashboard V1 (optimized) */}
            {/* {isNavItemVisible(dashboardV1Item) && renderNavLink(dashboardV1Item)} */}
