@@ -808,10 +808,15 @@ export interface BusinessReportsData {
 
 export type SectionKey = keyof BusinessReportsData;
 
+/** Why a section has no data: stopped by the user, too heavy for the range, no access, or another failure. */
+export type SectionErrorKind = "stopped" | "too-big" | "no-access" | "failed";
+
 /** One section's state: each loads, fails and renders on its own. */
 export interface SectionState<T> {
   data: T | null;
+  /** A short message for the user (never raw server output). */
   error: string | null;
+  errorKind?: SectionErrorKind;
   loading: boolean;
 }
 

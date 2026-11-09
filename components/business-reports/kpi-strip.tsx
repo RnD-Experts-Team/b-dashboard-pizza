@@ -19,6 +19,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import type { SalesMetrics } from "@/types/business-reports.types";
 import { useSection } from "./report-context";
+import { SectionNote } from "./section-slot";
 import { useFinalLabor, preferFinal } from "./final-labor";
 import { fmt$, fmt$2, fmtNum, fmtPct, perStoreDay } from "./report-format";
 
@@ -154,9 +155,13 @@ function buildTiles(t: SalesMetrics, finalLabor: number | null): Tile[] {
  * the per-store-day average beside it; the gauge button swaps the two.
  */
 export function KpiStrip() {
-  const { data } = useSection("sales");
+  const sales = useSection("sales");
+  const { data } = sales;
   const finalLabor = useFinalLabor();
   const [perDayFirst, setPerDayFirst] = useState(false);
+
+  // Stopped or failed: a one-line note in its place, never an endless skeleton.
+  if (!data && sales.error) return <SectionNote state={sales} label="Range summary" />;
 
   if (!data) {
     return (

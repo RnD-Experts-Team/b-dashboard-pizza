@@ -119,6 +119,16 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     groupKey: "dashboards",
   },
   {
+    id: "businessReports",
+    href: (locale) => `/${locale}/dashboard/business-reports`,
+    icon: BarChart3,
+    titleKey: "businessReports",
+    requirements: (storeId) => [
+      { service: "Data", method: "POST", path: "/reports/business/sales", storeId },
+    ],
+    groupKey: "dashboards",
+  },
+  {
     id: "maintenanceAnalytics",
     href: (locale) => `/${locale}/dashboard/maintenance-analytics`,
     icon: BarChart3,

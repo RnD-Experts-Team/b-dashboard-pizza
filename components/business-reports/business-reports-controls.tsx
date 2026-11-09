@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WeekSelect } from "@/components/shared/week-select";
 import { AnalyticsControls } from "@/components/maintenance-tickets/analytics/analytics-controls";
@@ -33,6 +33,7 @@ export function BusinessReportsControls({
   range,
   onRangeChange,
   onLoad,
+  onStop,
   busy,
   hasLoaded,
 }: {
@@ -42,6 +43,8 @@ export function BusinessReportsControls({
   range: DateRange;
   onRangeChange: (range: DateRange) => void;
   onLoad: () => void;
+  /** Cancel the load in progress (what already landed stays). */
+  onStop: () => void;
   busy: boolean;
   hasLoaded: boolean;
 }) {
@@ -83,10 +86,20 @@ export function BusinessReportsControls({
         </>
       }
     >
-      <Button type="button" onClick={onLoad} disabled={Boolean(blockedReason) || busy} title={blockedReason} className="ms-auto">
-        <RefreshCw className={cn("me-1.5 h-3.5 w-3.5", busy && "animate-spin")} />
-        {hasLoaded ? "Refresh" : "Load"}
-      </Button>
+      {/* While loading, Load becomes Stop: cancel any time, change the filters, load again. */}
+      {busy ? (
+        <Button type="button" variant="outline" onClick={onStop} className="ms-auto" title="Stop loading; what already loaded stays">
+          <RefreshCw className="me-1.5 h-3.5 w-3.5 animate-spin" />
+          Loading…
+          <Square className="ms-2 h-3 w-3 fill-current" />
+          Stop
+        </Button>
+      ) : (
+        <Button type="button" onClick={onLoad} disabled={Boolean(blockedReason)} title={blockedReason} className="ms-auto">
+          <RefreshCw className="me-1.5 h-3.5 w-3.5" />
+          {hasLoaded ? "Refresh" : "Load"}
+        </Button>
+      )}
     </AnalyticsControls>
   );
 }
