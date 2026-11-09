@@ -16,6 +16,7 @@
 
 import type { AnalyticsSummary } from "@/types/maintenance-analytics.types";
 import type { StoreSkillsOverview } from "@/types/skills.types";
+import type { SalesHistory } from "@/types/dashboard-report.types";
 
 /* ══════════════════════════════════════════════════════════════════════
  *  Request
@@ -801,6 +802,8 @@ export interface BusinessReportsData {
   tickets: AnalyticsSummary;
   /** Operations: every active employee of the stores against every skill (a snapshot, not ranged). */
   skills: StoreSkillsOverview;
+  /** V1's Sales History for the loaded stores together: every week since the first data (not the picked range). */
+  salesHistory: SalesHistory;
 }
 
 export type SectionKey = keyof BusinessReportsData;

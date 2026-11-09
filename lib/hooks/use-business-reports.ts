@@ -22,6 +22,7 @@ const SECTION_KEYS: SectionKey[] = [
   "feedback",
   "tickets",
   "skills",
+  "salesHistory",
 ];
 
 const IDLE: BusinessReportsState = Object.fromEntries(
@@ -99,6 +100,7 @@ export function useBusinessReports(): UseBusinessReportsResult {
     void settle("feedback", svc.getFeedback(params, signal));
     void settle("tickets", svc.getTickets(params, signal));
     void settle("skills", svc.getSkills(params, signal));
+    void settle("salesHistory", svc.getSalesHistory(params, signal));
     void settle(
       "storeScore",
       // The grid fills in batch by batch; `loading` stays on until the last one.

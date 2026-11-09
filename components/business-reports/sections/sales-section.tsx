@@ -2,6 +2,8 @@
 
 import { V1Section } from "@/components/dashboard-v1/v1-section";
 import { V1BootsOnTheGroundCard } from "@/components/dashboard-v1/cards/v1-boots-on-the-ground";
+import { V1SalesHistoryCard } from "@/components/dashboard-v1/cards/v1-sales-history";
+import type { V1Span } from "@/components/dashboard-v1/v1-card";
 import { SectionSlot } from "@/components/business-reports/section-slot";
 import { useReport, useSection } from "@/components/business-reports/report-context";
 import { BR_SALES_TREND_SPAN, BrSalesTrendCard } from "@/components/business-reports/cards/sales/br-sales-trend";
@@ -25,6 +27,9 @@ import { BR_UPSELLING_SPAN, BrUpsellingCard } from "@/components/business-report
  *  later), operations (Orders vs Sales) and orders (Upselling).
  * ────────────────────────────────────────────────────────────────────────── */
 
+/** V1's Sales History card, full width as on V1. */
+const SALES_HISTORY_SPAN: V1Span = 4;
+
 const SALES_SPANS = [
   BR_SALES_TREND_SPAN,
   BR_SALES_SUMMARY_SPAN,
@@ -38,6 +43,7 @@ export function SalesSection() {
   const sales = useSection("sales");
   const operations = useSection("operations");
   const orders = useSection("orders");
+  const salesHistory = useSection("salesHistory");
 
   return (
     <V1Section category="sales" weekLabel={rangeLabel} gridClassName="gap-[7px]">
@@ -59,6 +65,10 @@ export function SalesSection() {
       </SectionSlot>
       <SectionSlot state={orders} spans={[BR_UPSELLING_SPAN]} label="Upselling">
         {(data) => <BrUpsellingCard data={data} />}
+      </SectionSlot>
+      {/* Same card and rules as V1: every week since the first data for these stores, whatever range is picked. */}
+      <SectionSlot state={salesHistory} spans={[SALES_HISTORY_SPAN]} label="Sales History">
+        {(data) => <V1SalesHistoryCard data={data} span={SALES_HISTORY_SPAN} />}
       </SectionSlot>
     </V1Section>
   );
