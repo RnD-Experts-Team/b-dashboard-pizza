@@ -23,14 +23,20 @@ export const GRANULARITY_OPTIONS: { key: SalesHistoryGranularity; label: string 
   { key: "years", label: "Year" },
 ];
 
-/** Short x-axis / pill label for a bucket, e.g. "Mar 24", "P4 FY26", "Q2 FY26", "FY2026". */
+/**
+ * Short table / pill label for a bucket, e.g. "W12 FY26", "P4 FY26", "Q2 FY26",
+ * "FY2026". Weeks use the same week number as the chart tooltip ("Week 12");
+ * the dates sit beside it via bucketRangeLabel.
+ */
 export function bucketLabel(
   granularity: SalesHistoryGranularity,
   bucket: SalesHistoryBucket,
 ): string {
   switch (granularity) {
-    case "weeks":
-      return fmtDate((bucket as SalesHistoryWeek).week_start);
+    case "weeks": {
+      const b = bucket as SalesHistoryWeek;
+      return `W${b.week_number} FY${String(b.fiscal_year).slice(-2)}`;
+    }
     case "periods": {
       const b = bucket as SalesHistoryPeriod;
       return `P${b.period_number} FY${String(b.fiscal_year).slice(-2)}`;
