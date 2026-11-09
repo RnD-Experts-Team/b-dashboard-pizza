@@ -23,6 +23,7 @@ const SECTIONS = new Set([
   "quality",
   "debriefs",
   "store-score",
+  "sales-history",
 ]);
 
 /**

@@ -4,6 +4,7 @@ import { schedulingService } from "@/lib/api/services/scheduling.service";
 import { daysToInstants } from "@/lib/maintenance-tickets/local-range";
 import type { AnalyticsSummary } from "@/types/maintenance-analytics.types";
 import type { StoreSkillsOverview } from "@/types/skills.types";
+import type { SalesHistory } from "@/types/dashboard-report.types";
 import type {
   BusinessReportsParams,
   DebriefsSection,
@@ -89,6 +90,9 @@ export const businessReportsService = {
   getQuality: (p: BusinessReportsParams, s?: AbortSignal) => postSection<QualitySection>("quality", p, s),
   getDebriefs: (p: BusinessReportsParams, s?: AbortSignal) =>
     postSection<DebriefsSection>("debriefs", p, s),
+  /** All-time weekly sales of the stores (the range is ignored, as on V1). */
+  getSalesHistory: (p: BusinessReportsParams, s?: AbortSignal) =>
+    postSection<SalesHistory>("sales-history", p, s),
 
   /** Store score in store batches; `onBatch` gets the merged result after each one lands. */
   async getStoreScore(
