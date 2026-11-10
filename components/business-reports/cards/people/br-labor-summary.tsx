@@ -102,6 +102,20 @@ function LaborSummaryDialog({ data, rows, onClose }: { data: LaborReport; rows: 
         sortValue: (r) => r.block.summary.separations,
       },
       {
+        key: "moved_in",
+        header: "Moved In",
+        numeric: true,
+        render: (r) => fmtNumber(r.block.headcount.transfers_in),
+        sortValue: (r) => r.block.headcount.transfers_in,
+      },
+      {
+        key: "moved_out",
+        header: "Moved Out",
+        numeric: true,
+        render: (r) => fmtNumber(r.block.headcount.transfers_out),
+        sortValue: (r) => r.block.headcount.transfers_out,
+      },
+      {
         key: "notable",
         header: "Notable",
         numeric: true,
