@@ -22,6 +22,9 @@ import {
 import { fmtNumber } from "./labor-format";
 import { formatDateOnly, parseDateOrNull } from "@/lib/utils/date-display";
 
+const BAR_RADIUS = 4;
+const LABEL_WEIGHT = 700;
+
 interface LaborHeadcountProps {
   headcount: LaborHeadcountData;
   /** The business week's bounds, for the "day before"/"end of week" dates. */
@@ -41,11 +44,11 @@ export function LaborHeadcount({ headcount, weekStart, weekEnd }: LaborHeadcount
       chart: { ...base.chart, type: "bar" },
       colors: [PEOPLE.chartColors[0]],
       plotOptions: {
-        bar: { horizontal: true, borderRadius: 4, barHeight: "72%" },
+        bar: { horizontal: true, borderRadius: BAR_RADIUS, barHeight: "72%" },
       },
       dataLabels: {
         enabled: true,
-        style: { fontSize: "11px", fontWeight: 700, colors: ["#fff"] },
+        style: { fontSize: "11px", fontWeight: LABEL_WEIGHT, colors: ["#fff"] },
       },
       xaxis: {
         ...base.xaxis,
@@ -100,7 +103,8 @@ export function LaborHeadcount({ headcount, weekStart, weekEnd }: LaborHeadcount
               <TooltipContent side="top" className="max-w-56 text-center text-xs">
                 Active headcount the day before this business week began,
                 compared to active headcount at week&apos;s end. The
-                difference is hires minus separations during the week.
+                difference is hires minus separations, plus people moved in
+                from and minus people moved out to other stores.
               </TooltipContent>
             </Tooltip>
           </div>
@@ -130,7 +134,7 @@ export function LaborHeadcount({ headcount, weekStart, weekEnd }: LaborHeadcount
                 net < 0 && "bg-rose-500/15 text-rose-600 dark:text-rose-400",
                 net === 0 && "bg-muted text-muted-foreground",
               )}
-              title="Net change: new hires minus separations this week"
+              title="Net change: end minus start (hires − separations + moved in − moved out)"
             >
               {net > 0 ? "+" : ""}
               {fmtNumber(net)} net
@@ -141,6 +145,8 @@ export function LaborHeadcount({ headcount, weekStart, weekEnd }: LaborHeadcount
         <div className="grid shrink-0 grid-cols-2 gap-1">
           <V1Metric label="New Hires" value={fmtNumber(headcount.new_hires)} />
           <V1Metric label="Separations" value={fmtNumber(headcount.separations)} />
+          <V1Metric label="Moved In" value={fmtNumber(headcount.transfers_in)} />
+          <V1Metric label="Moved Out" value={fmtNumber(headcount.transfers_out)} />
         </div>
 
         {/* Grows to absorb whatever extra height the grid row stretched this

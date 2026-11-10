@@ -638,9 +638,15 @@ export interface LaborBlock {
   headcount: {
     active_start: number;
     active_end: number;
+    /** active_end − active_start (hires − separations + transfers in − out). */
     net_change: number;
+    /** People who became active at these stores while active nowhere before. */
     new_hires: number;
+    /** People who left these stores and are active nowhere after. */
     separations: number;
+    /** Moved in from / out to a store outside the one counted. */
+    transfers_in: number;
+    transfers_out: number;
     by_position: Array<{ position: string; count: number }>;
   };
   tenure: {

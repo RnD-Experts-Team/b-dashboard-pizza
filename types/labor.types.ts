@@ -65,7 +65,10 @@ export interface LaborHeadcount {
   active_end_of_week: number;
   new_hires: number;
   separations: number;
-  /** new_hires - separations. Can be negative. */
+  /** Moved in from / out to another store (not hires or separations). */
+  transfers_in: number;
+  transfers_out: number;
+  /** End − start: new_hires − separations + transfers_in − transfers_out. Can be negative. */
   net_change: number;
   /** Already sorted descending by count — do not re-sort. */
   by_position: LaborPositionCount[];
