@@ -5,11 +5,9 @@ import { SpeedometerGauge } from "@/components/dspr/speedometer-gauge";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
 import { ReportBlock, ReportDialog, type ReportTab } from "@/components/business-reports/report-dialog";
-import { preferFinal, useFinalLabor, type FinalLabor } from "@/components/business-reports/final-labor";
+import { useFinalLabor, type FinalLabor } from "@/components/business-reports/final-labor";
 import {
   LABOR_ZONES,
-  fmt$,
-  fmt$Compact,
   fmtPct,
   laborColor,
   laborLabel,
@@ -36,46 +34,37 @@ const TARGET_HIGH = 24;
 const TARGET_GREEN = "#22C55E";
 const TARGET_BAND = { from: TARGET_LOW, to: TARGET_HIGH, color: TARGET_GREEN };
 const FINAL_COLOR = "#0ea5e9";
+const NO_FINAL_COLOR = "#94a3b8";
 
 const fmtLaborAxis = (v: number): string => `${v.toFixed(1)}%`;
 const onTarget = (v: number) => v >= TARGET_LOW && v <= TARGET_HIGH;
 
 /** A labor % in its traffic-light colour, or "—". */
-function LaborValue({ value, estimated = false }: { value: number | null | undefined; estimated?: boolean }) {
+function LaborValue({ value }: { value: number | null | undefined }) {
   if (value === null || value === undefined) return <span className="text-muted-foreground">{NO_VALUE}</span>;
   return (
     <span className="font-semibold" style={{ color: laborColor(value) }}>
       {fmtPct(value)}
-      {estimated && <span className="ms-1 text-xs font-normal text-muted-foreground">Est.</span>}
     </span>
   );
 }
 
+const statusOf = (v: number | null) => (v === null ? NO_VALUE : laborLabel(v));
+
 interface LaborWeekRow {
   week_start: string;
-  /** Final labor %, or null when Hiring has none for the week. */
+  /** Final labor % (payroll ÷ royalty obligation), or null when the week has no payroll. */
   final: number | null;
-  /** Final when there is one, else the derived estimate. */
-  shown: number;
-  isFinal: boolean;
-  prevShown: number | null;
-  derived: number;
-  laborCost: number;
+  prevFinal: number | null;
 }
 
 interface LaborStoreRow extends StoreRow<SalesMetrics> {
   final: number | null;
-  shown: number;
-  isFinal: boolean;
 }
 
 function weekRows(weeks: SalesWeek[], final: FinalLabor | null): LaborWeekRow[] {
-  const base = weeks.map((w) => {
-    const f = final?.byWeek.get(w.week_start) ?? null;
-    const { value, isFinal } = preferFinal(f, w.labor_percent);
-    return { week_start: w.week_start, final: f, shown: value, isFinal, derived: w.labor_percent, laborCost: w.labor_cost };
-  });
-  return withPrev(base).map(({ row, prev }) => ({ ...row, prevShown: prev ? prev.shown : null }));
+  const base = weeks.map((w) => ({ week_start: w.week_start, final: final?.byWeek.get(w.week_start) ?? null }));
+  return withPrev(base).map(({ row, prev }) => ({ ...row, prevFinal: prev ? prev.final : null }));
 }
 
 function LaborDialog({ sales, final, onClose }: { sales: SalesSection; final: FinalLabor | null; onClose: () => void }) {
@@ -83,45 +72,37 @@ function LaborDialog({ sales, final, onClose }: { sales: SalesSection; final: Fi
   const weeks = useMemo(() => weekRows(sales.by_week, final), [sales.by_week, final]);
   const base = useStoreRows(sales.by_store);
   const stores = useMemo<LaborStoreRow[]>(
-    () =>
-      base.map((r) => {
-        const f = final?.byStore.get(r.store) ?? null;
-        const { value, isFinal } = preferFinal(f, r.data.labor_percent);
-        return { ...r, final: f, shown: value, isFinal };
-      }),
+    () => base.map((r) => ({ ...r, final: final?.byStore.get(r.store) ?? null })),
     [base, final],
   );
   const focus = useStoreFocus<LaborStoreRow>();
-  const overall = preferFinal(final?.overall, sales.totals.labor_percent);
+  const overall = final?.overall ?? null;
   const finalWeeks = weeks.filter((w) => w.final !== null);
   const weeksOnTarget = finalWeeks.filter((w) => w.final !== null && onTarget(w.final)).length;
-  const storesOnTarget = stores.filter((s) => onTarget(s.shown)).length;
+  const finalStores = stores.filter((s) => s.final !== null);
+  const storesOnTarget = finalStores.filter((s) => s.final !== null && onTarget(s.final)).length;
 
   const categories = useMemo(() => weeks.map((w) => labelOf(w.week_start)), [weeks, labelOf]);
   const series = useMemo(
-    () => [{ name: "Labor %", data: weeks.map((w) => Number(w.shown.toFixed(1))), color: FINAL_COLOR }],
+    () => [{ name: "Labor %", data: weeks.map((w) => (w.final === null ? 0 : Number(w.final.toFixed(1)))), color: FINAL_COLOR }],
     [weeks],
   );
-  const barColors = useMemo(() => weeks.map((w) => laborColor(w.shown)), [weeks]);
+  const barColors = useMemo(() => weeks.map((w) => (w.final === null ? NO_FINAL_COLOR : laborColor(w.final))), [weeks]);
 
   const weekColumns = useMemo<PagedColumn<LaborWeekRow>[]>(
     () => [
       { key: "week", header: "Week", sortValue: (r) => r.week_start, render: (r) => labelOf(r.week_start) },
-      { key: "final", header: "Final labor %", numeric: true, sortValue: (r) => r.shown, render: (r) => <LaborValue value={r.shown} estimated={!r.isFinal} /> },
-      { key: "delta", header: "Δ vs prev. week", numeric: true, render: (r) => <PpDelta curr={r.shown} prev={r.prevShown} goodWhen="neutral" /> },
-      { key: "status", header: "Status", sortValue: (r) => r.shown, render: (r) => laborLabel(r.shown) },
-      { key: "cost", header: "Labor $", numeric: true, sortValue: (r) => r.laborCost, render: (r) => fmt$(r.laborCost) },
-      { key: "derived", header: "Est. (labor ÷ sales)", numeric: true, sortValue: (r) => r.derived, render: (r) => fmtPct(r.derived) },
+      { key: "final", header: "Final labor %", numeric: true, sortValue: (r) => r.final, render: (r) => <LaborValue value={r.final} /> },
+      { key: "delta", header: "Δ vs prev. week", numeric: true, render: (r) => <PpDelta curr={r.final} prev={r.prevFinal} goodWhen="neutral" /> },
+      { key: "status", header: "Status", sortValue: (r) => r.final, render: (r) => statusOf(r.final) },
     ],
     [labelOf],
   );
   const storeColumns = useMemo<PagedColumn<LaborStoreRow>[]>(
     () => [
       { key: "store", header: "Store", sortValue: (r) => r.name, render: (r) => r.name },
-      { key: "final", header: "Final labor %", numeric: true, sortValue: (r) => r.shown, render: (r) => <LaborValue value={r.shown} estimated={!r.isFinal} /> },
-      { key: "status", header: "Status", sortValue: (r) => r.shown, render: (r) => laborLabel(r.shown) },
-      { key: "cost", header: "Labor $", numeric: true, sortValue: (r) => r.data.labor_cost, render: (r) => fmt$(r.data.labor_cost) },
-      { key: "derived", header: "Est. (labor ÷ sales)", numeric: true, sortValue: (r) => r.data.labor_percent, render: (r) => fmtPct(r.data.labor_percent) },
+      { key: "final", header: "Final labor %", numeric: true, sortValue: (r) => r.final, render: (r) => <LaborValue value={r.final} /> },
+      { key: "status", header: "Status", sortValue: (r) => r.final, render: (r) => statusOf(r.final) },
     ],
     [],
   );
@@ -133,7 +114,7 @@ function LaborDialog({ sales, final, onClose }: { sales: SalesSection; final: Fi
       content: (
         <ReportBlock
           title="Final labor % by week"
-          description="Hiring's final weekly labor; a week without one shows the estimate (labor ÷ sales). Green band = target 19–24%."
+          description="Total payroll ÷ royalty obligation × 100; a week without payroll is left out. Green band = target 19–24%."
         >
           <TrendChart kind="bar" categories={categories} series={series} barColors={barColors} band={TARGET_BAND} format={fmtLaborAxis} />
         </ReportBlock>
@@ -145,7 +126,7 @@ function LaborDialog({ sales, final, onClose }: { sales: SalesSection; final: Fi
       content: (
         <div className="space-y-2">
           <PagedTable size="lg" rows={weeks} columns={weekColumns} rowKey={(r) => r.week_start} initialSort="week" />
-          {final === null && <DialogNote>Final labor is still loading; the estimates show until it arrives.</DialogNote>}
+          {final === null && <DialogNote>Final labor is still loading.</DialogNote>}
         </div>
       ),
     },
@@ -174,26 +155,20 @@ function LaborDialog({ sales, final, onClose }: { sales: SalesSection; final: Fi
       title="Labor"
       category="operations"
       stats={[
-        {
-          label: overall.isFinal ? "Final labor %" : "Labor % (Est.)",
-          value: <LaborValue value={overall.value} />,
-          sub: laborLabel(overall.value),
-        },
-        { label: "Labor $", value: fmt$Compact(sales.totals.labor_cost), sub: fmt$(sales.totals.labor_cost) },
-        { label: "Est. labor %", value: fmtPct(sales.totals.labor_percent), sub: "labor ÷ sales" },
+        { label: "Final labor %", value: <LaborValue value={overall} />, sub: statusOf(overall) },
         { label: "Weeks on target", value: `${weeksOnTarget}/${finalWeeks.length}`, sub: "final 19–24%" },
-        { label: "Stores on target", value: `${storesOnTarget}/${stores.length}`, sub: plural(stores.length, "store") },
+        { label: "Stores on target", value: `${storesOnTarget}/${finalStores.length}`, sub: plural(finalStores.length, "store") },
       ]}
       tabs={tabs}
     />
   );
 }
 
-/** Final labor % (Hiring) gauge; the derived labor ÷ sales stands in, marked "Est.", only while no final exists. */
+/** Final labor % gauge: total payroll ÷ royalty obligation over the range's store-weeks with payroll. */
 export function BrLaborCard({ data }: { data: SalesSection }) {
   const final = useFinalLabor();
   const [open, setOpen] = useState(false);
-  const { value, isFinal } = preferFinal(final?.overall, data.totals.labor_percent);
+  const value = final?.overall ?? null;
   const weeksWithFinal = final?.byWeek.size ?? 0;
 
   return (
@@ -203,24 +178,25 @@ export function BrLaborCard({ data }: { data: SalesSection }) {
       category="operations"
       period="R"
       span={1}
-      headerNote={isFinal ? "Final" : "Est."}
+      headerNote="Final"
       bodyClassName="overflow-hidden"
       onExpand={() => setOpen(true)}
     >
       <div className="flex flex-col">
         <div className="mx-auto w-full max-w-[260px]">
           <SpeedometerGauge
-            value={value}
+            value={value ?? 0}
             max={LABOR_SCALE}
             zones={LABOR_ZONES}
-            statusLabel={laborLabel(value)}
+            statusLabel={statusOf(value)}
             statusColor="#DC2626"
-            valueDisplay={fmtPct(value)}
+            valueDisplay={value === null ? NO_VALUE : fmtPct(value)}
           />
         </div>
         <p className="text-center text-[9px] font-medium text-muted-foreground">
-          {isFinal && `Final labor, avg of ${plural(weeksWithFinal, "week")} · `}
-          {!isFinal && (final === null ? "Est. (labor ÷ sales) · final loading · " : "Est. (labor ÷ sales) · no final yet · ")}
+          {final === null && "Final labor loading · "}
+          {final !== null && value === null && "No payroll for this range · "}
+          {value !== null && `Payroll ÷ royalty, ${plural(weeksWithFinal, "week")} · `}
           Target <span className="font-semibold text-emerald-600 dark:text-emerald-400">19–24%</span>
         </p>
       </div>
