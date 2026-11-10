@@ -61,7 +61,7 @@ export default function BusinessReportsPage() {
   // The full selection to go back to after focusing one store.
   const [beforeFocus, setBeforeFocus] = useState<{ params: BusinessReportsParams; selection: StoreSelection } | null>(null);
 
-  const { sections, loadedParams, loadedAt, busy, load } = useBusinessReports();
+  const { sections, loadedParams, loadedAt, busy, load, stop } = useBusinessReports();
 
   const storesFor = useCallback(
     (sel: StoreSelection) => (sel === "all" ? storeOptions.map((o) => o.id) : sel),
@@ -121,6 +121,7 @@ export default function BusinessReportsPage() {
         range={range}
         onRangeChange={setRange}
         onLoad={handleLoad}
+        onStop={stop}
         busy={busy}
         hasLoaded={loadedParams !== null}
       />

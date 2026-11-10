@@ -20,7 +20,8 @@ import type { OperationsMetrics, SalesMetrics, SalesSection } from "@/types/busi
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  Store Comparison — one row per loaded store with the range's headline
- *  figures side by side. Sales drives it; operations (portal / HnR) and the
+ *  figures side by side. Sales drives it; operations (Blue Line / Pepsi %
+ *  of sales, portal / HnR) and the
  *  store score fill in when those sections land. Labor % is Hiring's FINAL
  *  labor (mean of the store's weeks) where it exists, else the derived
  *  labor cost ÷ sales ("Est."). A row focuses that store.
@@ -131,6 +132,20 @@ export function BrStoreComparison({ data }: { data: SalesSection }) {
         numeric: true,
         render: (r) => <LaborPctValue value={r.labor.value} isFinal={r.labor.isFinal} />,
         sortValue: (r) => r.labor.value,
+      },
+      {
+        key: "blue_line",
+        header: "Blue Line %",
+        numeric: true,
+        render: (r) => show(opsValue(r, (m) => m.blue_line_pct), fmtPct, opsPending(r)),
+        sortValue: (r) => opsValue(r, (m) => m.blue_line_pct),
+      },
+      {
+        key: "pepsi",
+        header: "Pepsi %",
+        numeric: true,
+        render: (r) => show(opsValue(r, (m) => m.pepsi_pct), fmtPct, opsPending(r)),
+        sortValue: (r) => opsValue(r, (m) => m.pepsi_pct),
       },
       {
         key: "portal",

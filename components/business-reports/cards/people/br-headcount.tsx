@@ -11,8 +11,9 @@ import type { LaborReport } from "@/types/business-reports.types";
 import { TALL_ROW_HEIGHT, peopleBarOptions } from "./br-people-kit";
 
 /* ──────────────────────────────────────────────────────────────────────────
- *  Headcount — active employees at the start vs end of the range, hires and
- *  separations, and the end-of-range mix by position (all loaded stores).
+ *  Headcount — active employees at the start vs end of the range, hires,
+ *  separations and moves between stores (start + all four = end), and the
+ *  end-of-range mix by position (all loaded stores).
  * ────────────────────────────────────────────────────────────────────────── */
 
 const BAR_ROW_PX = 22;
@@ -22,6 +23,9 @@ export function BrHeadcount({ data }: { data: LaborReport }) {
   const theme = useChartTheme();
   const h = data.combined.headcount;
   const positions = h.by_position;
+  // Net = end − start = hires − separations + moved in − moved out (Hiring
+  // counts each person's moves, so these always add up to it). A move between
+  // two loaded stores is a move out of one and a move into the other.
   const net = h.net_change;
 
   const options = useMemo(
@@ -51,7 +55,7 @@ export function BrHeadcount({ data }: { data: LaborReport }) {
               net < 0 && "bg-rose-500/15 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400",
               net === 0 && "bg-muted text-muted-foreground",
             )}
-            title="New hires minus separations over the range"
+            title="Active employees at the end minus at the start"
           >
             {net > 0 ? "+" : ""}
             {fmtNumber(net)} net
@@ -59,8 +63,10 @@ export function BrHeadcount({ data }: { data: LaborReport }) {
         </div>
 
         <div className="grid grid-cols-2 gap-1">
-          <V1Metric label="New Hires" value={fmtNumber(h.new_hires)} size="sm" />
-          <V1Metric label="Separations" value={fmtNumber(h.separations)} size="sm" />
+          <V1Metric label="New Hires" value={`+${fmtNumber(h.new_hires)}`} size="sm" />
+          <V1Metric label="Separations" value={`−${fmtNumber(h.separations)}`} size="sm" />
+          <V1Metric label="Moved In" value={`+${fmtNumber(h.transfers_in)}`} size="sm" />
+          <V1Metric label="Moved Out" value={`−${fmtNumber(h.transfers_out)}`} size="sm" />
         </div>
 
         <V1SubLabel>By Position · end of range</V1SubLabel>

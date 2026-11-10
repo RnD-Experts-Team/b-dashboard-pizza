@@ -91,7 +91,6 @@ function PerformanceDialog({
       { key: "hours", header: "Hours", numeric: true, render: (r) => fmtHours(r.h.total_hours, 0), sortValue: (r) => r.h.total_hours },
       { key: "gross", header: "Gross Pay", numeric: true, render: (r) => fmtCurrency(r.h.total_gross_pay, 0), sortValue: (r) => r.h.total_gross_pay },
       { key: "hourly", header: "Avg Hourly", numeric: true, render: (r) => fmtCurrency(r.h.average_hourly_pay), sortValue: (r) => r.h.average_hourly_pay },
-      { key: "sales", header: "Sales", numeric: true, render: (r) => fmtCurrency(r.h.total_sales, 0), sortValue: (r) => r.h.total_sales },
       {
         key: "labor",
         header: "Labor %",
@@ -114,7 +113,7 @@ function PerformanceDialog({
       label: labor.isFinal ? "Final labor" : "Labor (est.)",
       value: <LaborPctValue value={labor.value} isFinal={labor.isFinal} tagClassName="text-[10px]" />,
     },
-    { label: "Total sales", value: fmtMoneyTile(h.total_sales), sub: `${fmtMoneyTile(h.total_tips)} tips` },
+    { label: "Total tips", value: fmtMoneyTile(h.total_tips) },
     { label: "Avg performance", value: fmtNumber(h.average_performance_score, TWO_DP), sub: `final score ${fmtNumber(h.average_final_score, TWO_DP)}` },
   ];
   const storeSearch = (r: StoreRow) => storeName(r.store);
@@ -205,7 +204,6 @@ export function BrLaborPerformance({ data }: { data: LaborReport }) {
           label={labor.isFinal ? "Final Labor" : "Labor (est.)"}
           value={<LaborPctValue value={labor.value} isFinal={labor.isFinal} />}
         />
-        <V1Metric label="Total Sales" value={<span title={fmtCurrency(h.total_sales, 0)}>{fmtMoneyTile(h.total_sales)}</span>} />
         <V1Metric label="Total Tips" value={<span title={fmtCurrency(h.total_tips, 0)}>{fmtMoneyTile(h.total_tips)}</span>} />
         <V1Metric label="Avg Performance" value={fmtNumber(h.average_performance_score, TWO_DP)} />
         <V1Metric label="Avg Final Score" value={fmtNumber(h.average_final_score, TWO_DP)} />

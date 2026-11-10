@@ -16,6 +16,7 @@
 
 import type { AnalyticsSummary } from "@/types/maintenance-analytics.types";
 import type { StoreSkillsOverview } from "@/types/skills.types";
+import type { SalesHistory } from "@/types/dashboard-report.types";
 
 /* ══════════════════════════════════════════════════════════════════════
  *  Request
@@ -637,9 +638,15 @@ export interface LaborBlock {
   headcount: {
     active_start: number;
     active_end: number;
+    /** active_end − active_start (hires − separations + transfers in − out). */
     net_change: number;
+    /** People who became active at these stores while active nowhere before. */
     new_hires: number;
+    /** People who left these stores and are active nowhere after. */
     separations: number;
+    /** Moved in from / out to a store outside the one counted. */
+    transfers_in: number;
+    transfers_out: number;
     by_position: Array<{ position: string; count: number }>;
   };
   tenure: {
@@ -801,14 +808,21 @@ export interface BusinessReportsData {
   tickets: AnalyticsSummary;
   /** Operations: every active employee of the stores against every skill (a snapshot, not ranged). */
   skills: StoreSkillsOverview;
+  /** V1's Sales History for the loaded stores together: every week since the first data (not the picked range). */
+  salesHistory: SalesHistory;
 }
 
 export type SectionKey = keyof BusinessReportsData;
 
+/** Why a section has no data: stopped by the user, too heavy for the range, no access, or another failure. */
+export type SectionErrorKind = "stopped" | "too-big" | "no-access" | "failed";
+
 /** One section's state: each loads, fails and renders on its own. */
 export interface SectionState<T> {
   data: T | null;
+  /** A short message for the user (never raw server output). */
   error: string | null;
+  errorKind?: SectionErrorKind;
   loading: boolean;
 }
 
