@@ -4,55 +4,86 @@ import { useMemo } from "react";
 import { useSection } from "./report-context";
 
 /**
- * FINAL labor % (Hiring's weekly labor, what V1's "Final" view shows) — the
- * labor figure every Business Reports card uses wherever it exists. The
- * derived one (labor cost ÷ sales from the Data service) is only a fallback
- * for a week/store Hiring has no final value for, or while it is loading.
+ * FINAL labor % — the only labor figure Business Reports shows (no estimate):
+ * total payroll ÷ royalty obligation × 100, added up over store-weeks, never
+ * an average of weekly percentages. Payroll per store-week comes from Hiring's
+ * payroll weeks model; royalty obligation per store-week from the sales
+ * section. A store-week without payroll (or without royalty) is left out.
  */
 export interface FinalLabor {
-  /** Mean of the range's weeks (combined across stores); null with none. */
+  /** Every loaded store-week together; null with none. */
   overall: number | null;
-  /** week_start → combined final labor %. */
+  /** week_start → all stores that week. */
   byWeek: Map<string, number>;
-  /** store → mean of its weeks. */
+  /** store → all its weeks. */
   byStore: Map<string, number>;
-  /** store → week_start → final labor %. */
+  /** store → week_start → that store-week. */
   byStoreWeek: Map<string, Map<string, number>>;
+  /** Over any weeks (and stores) — for buckets like a period or a quarter. */
+  over: (weeks: Iterable<string>, stores?: Iterable<string>) => number | null;
 }
 
-type Entry = { week_start: string; labor: number | null };
+interface StoreWeek {
+  store: string;
+  week: string;
+  payroll: number;
+  royalty: number;
+}
 
-function weekMap(entries: Entry[] | undefined): Map<string, number> {
+const PERCENT = 100;
+
+function ratio(rows: StoreWeek[]): number | null {
+  const royalty = rows.reduce((sum, r) => sum + r.royalty, 0);
+  return royalty > 0 ? (rows.reduce((sum, r) => sum + r.payroll, 0) / royalty) * PERCENT : null;
+}
+
+function groupBy(rows: StoreWeek[], key: (r: StoreWeek) => string): Map<string, StoreWeek[]> {
+  return rows.reduce((groups, r) => groups.set(key(r), [...(groups.get(key(r)) ?? []), r]), new Map<string, StoreWeek[]>());
+}
+
+function ratioBy(rows: StoreWeek[], key: (r: StoreWeek) => string): Map<string, number> {
+  const groups = groupBy(rows, key);
   return new Map(
-    (entries ?? []).flatMap((e) => (e.labor === null || e.labor === undefined ? [] : [[e.week_start, e.labor] as const])),
+    [...groups].flatMap(([k, group]) => {
+      const value = ratio(group);
+      return value === null ? [] : [[k, value] as const];
+    }),
   );
 }
 
-function mean(values: Iterable<number>): number | null {
-  const list = [...values];
-  return list.length ? list.reduce((a, b) => a + b, 0) / list.length : null;
-}
-
-/** null until the Hiring labor report has loaded (callers fall back to derived labor). */
+/** null until both the Hiring labor report and the sales section have loaded. */
 export function useFinalLabor(): FinalLabor | null {
-  const { data } = useSection("labor");
+  const { data: labor } = useSection("labor");
+  const { data: sales } = useSection("sales");
   return useMemo(() => {
-    if (!data) return null;
-    const byStoreWeek = new Map(
-      Object.entries(data.by_store ?? {}).map(([store, block]) => [store, weekMap(block.final_labor)]),
-    );
-    const byStore = new Map(
-      [...byStoreWeek].flatMap(([store, weeks]) => {
-        const m = mean(weeks.values());
-        return m === null ? [] : [[store, m] as const];
+    if (!labor || !sales) return null;
+    const rows: StoreWeek[] = Object.entries(labor.by_store ?? {}).flatMap(([store, block]) =>
+      (block.final_labor ?? []).flatMap((w) => {
+        const royalty = sales.by_store_week?.[store]?.[w.week_start]?.sales ?? 0;
+        return w.payroll === null || w.payroll === undefined || royalty <= 0
+          ? []
+          : [{ store, week: w.week_start, payroll: w.payroll, royalty }];
       }),
     );
-    const byWeek = weekMap(data.combined?.final_labor);
-    return { overall: mean(byWeek.values()), byWeek, byStore, byStoreWeek };
-  }, [data]);
+    const byStoreWeek = new Map(
+      [...groupBy(rows, (r) => r.store)].map(([store, group]) => [store, ratioBy(group, (r) => r.week)] as const),
+    );
+    const over = (weeks: Iterable<string>, stores?: Iterable<string>) => {
+      const weekSet = new Set(weeks);
+      const storeSet = stores ? new Set(stores) : null;
+      return ratio(rows.filter((r) => weekSet.has(r.week) && (storeSet === null || storeSet.has(r.store))));
+    };
+    return {
+      overall: ratio(rows),
+      byWeek: ratioBy(rows, (r) => r.week),
+      byStore: ratioBy(rows, (r) => r.store),
+      byStoreWeek,
+      over,
+    };
+  }, [labor, sales]);
 }
 
-/** Final labor when there is one, else the derived figure. */
-export function preferFinal(final: number | null | undefined, derived: number): { value: number; isFinal: boolean } {
-  return final === null || final === undefined ? { value: derived, isFinal: false } : { value: final, isFinal: true };
+/** The final labor to show; null (shown "—") when there is none — never an estimate. */
+export function laborValue(final: number | null | undefined): { value: number | null; isFinal: boolean } {
+  return final === null || final === undefined ? { value: null, isFinal: false } : { value: final, isFinal: true };
 }

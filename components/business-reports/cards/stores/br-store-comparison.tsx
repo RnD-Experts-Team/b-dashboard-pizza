@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import { DASH } from "@/components/labor/labor-format";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
-import { preferFinal, useFinalLabor } from "@/components/business-reports/final-labor";
+import { laborValue, useFinalLabor } from "@/components/business-reports/final-labor";
 import { useReport, useSection } from "@/components/business-reports/report-context";
 import { LaborPctValue } from "@/components/business-reports/cards/people/br-people-kit";
 import {
@@ -22,9 +22,9 @@ import type { OperationsMetrics, SalesMetrics, SalesSection } from "@/types/busi
  *  Store Comparison — one row per loaded store with the range's headline
  *  figures side by side. Sales drives it; operations (Blue Line / Pepsi %
  *  of sales, portal / HnR) and the
- *  store score fill in when those sections land. Labor % is Hiring's FINAL
- *  labor (mean of the store's weeks) where it exists, else the derived
- *  labor cost ÷ sales ("Est."). A row focuses that store.
+ *  store score fill in when those sections land. Labor % is the final labor:
+ *  payroll ÷ royalty obligation over the store's weeks with payroll. A row
+ *  focuses that store.
  * ────────────────────────────────────────────────────────────────────────── */
 
 const CARD_HEIGHT = 460;
@@ -66,9 +66,6 @@ export function BrStoreComparison({ data }: { data: SalesSection }) {
       .sort((a, b) => data.by_store[b].sales - data.by_store[a].sales);
     const rankOf = new Map(ranked.map((s, i) => [s, i + 1]));
     return params.stores.map((store) => {
-      const m = data.by_store[store];
-      const fin = final?.byStore.get(store);
-      const derived = m && m.store_days > 0 && m.sales > 0 ? m.labor_percent : null;
       return {
       store,
       rank: rankOf.get(store) ?? null,
@@ -76,7 +73,7 @@ export function BrStoreComparison({ data }: { data: SalesSection }) {
       ops: opsByStore?.[store] ?? null,
       score: scoreByStore?.[store]?.average_score ?? null,
       scoreLabel: scoreByStore?.[store]?.average_label ?? null,
-      labor: derived === null ? { value: fin ?? null, isFinal: fin !== undefined } : preferFinal(fin, derived),
+      labor: laborValue(final?.byStore.get(store)),
       };
     });
   }, [params.stores, data.by_store, opsByStore, scoreByStore, final]);

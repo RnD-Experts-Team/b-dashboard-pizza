@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import type { SalesMetrics } from "@/types/business-reports.types";
 import { useSection } from "./report-context";
 import { SectionNote } from "./section-slot";
-import { useFinalLabor, preferFinal } from "./final-labor";
+import { useFinalLabor, laborValue } from "./final-labor";
 import { fmt$, fmt$2, fmtNum, fmtPct, perStoreDay } from "./report-format";
 
 interface Tile {
@@ -38,9 +38,10 @@ interface Tile {
 }
 
 const TILE_COUNT = 10;
+const DASH = "—";
 
 function buildTiles(t: SalesMetrics, finalLabor: number | null): Tile[] {
-  const labor = preferFinal(finalLabor, t.labor_percent);
+  const labor = laborValue(finalLabor);
   const avg = (v: number) => perStoreDay(v, t.store_days);
   return [
     {
@@ -136,16 +137,14 @@ function buildTiles(t: SalesMetrics, finalLabor: number | null): Tile[] {
       tooltip: "Waste recorded in Alta inventory (cost)",
     },
     {
-      label: labor.isFinal ? "Final Labor" : "Labor (est.)",
-      total: fmtPct(labor.value),
+      label: "Final Labor",
+      total: labor.value === null ? DASH : fmtPct(labor.value),
       perDay: fmt$(avg(t.labor_cost)),
       icon: Clock,
       color: "text-sky-600 dark:text-sky-400",
       iconBg: "bg-sky-500/15 dark:bg-sky-500/20",
       border: "border-l-sky-500",
-      tooltip: labor.isFinal
-        ? "Final labor % (weekly, from Hiring) averaged over the range — per store-day: labor cost"
-        : "Estimated labor % (labor cost ÷ sales) until the final labor loads — per store-day: labor cost",
+      tooltip: "Final labor: total payroll ÷ royalty obligation × 100 over the store-weeks with payroll — per store-day: labor cost",
     },
   ];
 }
