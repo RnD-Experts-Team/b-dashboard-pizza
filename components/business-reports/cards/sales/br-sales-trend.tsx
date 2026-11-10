@@ -9,7 +9,7 @@ import { ApexChart, useChartTheme } from "@/components/business-reports/chart";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
 import { useReport } from "@/components/business-reports/report-context";
 import { ReportBlock, ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
-import { preferFinal, useFinalLabor, type FinalLabor } from "@/components/business-reports/final-labor";
+import { laborValue, useFinalLabor, type FinalLabor } from "@/components/business-reports/final-labor";
 import {
   Delta,
   GRANULARITY_OPTIONS,
@@ -23,7 +23,6 @@ import {
   fmtRange,
   pctChangeOrNull,
   perStoreDay,
-  share,
   sumKeys,
   type Granularity,
 } from "@/components/business-reports/report-format";
@@ -73,7 +72,7 @@ interface TrendPoint {
 interface TrendRow extends TrendPoint {
   delta: number | null;
   avgTicket: number;
-  labor: { value: number; isFinal: boolean };
+  labor: { value: number | null; isFinal: boolean };
   perStoreDay: number;
 }
 
@@ -85,7 +84,7 @@ interface StoreRow {
   customers: number;
   orders: number;
   avgTicket: number;
-  labor: { value: number; isFinal: boolean };
+  labor: { value: number | null; isFinal: boolean };
 }
 
 const compact$ = new Intl.NumberFormat("en-US", {
@@ -135,15 +134,9 @@ function avgTicketOf(p: { sales: number; customers: number }): number {
   return p.customers > 0 ? p.sales / p.customers : 0;
 }
 
-/**
- * Final labor for a bucket when Hiring has it for EVERY week in it (their
- * mean, V1's convention); otherwise the derived labor cost ÷ sales.
- */
-function bucketLabor(p: TrendPoint, final: FinalLabor | null): { value: number; isFinal: boolean } {
-  const finals = final ? p.weeks.map((w) => final.byWeek.get(w)) : [];
-  const complete = finals.length > 0 && finals.every((v) => v !== undefined);
-  const mean = complete ? finals.reduce<number>((s, v) => s + (v ?? 0), 0) / finals.length : null;
-  return preferFinal(mean, share(p.laborCost, p.sales));
+/** A bucket's final labor: its weeks' payroll ÷ royalty obligation (weeks with payroll only). */
+function bucketLabor(p: TrendPoint, final: FinalLabor | null): { value: number | null; isFinal: boolean } {
+  return laborValue(final?.over(p.weeks));
 }
 
 function toRows(points: TrendPoint[], final: FinalLabor | null): TrendRow[] {
@@ -348,7 +341,7 @@ function periodColumns(firstHeader: string): PagedColumn<TrendRow>[] {
       key: "labor",
       header: "Labor %",
       numeric: true,
-      sortValue: (r) => (r.labor.value > 0 ? r.labor.value : null),
+      sortValue: (r) => r.labor.value,
       render: (r) => <LaborValue value={r.labor.value} isFinal={r.labor.isFinal} />,
     },
   ];
@@ -363,7 +356,7 @@ function storeRow(store: string, m: SalesMetrics, final: FinalLabor | null): Sto
     customers: m.customer_count,
     orders: m.total_orders,
     avgTicket: avgTicketOf({ sales: m.sales, customers: m.customer_count }),
-    labor: preferFinal(final?.byStore.get(store), m.labor_percent),
+    labor: laborValue(final?.byStore.get(store)),
   };
 }
 
@@ -403,7 +396,7 @@ function TrendDialog({
     return { best: pick((a, b) => a.perStoreDay > b.perStoreDay), worst: pick((a, b) => a.perStoreDay < b.perStoreDay) };
   }, [rows]);
 
-  const overallLabor = preferFinal(final?.overall, t.labor_percent);
+  const overallLabor = laborValue(final?.overall);
 
   const stats: ReportStat[] = [
     { label: "Sales", value: fmt$(t.sales), sub: `${fmt$(perStoreDay(t.sales, t.store_days))} per store-day` },
@@ -422,9 +415,9 @@ function TrendDialog({
     },
     { label: "Guests", value: fmtNum(t.customer_count), sub: `${fmt$2(t.avg_ticket)} avg ticket` },
     {
-      label: overallLabor.isFinal ? "Labor % · Final" : "Labor % · Est.",
-      value: overallLabor.value > 0 ? `${overallLabor.value.toFixed(1)}%` : "—",
-      sub: overallLabor.isFinal ? "Hiring's final labor" : "labor cost ÷ sales",
+      label: "Labor % · Final",
+      value: overallLabor.value === null ? "—" : `${overallLabor.value.toFixed(1)}%`,
+      sub: "payroll ÷ royalty obligation",
     },
   ];
 
@@ -455,7 +448,7 @@ function TrendDialog({
         key: "labor",
         header: "Labor %",
         numeric: true,
-        sortValue: (r) => (r.labor.value > 0 ? r.labor.value : null),
+        sortValue: (r) => r.labor.value,
         render: (r) => <LaborValue value={r.labor.value} isFinal={r.labor.isFinal} />,
       },
     ],
@@ -507,7 +500,7 @@ function TrendDialog({
       key: "stores",
       label: "By store",
       content: (
-        <ReportBlock title="Every store" description="Labor %: Final = mean of the store's final weeks; Est. = labor cost ÷ sales.">
+        <ReportBlock title="Every store" description="Labor %: final labor = the store's payroll ÷ royalty obligation over its weeks with payroll.">
           <PagedTable
             size="lg"
             rows={storeRows}

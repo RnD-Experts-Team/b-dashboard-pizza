@@ -11,7 +11,7 @@ import {
   preferredStat,
   type StatHint,
 } from "@/components/labor/labor-format";
-import { preferFinal, useFinalLabor } from "@/components/business-reports/final-labor";
+import { laborValue, useFinalLabor } from "@/components/business-reports/final-labor";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
 import { useReport } from "@/components/business-reports/report-context";
 import { ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
@@ -39,11 +39,6 @@ interface StoreRow {
 function statClass(key: string, stat: Exclude<StatHint, "both">): string | undefined {
   const hint = preferredStat(key);
   return hint === "both" || hint === stat ? "font-semibold" : "text-muted-foreground";
-}
-
-function laborOf(final: number | null | undefined, derived: number | null): { value: number | null; isFinal: boolean } {
-  if (derived === null) return { value: final ?? null, isFinal: final !== null && final !== undefined };
-  return preferFinal(final, derived);
 }
 
 const metricSearch = (r: ColumnRow) => `${r.label} ${r.key}`;
@@ -80,7 +75,7 @@ function PerformanceDialog({
       Object.entries(data.by_store).map(([store, block]) => ({
         store,
         h: block.labor.highlights,
-        labor: laborOf(final?.byStore.get(store), block.labor.highlights.average_labor_percent),
+        labor: laborValue(final?.byStore.get(store)),
       })),
     [data.by_store, final],
   );
@@ -110,7 +105,7 @@ function PerformanceDialog({
     { label: "Avg hourly pay", value: fmtCurrency(h.average_hourly_pay) },
     { label: "Total gross pay", value: fmtMoneyTile(h.total_gross_pay), sub: `${fmtCurrency(h.average_gross_pay_per_employee, 0)} / employee` },
     {
-      label: labor.isFinal ? "Final labor" : "Labor (est.)",
+      label: "Final labor",
       value: <LaborPctValue value={labor.value} isFinal={labor.isFinal} tagClassName="text-[10px]" />,
     },
     { label: "Total tips", value: fmtMoneyTile(h.total_tips) },
@@ -175,7 +170,7 @@ export function BrLaborPerformance({ data }: { data: LaborReport }) {
     () => Object.entries(by_column).map(([key, stats]) => ({ ...stats, key })),
     [by_column],
   );
-  const labor = laborOf(final?.overall, h.average_labor_percent);
+  const labor = laborValue(final?.overall);
 
   return (
     <V1Card
@@ -201,7 +196,7 @@ export function BrLaborPerformance({ data }: { data: LaborReport }) {
           value={<span title={fmtCurrency(h.average_gross_pay_per_employee, 0)}>{fmtMoneyTile(h.average_gross_pay_per_employee)}</span>}
         />
         <V1Metric
-          label={labor.isFinal ? "Final Labor" : "Labor (est.)"}
+          label={"Final Labor"}
           value={<LaborPctValue value={labor.value} isFinal={labor.isFinal} />}
         />
         <V1Metric label="Total Tips" value={<span title={fmtCurrency(h.total_tips, 0)}>{fmtMoneyTile(h.total_tips)}</span>} />

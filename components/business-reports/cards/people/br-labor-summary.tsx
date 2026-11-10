@@ -5,7 +5,7 @@ import { ArrowRight } from "lucide-react";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import { V1Metric } from "@/components/dashboard-v1/v1-ui";
 import { fmtCurrency, fmtHours, fmtNumber, fmtPercent } from "@/components/labor/labor-format";
-import { preferFinal, useFinalLabor, type FinalLabor } from "@/components/business-reports/final-labor";
+import { laborValue, useFinalLabor, type FinalLabor } from "@/components/business-reports/final-labor";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
 import { useReport } from "@/components/business-reports/report-context";
 import { ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
@@ -39,21 +39,15 @@ function netAccent(n: number): string | undefined {
   return undefined;
 }
 
-/** A store's or week's labor %: final when Hiring has it, else the derived one. */
-function laborOf(final: number | null | undefined, derived: number | null): { value: number | null; isFinal: boolean } {
-  if (derived === null) return { value: final ?? null, isFinal: final !== null && final !== undefined };
-  return preferFinal(final, derived);
-}
-
 function storeLabor(final: FinalLabor | null, r: StoreRow) {
-  return laborOf(final?.byStore.get(r.store), r.block.labor.highlights.average_labor_percent);
+  return laborValue(final?.byStore.get(r.store));
 }
 
 function LaborSummaryDialog({ data, rows, onClose }: { data: LaborReport; rows: StoreRow[]; onClose: () => void }) {
   const { storeName } = useReport();
   const final = useFinalLabor();
   const s = data.combined.summary;
-  const overall = laborOf(final?.overall, data.combined.labor.highlights.average_labor_percent);
+  const overall = laborValue(final?.overall);
 
   const columns = useMemo<PagedColumn<StoreRow>[]>(
     () => [
@@ -191,10 +185,10 @@ function LaborSummaryDialog({ data, rows, onClose }: { data: LaborReport; rows: 
         header: "Labor %",
         numeric: true,
         render: (w) => {
-          const l = laborOf(final?.byWeek.get(w.week_start), w.average_labor_percent);
+          const l = laborValue(final?.byWeek.get(w.week_start));
           return <LaborPctValue value={l.value} isFinal={l.isFinal} />;
         },
-        sortValue: (w) => laborOf(final?.byWeek.get(w.week_start), w.average_labor_percent).value,
+        sortValue: (w) => laborValue(final?.byWeek.get(w.week_start)).value,
       },
       { key: "turnover", header: "Turnover", numeric: true, render: (w) => fmtPercent(w.turnover_rate_percent), sortValue: (w) => w.turnover_rate_percent },
       { key: "pay", header: "Avg Hourly", numeric: true, render: (w) => fmtCurrency(w.average_hourly_pay), sortValue: (w) => w.average_hourly_pay },
@@ -210,7 +204,7 @@ function LaborSummaryDialog({ data, rows, onClose }: { data: LaborReport; rows: 
     { label: "Turnover", value: fmtPercent(s.turnover_rate_percent) },
     { label: "Avg weekly gross", value: fmtMoneyTile(s.avg_weekly_gross_pay), sub: `${fmtHours(s.avg_weekly_hours, 0)} / week` },
     {
-      label: overall.isFinal ? "Final labor" : "Labor (est.)",
+      label: "Final labor",
       value: <LaborPctValue value={overall.value} isFinal={overall.isFinal} tagClassName="text-[10px]" />,
     },
   ];

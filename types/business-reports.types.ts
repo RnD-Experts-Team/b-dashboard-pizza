@@ -696,7 +696,8 @@ export interface LaborBlock {
     total_hours: number | null;
     tips_per_hour: number | null;
   };
-  final_labor: Array<{ week_start: string; week_end: string; labor: number | null }>;
+  /** Total payroll per week from Hiring's payroll weeks model; null for a week it has none. */
+  final_labor: Array<{ week_start: string; week_end: string; payroll: number | null }>;
   roster?: LaborRosterRow[];
   birthdays?: Array<{
     employee_id: number;

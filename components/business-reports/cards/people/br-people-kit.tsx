@@ -184,7 +184,7 @@ export function ActiveToggle({
 
 /**
  * A labor % in its V1 band colour, tagged "Final" (Hiring's weekly final
- * labor) or "Est." (derived labor cost ÷ sales, the fallback).
+ * labor: payroll ÷ royalty obligation); "—" when there is none.
  */
 export function LaborPctValue({
   value,
