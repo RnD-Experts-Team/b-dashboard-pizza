@@ -41,6 +41,16 @@ function isCaption(ev: CalendarEvent): boolean {
   return isSummaryEvent(ev) || (!!ev.feedType && CAPTION_TYPES.has(ev.feedType));
 }
 
+/**
+ * A roll-up of the per-store daily captions ("Cleaning 0/19", "Dough not confirmed",
+ * "LY $3,407"): the same routine in every store, every day. A Month cell leaves it
+ * out — repeated in all 35 cells it only adds noise; the day panel lists it and the
+ * date's tint says when it went badly.
+ */
+export function isRoutineRollUp(ev: CalendarEvent): boolean {
+  return !!ev.members?.length && isCaption(ev.members[0]);
+}
+
 /** Events that are the same thing in another store share a key; null = never grouped. */
 function bucketKey(ev: CalendarEvent): string | null {
   if (ev.source === "user" || ev.companyWide || !ev.store.code) return null;

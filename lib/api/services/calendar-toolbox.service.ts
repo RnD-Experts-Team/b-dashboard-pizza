@@ -1,9 +1,11 @@
 import axios from "axios";
 import {
   isPrivateTaskAction,
+  parseReminderList,
   toCreatePayload,
   type CreateItemInput,
   type ReminderAction,
+  type ReminderRef,
   type TaskAction,
 } from "@/lib/calendar/toolbox-write";
 import { invalidateFeedSource } from "./calendar-feed.service";
@@ -94,9 +96,10 @@ export const calendarToolboxService = {
 
   /**
    * Creator only. Without `store` the whole item is cancelled in every store it was
-   * sent to (guide §8.2). With `store` (`?stores=`, the same query the task actions
-   * use for "the ONE store") only that store's copy should be — NOT in the guide:
-   * if the backend ignores it, the item is cancelled everywhere, as without it.
+   * sent to. With `store` (`?stores=`; FRONTEND_CALENDAR_CHANGES.md) only that store's
+   * copy is: a plain event leaves that store for good, a task stays there as
+   * `cancelled`; cancelling the last store cancels the item everywhere. A 422
+   * ("not in every store sent", "Nothing to cancel there") carries its own message.
    */
   cancelEvent(id: number, store?: string): Promise<void> {
     return post(`/events/${id}/cancel`, {}, store ? { stores: store } : undefined);
@@ -109,6 +112,20 @@ export const calendarToolboxService = {
    */
   taskAction(id: number, action: TaskAction, store: string, body: { note?: string; reason?: string } = {}): Promise<void> {
     return post(`/tasks/${id}/${action}`, body, isPrivateTaskAction(action) ? undefined : { stores: store });
+  },
+
+  /**
+   * All my reminders (upcoming and rung), so an event can say "a reminder is set"
+   * even when it rings on a day the view isn't showing. A read: it never throws —
+   * without the list the Calendar still shows the reminders the feed carries.
+   */
+  async listReminders(): Promise<ReminderRef[]> {
+    try {
+      const { data } = await axios.get(`${BASE}/reminders`, { headers: headers(), timeout: TIMEOUT_MS });
+      return parseReminderList(data);
+    } catch {
+      return [];
+    }
   },
 
   reminderAction(id: number, action: ReminderAction, body: { minutes?: number } = {}): Promise<void> {

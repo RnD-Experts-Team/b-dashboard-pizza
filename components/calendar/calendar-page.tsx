@@ -22,6 +22,7 @@ import {
   useCalendarNow,
   useCalendarStores,
   useCalendarYear,
+  useReminderTargets,
 } from "@/lib/hooks/use-calendar-events";
 import { CalendarClockProvider } from "./calendar-clock";
 import { CategoryTabs, FilterPopover } from "./calendar-filters";
@@ -31,6 +32,7 @@ import { EventDialog, type EditorTarget } from "./event-dialog";
 import { FeedNotice, ManyStoresNote } from "./feed-notice";
 import { CalendarPeekProvider, usePeek, type PeekTarget } from "./event-peek";
 import { DayCountsPeekCard, DayPeekCard, EventPeekCard, GroupPeekCard } from "./peek-cards";
+import { ReminderTargetsProvider } from "./event-signs";
 import { ShowStoreProvider } from "./store-label";
 import { StorePicker } from "./store-picker";
 import { useCalendarFormat } from "./use-calendar-format";
@@ -266,17 +268,7 @@ function CalendarPageInner({ now }: { now: number }) {
   const grouped = useMemo(() => byDay(viewEvents), [viewEvents]);
   // My reminders by the event they were made from, so that event's card can say "Reminder set for …".
   // From every loaded event (not the filtered ones): hiding the reminders tab shouldn't hide the proof.
-  const remindersByTarget = useMemo(() => {
-    const map = new Map<string, CalendarEvent[]>();
-    for (const e of events) {
-      const target = e.feedType === "reminder" ? e.extra?.target_ref : null;
-      if (typeof target !== "string") continue;
-      const list = map.get(target);
-      if (list) list.push(e);
-      else map.set(target, [e]);
-    }
-    return map;
-  }, [events]);
+  const remindersByTarget = useReminderTargets(events);
   const renderPeek = useCallback(
     (target: PeekTarget, close: () => void) => {
       const go = (key: string) => {
@@ -371,9 +363,9 @@ function CalendarPageInner({ now }: { now: number }) {
   else if (isYear ? year.showSkeleton : showSkeleton) body = <CalendarSkeleton />;
   else if (view === "month")
     body = compact ? (
-      <CompactMonthView cursor={cursor} events={viewEvents} onSelectDay={selectDay} />
+      <CompactMonthView cursor={cursor} events={viewEvents} onSelectDay={selectDay} onOpenDay={openDay} />
     ) : (
-      <MonthView cursor={cursor} events={viewEvents} onOpenDay={openDay} />
+      <MonthView cursor={cursor} events={viewEvents} onOpenDay={openDay} onSelectDay={selectDay} />
     );
   else if (view === "week")
     body = (
@@ -398,7 +390,7 @@ function CalendarPageInner({ now }: { now: number }) {
         scrollMemory={scrollMemory}
       />
     );
-  else body = <YearView cursor={cursor} events={viewEvents} counts={year.days} onOpenDay={openDay} onOpenMonth={openMonth} />;
+  else body = <YearView cursor={cursor} events={viewEvents} counts={year.days} onOpenMonth={openMonth} />;
 
   // The Year view draws counts, not events: an empty event list says nothing there.
   const emptyNote =
@@ -410,6 +402,7 @@ function CalendarPageInner({ now }: { now: number }) {
 
   return (
     <ShowStoreProvider value={showStore}>
+    <ReminderTargetsProvider value={remindersByTarget}>
     <CalendarPeekProvider render={renderPeek}>
       <PeekAutoClose signal={`${rangeSignal}|${cursorKey}`} />
       {/* sm+: exactly the height the shell leaves (see useFitHeight) — the page
@@ -422,14 +415,14 @@ function CalendarPageInner({ now }: { now: number }) {
           </Button>
         </PageHeader>
 
-        {/* Controls: category tabs · search · filter. One row on xl+; below that
-            search + filter sit ABOVE the tabs so the tabs get the full width and
-            their underline stays on the divider. */}
-        <div className="flex flex-col gap-3 border-b xl:flex-row xl:items-end xl:justify-between xl:gap-6">
-          <div className="min-w-0">
-            <CategoryTabs counts={counts} total={viewAll.length} hideCounts={isYear} />
+        {/* Controls: event-type chips · search · stores · filter. One row on xl+; below that
+            search + filter sit ABOVE the chips so the chips get the full width. The chips fit
+            themselves to the room (what doesn't fit goes into "N more"), so nothing is clipped. */}
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between xl:gap-6">
+          <div className="min-w-0 xl:flex-1">
+            <CategoryTabs counts={counts} total={viewAll.length} hideCounts={isYear} disabled={isYear} />
           </div>
-          <div className="order-first flex items-center justify-between gap-2 xl:order-none xl:shrink-0 xl:pb-2.5">
+          <div className="order-first flex items-center justify-between gap-2 xl:order-none xl:shrink-0">
             {/* The label carries the width, so the clear button and "/" hint stay inside the field. */}
             <label className="relative min-w-0 flex-1 sm:max-w-64 xl:flex-none">
               <span className="sr-only">{t("search.label")}</span>
@@ -438,6 +431,7 @@ function CalendarPageInner({ now }: { now: number }) {
                 ref={searchRef}
                 type="search"
                 autoComplete="off"
+                disabled={isYear}
                 value={search}
                 placeholder={t("search.placeholder")}
                 onChange={(e) => setSearch(e.target.value)}
@@ -447,7 +441,7 @@ function CalendarPageInner({ now }: { now: number }) {
                     e.currentTarget.blur();
                   }
                 }}
-                className="h-8 w-full rounded-md border bg-background pe-8 ps-8 text-sm shadow-xs outline-none transition-[color,box-shadow,border-color] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30 xl:w-40 xl:transition-[width,color,box-shadow,border-color] xl:focus:w-48 [&::-webkit-search-cancel-button]:hidden"
+                className="h-8 w-full rounded-md border bg-background pe-8 ps-8 text-sm shadow-xs outline-none transition-[color,box-shadow,border-color] placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30 xl:w-40 xl:transition-[width,color,box-shadow,border-color] xl:focus:w-48 [&::-webkit-search-cancel-button]:hidden"
               />
               {search ? (
                 <button
@@ -468,7 +462,7 @@ function CalendarPageInner({ now }: { now: number }) {
               )}
             </label>
             <StorePicker />
-            <FilterPopover counts={counts} />
+            <FilterPopover counts={counts} disabled={isYear} />
           </div>
         </div>
 
@@ -526,6 +520,7 @@ function CalendarPageInner({ now }: { now: number }) {
         onConfirm={confirmDelete}
       />
     </CalendarPeekProvider>
+    </ReminderTargetsProvider>
     </ShowStoreProvider>
   );
 }

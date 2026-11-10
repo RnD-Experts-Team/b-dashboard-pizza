@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
 import { categoryOf } from "@/lib/calendar/categories";
 import { dayKey, fromKey, isDayKey, startOfDay } from "@/lib/calendar/dates";
 import { feedHref } from "@/lib/calendar/feed-links";
-import { COUNT_STATUSES, storesNeedingAttention, type DayCount } from "@/lib/calendar/day-counts";
+import { attentionCount, COUNT_STATUSES, storesNeedingAttention, type DayCount } from "@/lib/calendar/day-counts";
 import { commonCategory, groupStats, needsAction } from "@/lib/calendar/grouping";
 import { isMultiDay, lastDay, spanDays } from "@/lib/calendar/layout";
 import { EVENT_STATUSES, type CalendarEvent, type EventStatus } from "@/lib/calendar/types";
@@ -38,6 +38,7 @@ import { useCalendarClock } from "./calendar-clock";
 import { EventActions } from "./event-actions";
 import { usePeek } from "./event-peek";
 import { AvatarStack, EventDot, StatusBadge } from "./event-parts";
+import { EventSigns } from "./event-signs";
 import { useShowStore } from "./store-label";
 import { useCalendarFormat } from "./use-calendar-format";
 
@@ -142,6 +143,8 @@ export function EventPeekCard({
           {f.title(ev)}
         </h3>
         {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
+        {/* Where it stands: started / submitted / returned / approved, and a reminder I set for it. */}
+        <EventSigns ev={ev} words className="mt-2" />
       </div>
 
       <div className="space-y-2 text-xs">
@@ -231,7 +234,7 @@ export function EventPeekCard({
 }
 
 /** One row of a group: only what needs a look gets a mark (the tally above says the rest). */
-function RowStatus({ status }: { status?: EventStatus }) {
+export function RowStatus({ status }: { status?: EventStatus }) {
   const t = useTranslations("calendar.status");
   if (!status) return null;
   if (status === "overdue" || status === "missed") {
@@ -449,6 +452,13 @@ export function DayCountsPeekCard({
   const attention = useMemo(() => (showStores ? storesNeedingAttention(day) : []), [day, showStores]);
   const shown = attention.slice(0, ATTENTION_NAMES);
   const rest = attention.length - shown.length;
+  // The day's work in three parts: done, still open (running, to do, scheduled) and overdue or missed.
+  const split = useMemo(() => {
+    const done = day.byStatus.done ?? 0;
+    const late = attentionCount(day);
+    const sum = COUNT_STATUSES.reduce((n, s) => n + (day.byStatus[s] ?? 0), 0);
+    return sum > 0 ? { done, late, open: Math.max(0, sum - done - late) } : null;
+  }, [day]);
 
   return (
     <div className="w-72 max-w-full space-y-2.5 p-3" aria-label={f.shortDate(date)}>
@@ -456,6 +466,15 @@ export function DayCountsPeekCard({
         <h3 className="font-heading text-sm font-semibold">{f.shortDate(date)}</h3>
         <span className="text-xs tabular-nums text-muted-foreground">{t("year.total", { n: day.total })}</span>
       </div>
+
+      {/* Decorative: the numbers just below say the same. */}
+      {split && (
+        <div aria-hidden className="flex h-1.5 overflow-hidden rounded-full bg-muted">
+          <span className="basis-0 bg-foreground/70" style={{ flexGrow: split.done }} />
+          <span className="basis-0 bg-foreground/25" style={{ flexGrow: split.open }} />
+          <span className="basis-0 bg-destructive" style={{ flexGrow: split.late }} />
+        </div>
+      )}
 
       <p className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs tabular-nums">
         {COUNT_STATUSES.filter((s) => day.byStatus[s]).map((s) => (

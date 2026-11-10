@@ -8,6 +8,7 @@ import { useCalendarStore } from "@/lib/store/calendar.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { addDays, dayKey, startOfDay } from "@/lib/calendar/dates";
 import { isStoreCode, type FeedSource } from "@/lib/calendar/feed-types";
+import { mergeReminderTargets, reminderTargets, type ReminderRef } from "@/lib/calendar/toolbox-write";
 import type { CalendarEvent, CalendarEventInput, CalendarStoreRef, DateRange } from "@/lib/calendar/types";
 
 /** Show the skeleton only when data is slower than this (no flash on fast loads). */
@@ -272,6 +273,27 @@ export function useTodayEvents(): { events: CalendarEvent[]; todayKey: string | 
   // Nothing to ask until the clock is known (the placeholder range is 1970).
   const { events } = useCalendarEvents(range, { enabled: todayKey != null, source: "dashboard" });
   return { events: todayKey ? events : [], todayKey, now };
+}
+
+/**
+ * My reminders by the event they were made from: the ones the feed carries (they ring
+ * inside the visible range) plus Toolbox's own list of ALL of them, so an event shows
+ * "a reminder is set" on its own day even when the reminder rings on another day.
+ * The list is asked again after every Toolbox write (a new reminder, a snooze, a cancel).
+ */
+export function useReminderTargets(events: readonly CalendarEvent[]): ReadonlyMap<string, readonly CalendarEvent[]> {
+  const revision = useCalendarStore((s) => s.revision);
+  const [listed, setListed] = useState<ReminderRef[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void calendarToolboxService.listReminders().then((list) => {
+      if (alive) setListed(list);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [revision]);
+  return useMemo(() => mergeReminderTargets(reminderTargets(events), listed), [events, listed]);
 }
 
 /** Fallback store for events created with no store selected. */

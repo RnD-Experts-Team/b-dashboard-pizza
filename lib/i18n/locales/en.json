@@ -3632,7 +3632,11 @@
     },
     "tabs": {
       "label": "Event type",
-      "all": "All scheduled"
+      "all": "All",
+      "more": "{n} more",
+      "custom": "{n, plural, one {# type} other {# types}}",
+      "clearCustom": "Show all types",
+      "yearOff": "Event types don't apply to the Year view"
     },
     "search": {
       "label": "Search events",
@@ -3696,6 +3700,16 @@
     "emptyRange": "Nothing scheduled",
     "emptyRangeHint": "No events in this range match your filters. Try another date or show more event types.",
     "schedule": "Schedule",
+    "agenda": {
+      "label": "Day details"
+    },
+    "signs": {
+      "reminder": "Reminder set",
+      "started": "Started",
+      "submitted": "Submitted, awaiting review",
+      "returned": "Returned for changes",
+      "approved": "Approved"
+    },
     "now": "Now",
     "dayOf": "Day {i}/{n}",
     "left": "Now · {d} left",
@@ -3733,7 +3747,11 @@
       "later": "Later today",
       "showEarlier": "{n, plural, one {Show 1 earlier} other {Show # earlier}}",
       "hideEarlier": "Hide earlier",
-      "overdue": "Overdue"
+      "overdue": "Overdue",
+      "attentionGroup": "Needs attention",
+      "needAttention": "{n} need attention",
+      "hintAttention": "{n, plural, one {1 thing needs attention today} other {# things need attention today}}",
+      "routine": "{n, plural, one {Daily routine · 1 item} other {Daily routine · # items}}"
     },
     "newEvent": "New event",
     "editor": {
@@ -3827,6 +3845,11 @@
     },
     "new": {
       "heading": "Add to the calendar",
+      "flow": {
+        "title": "How it moves",
+        "submit": "Submitted",
+        "autoDone": "Done on submit"
+      },
       "kindLabel": "What are you adding",
       "hint": {
         "event": "Something happening at one or more stores.",
@@ -3972,6 +3995,7 @@
       "cancelYes": "Yes, cancel it",
       "cancelAskStores": "Cancel it for {store} only, or for every store it was sent to?",
       "cancelAskAll": "This cancels it for every store it was sent to, not only {store}. Cancel it?",
+      "cancelEventNoUndo": "Cancelling an event for {store} can't be undone: it won't come back to that store.",
       "cancelThisStore": "Only {store}",
       "cancelAllStores": "All stores",
       "keep": "Keep it",
@@ -3992,12 +4016,13 @@
       "total": "{n, plural, one {# item} other {# items}}",
       "needAttention": "Need attention",
       "moreStores": "{n, plural, one {+# more store} other {+# more stores}}",
-      "note": "The year shows every type, coloured by its worst status. Filters and search apply in Day, Week and Month.",
+      "note": "Filters and search apply in Day, Week and Month.",
+      "overdueCount": "{n} overdue or missed",
       "legend": {
-        "attention": "Overdue or missed",
-        "active": "In progress",
-        "open": "Still to do",
-        "done": "All done"
+        "title": "Shaded by overdue or missed work, compared with the rest of the year",
+        "none": "Nothing overdue or missed this year",
+        "less": "Less",
+        "more": "More"
       }
     }
   },

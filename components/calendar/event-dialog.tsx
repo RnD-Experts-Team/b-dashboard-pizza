@@ -128,7 +128,9 @@ export function EventDialog({
   const open = target != null;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-3xl">
+      {/* Wide on purpose: the new-item form lays out in two columns so it fits without scrolling
+          (the height cap and scroll stay for short windows and the narrow single column). */}
+      <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-3xl lg:max-w-4xl">
         {target &&
           (target.kind === "create" && !CALENDAR_MOCK ? (
             <NewItemForm
