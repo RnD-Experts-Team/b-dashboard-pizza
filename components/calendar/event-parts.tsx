@@ -7,10 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { categoryOf } from "@/lib/calendar/categories";
 import { groupPeekId, groupStats } from "@/lib/calendar/grouping";
-import { dotCategories, isMultiDay, isPast, type LaneItem, type LaneMore } from "@/lib/calendar/layout";
+import { dotCategories, eventPriority, isMultiDay, isPast, type LaneItem, type LaneMore } from "@/lib/calendar/layout";
 import type { CalendarEvent, CategoryKey, EventStatus } from "@/lib/calendar/types";
 import { useCalendarClock } from "./calendar-clock";
 import { usePeek, type PeekSide } from "./event-peek";
+import { EventSigns } from "./event-signs";
 import { StoreLabel } from "./store-label";
 import { useCalendarFormat } from "./use-calendar-format";
 
@@ -177,11 +178,17 @@ export function LaneCell({
   );
 }
 
-/** Timed pill: dot · title · time (the time shows once the lane is wide enough). */
-export function EventPill({ ev }: { ev: CalendarEvent }) {
+/**
+ * Timed pill: dot · title · time (the time shows once the lane is wide enough).
+ * `plain` (Month) leaves the store badge out — it only steals the room the title
+ * needs ("Birthday: S…"); the store is in the peek card and the day panel.
+ */
+export function EventPill({ ev, plain }: { ev: CalendarEvent; plain?: boolean }) {
   const f = useCalendarFormat();
   const now = useCalendarClock();
   const { peekProps } = usePeek();
+  // Month: everyday information (a birthday, a shift) steps back; what matters keeps full weight.
+  const calm = !!plain && eventPriority(ev) < 2;
   return (
     <button
       type="button"
@@ -189,15 +196,16 @@ export function EventPill({ ev }: { ev: CalendarEvent }) {
       className={cn(
         "flex h-5 w-full min-w-0 items-center gap-1.5 rounded-sm px-1.5 text-start text-[11px] leading-none transition-colors duration-150 hover:bg-accent/60",
         EVENT_FOCUS,
-        isPast(ev, now) && "text-muted-foreground",
+        (isPast(ev, now) || calm) && "text-muted-foreground",
       )}
     >
       <EventDot category={ev.category} />
-      <StoreLabel ev={ev} />
+      {!plain && <StoreLabel ev={ev} />}
       <PrivateMark ev={ev} />
-      <span dir="auto" className={cn("min-w-0 flex-1 truncate text-start font-medium", struck(ev))}>
+      <span dir="auto" className={cn("min-w-0 flex-1 truncate text-start", calm ? "font-normal" : "font-medium", struck(ev))}>
         {f.title(ev)}
       </span>
+      <EventSigns ev={ev} />
       <span className="hidden shrink-0 tabular-nums text-muted-foreground @[9rem]:inline">
         {f.time(ev.start)}
       </span>
@@ -209,41 +217,49 @@ export function EventPill({ ev }: { ev: CalendarEvent }) {
  * One lane item: timed → pill; all-day → a neutral bar with a category dot.
  * Bars that continue past the row edge lose that corner and show a chevron.
  * `day` — show "Day i/n" on multi-day bars (single-column rows).
+ * `plain` (the Month view, where a day holds dozens) — a one-day item is a line of
+ * text with no fill; one that spans days is a LIGHT band whose flat ends say it
+ * continues (no chevrons, no store badge).
  */
-export function EventBar({ item, day }: { item: LaneItem; day?: Date }) {
+export function EventBar({ item, day, plain }: { item: LaneItem; day?: Date; plain?: boolean }) {
   const f = useCalendarFormat();
   const { peekProps } = usePeek();
   const { ev, before, after } = item;
-  if (ev.members) return <GroupBar item={item} />;
-  if (!ev.allDay) return <EventPill ev={ev} />;
+  if (ev.members) return <GroupBar item={item} plain={plain} />;
+  if (!ev.allDay) return <EventPill ev={ev} plain={plain} />;
+  const flat = plain && !isMultiDay(ev);
+  const calm = flat && eventPriority(ev) < 2;
   const radius = before && after ? "" : before ? "rounded-e-sm" : after ? "rounded-s-sm" : "rounded-sm";
   return (
     <button
       type="button"
       {...peekProps({ type: "event", id: ev.id })}
       className={cn(
-        "flex h-5 w-full min-w-0 items-center gap-1.5 bg-muted px-1.5 text-start text-[11px] font-medium leading-none text-foreground transition-colors duration-150 hover:bg-accent",
+        "flex h-5 w-full min-w-0 items-center gap-1.5 px-1.5 text-start text-[11px] leading-none transition-colors duration-150",
+        calm ? "font-normal text-muted-foreground" : "font-medium text-foreground",
+        flat ? "rounded-sm hover:bg-accent/60" : plain ? "bg-muted/60 hover:bg-accent" : "bg-muted hover:bg-accent",
         EVENT_FOCUS,
-        "data-[peek-open=true]:bg-accent",
-        radius,
+        !flat && "data-[peek-open=true]:bg-accent",
+        flat ? "rounded-sm" : radius,
       )}
     >
       {before ? (
-        <ChevronLeft className="size-3 shrink-0 opacity-50 rtl:rotate-180" />
+        plain ? null : <ChevronLeft className="size-3 shrink-0 opacity-50 rtl:rotate-180" />
       ) : (
         <EventDot category={ev.category} />
       )}
-      <StoreLabel ev={ev} />
+      {!plain && <StoreLabel ev={ev} />}
       <PrivateMark ev={ev} />
       <span dir="auto" className={cn("min-w-0 truncate text-start", struck(ev))}>
         {f.title(ev)}
       </span>
+      <EventSigns ev={ev} />
       {day && isMultiDay(ev) && (
         <span className="ms-auto shrink-0 ps-1 text-[10px] font-medium tabular-nums text-muted-foreground">
           {f.when(ev, day)}
         </span>
       )}
-      {after && <ChevronRight className="ms-auto size-3 shrink-0 opacity-50 rtl:rotate-180" />}
+      {after && !plain && <ChevronRight className="ms-auto size-3 shrink-0 opacity-50 rtl:rotate-180" />}
     </button>
   );
 }
@@ -253,12 +269,16 @@ export function EventBar({ item, day }: { item: LaneItem; day?: Date }) {
  * "Cleaning · 39 stores", with a red count when some of them need attention.
  * Clicking it lists the stores in a peek card.
  */
-function GroupBar({ item }: { item: LaneItem }) {
+function GroupBar({ item, plain }: { item: LaneItem; plain?: boolean }) {
   const t = useTranslations("calendar");
   const { peekProps } = usePeek();
   const { ev, before, after } = item;
   const members = ev.members ?? [];
-  const { stores, action } = groupStats(members);
+  const { stores, action: needing } = groupStats(members);
+  // Plain (Month): no fill and no red badge — what needs attention is the date's tint and the day panel.
+  const flat = plain && !isMultiDay(ev);
+  const calm = flat && eventPriority(ev) < 2;
+  const action = flat ? 0 : needing;
   const label = ev.title ?? ev.typeLabel ?? t(`categories.${ev.category}`);
   const radius = before && after ? "" : before ? "rounded-e-sm" : after ? "rounded-s-sm" : "rounded-sm";
   return (
@@ -266,10 +286,12 @@ function GroupBar({ item }: { item: LaneItem }) {
       type="button"
       {...peekProps({ type: "group", id: groupPeekId(members) })}
       className={cn(
-        "flex h-5 w-full min-w-0 items-center gap-1.5 bg-muted px-1.5 text-start text-[11px] font-medium leading-none text-foreground transition-colors duration-150 hover:bg-accent",
+        "flex h-5 w-full min-w-0 items-center gap-1.5 px-1.5 text-start text-[11px] leading-none transition-colors duration-150",
+        calm ? "font-normal text-muted-foreground" : "font-medium text-foreground",
+        flat ? "rounded-sm hover:bg-accent/60" : "bg-muted hover:bg-accent",
         EVENT_FOCUS,
-        "data-[peek-open=true]:bg-accent",
-        radius,
+        !flat && "data-[peek-open=true]:bg-accent",
+        flat ? "rounded-sm" : radius,
       )}
     >
       {before ? (
@@ -374,6 +396,7 @@ export function AgendaRow({
           <span dir="auto" className={cn("truncate text-start text-sm font-medium leading-snug", struck(ev))}>
             {f.title(ev)}
           </span>
+          <EventSigns ev={ev} className="ms-auto" />
         </span>
         <span className="mt-0.5 flex min-w-0 items-center gap-1.5 ps-3.5 text-xs text-muted-foreground">
           <cat.icon className="size-3 shrink-0" />

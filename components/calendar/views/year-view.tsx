@@ -4,75 +4,79 @@ import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { dayKey, isSameMonth } from "@/lib/calendar/dates";
-import type { DayCount, DayHeat } from "@/lib/calendar/day-counts";
+import { heatLevels, type DayCount, type HeatLevel } from "@/lib/calendar/day-counts";
 import { byDay } from "@/lib/calendar/layout";
 import type { CalendarEvent } from "@/lib/calendar/types";
 import { useCalendarClock } from "../calendar-clock";
-import { MiniMonth } from "../mini-month";
+import { HEAT_CLASS, MiniMonth } from "../mini-month";
 import { useCalendarFormat } from "../use-calendar-format";
 
-/** Same tints as the day cells (`mini-month.tsx`), for the legend. */
-const SWATCH: Record<DayHeat, string> = {
-  attention: "bg-destructive/15 dark:bg-destructive/25",
-  active: "bg-foreground/20",
-  open: "bg-muted",
-  done: "bg-muted/40 ring-1 ring-border",
-};
-const LEGEND: readonly DayHeat[] = ["attention", "active", "open", "done"];
+const LEVELS: readonly HeatLevel[] = [1, 2, 3, 4];
 
 /**
- * Year view: 12 mini months. Each day is tinted by its worst status across the
- * stores shown (`counts`, from `group=day`): hovering a day shows its tally and
- * the stores that need attention, clicking it opens that day (where the events
- * load), and a month's name opens Month view. Events created here before the
- * Toolbox writes (`events`) still add their dots.
+ * Year view: 12 mini months, with one colour in it. A day is tinted only when it
+ * has something overdue or missed, in four steps by how much it stood out against
+ * the rest of the year (`heatLevels`); everything else stays plain, and today is
+ * the one filled circle. Hovering a day shows its numbers and the stores that need
+ * attention; clicking a day (or a month's name) opens the Month view on it, where
+ * the day's panel lists every event (the Year view itself only holds counts).
+ * Events created here before the Toolbox writes (`events`) still add their dots.
  */
 export function YearView({
   cursor,
   events,
   counts,
-  onOpenDay,
   onOpenMonth,
 }: {
   cursor: Date;
   events: CalendarEvent[];
   counts: Map<string, DayCount>;
-  onOpenDay: (key: string) => void;
+  /** A day key opens that day in the Month view; a month's first day opens the month. */
   onOpenMonth: (key: string) => void;
 }) {
   const t = useTranslations("calendar.year");
   const f = useCalendarFormat();
   const now = new Date(useCalendarClock());
   const grouped = useMemo(() => byDay(events), [events]);
+  const levels = useMemo(() => heatLevels(counts), [counts]);
   const year = cursor.getFullYear();
 
   return (
     <div className="flex min-h-full flex-col">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-3 py-2 text-[11px] text-muted-foreground sm:px-4">
-        {LEGEND.map((h) => (
-          <span key={h} className="inline-flex items-center gap-1.5">
-            <span aria-hidden className={cn("size-3 rounded-full", SWATCH[h])} />
-            {t(`legend.${h}`)}
-          </span>
-        ))}
-      </div>
-      <div className="grid flex-1 gap-px bg-border sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+      {/* Nothing counted (no source answered): no legend to explain. */}
+      {counts.size > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b px-4 py-2.5 text-xs text-muted-foreground sm:px-6">
+          <p>{levels.size > 0 ? t("legend.title") : t("legend.none")}</p>
+          {levels.size > 0 && (
+            <div aria-hidden className="flex items-center gap-2">
+              <span>{t("legend.less")}</span>
+              <span className="flex items-center gap-1">
+                <span className="size-3 rounded-full ring-1 ring-inset ring-border" />
+                {LEVELS.map((l) => (
+                  <span key={l} className={cn("size-3 rounded-full", HEAT_CLASS[l])} />
+                ))}
+              </span>
+              <span>{t("legend.more")}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="grid flex-1 content-start gap-x-8 gap-y-8 p-4 sm:grid-cols-2 sm:p-6 lg:grid-cols-3 2xl:grid-cols-4">
         {Array.from({ length: 12 }, (_, m) => {
           const month = new Date(year, m, 1);
           const current = isSameMonth(month, now);
           return (
-            <section key={m} className="bg-card p-3 sm:p-4">
+            <section key={m} aria-label={f.monthName(month)}>
               <button
                 type="button"
                 onClick={() => onOpenMonth(dayKey(month))}
-                className={cn(
-                  "mb-1.5 rounded-md px-1.5 py-0.5 font-heading text-sm font-semibold outline-none transition-colors duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50",
-                  current && "underline decoration-2 underline-offset-4",
-                )}
+                className="-ms-1.5 mb-2 inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 font-heading text-sm font-semibold outline-none transition-colors duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50"
               >
+                {current && <span aria-hidden className="size-1.5 rounded-full bg-primary" />}
                 {f.monthName(month)}
               </button>
-              <MiniMonth month={month} grouped={grouped} counts={counts} onPick={onOpenDay} peek cellClass="h-7" />
+              <MiniMonth month={month} grouped={grouped} counts={counts} levels={levels} onPick={onOpenMonth} peek showOutside={false} cellClass="h-7" />
             </section>
           );
         })}

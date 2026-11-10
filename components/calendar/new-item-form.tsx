@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { BellRing, CalendarPlus, Globe, ListChecks, Loader2, Lock, type LucideIcon } from "lucide-react";
+import { ArrowRight, BellRing, CalendarPlus, Check, Globe, ListChecks, Loader2, Lock, Play, Send, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -19,7 +19,6 @@ import { PRIORITIES, SCOPES, type CreateItemInput, type Priority, type Scope } f
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { CalendarWriteError } from "@/lib/api/services/calendar-toolbox.service";
 import { useCalendarStoreOptions, useCalendarStores, useCalendarToolbox } from "@/lib/hooks/use-calendar-events";
-import { StepLabel } from "./step-label";
 import { StoreMultiSelect } from "./store-multi-select";
 import { useCalendarFormat } from "./use-calendar-format";
 
@@ -100,7 +99,7 @@ function initialState(start: Date, allDay: boolean, stores: string[]): FormState
   };
 }
 
-/** A row of pill choices (one of several). Module-level so it keeps its identity, and its focus, between renders. */
+/** A segmented choice (one of several): a soft track with the chosen one lifted. Module-level so it keeps its identity, and its focus, between renders. */
 function Segmented<T extends string | number>({
   label,
   value,
@@ -115,7 +114,7 @@ function Segmented<T extends string | number>({
   return (
     <div className="space-y-1.5">
       <span className="text-sm font-medium leading-none">{label}</span>
-      <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1.5">
+      <div role="radiogroup" aria-label={label} className="flex w-fit max-w-full flex-wrap gap-0.5 rounded-lg bg-muted/60 p-0.5">
         {items.map((it) => {
           const on = it.value === value;
           return (
@@ -126,10 +125,8 @@ function Segmented<T extends string | number>({
               aria-checked={on}
               onClick={() => onChange(it.value)}
               className={cn(
-                "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium outline-none transition-colors duration-150 focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                on
-                  ? "border-foreground bg-foreground text-background"
-                  : "bg-background text-muted-foreground hover:bg-accent hover:text-foreground dark:bg-input/30",
+                "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium outline-none transition-[background-color,color,box-shadow] duration-150 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                on ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground",
               )}
             >
               {it.label}
@@ -137,6 +134,16 @@ function Segmented<T extends string | number>({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/** A section's title, with an optional control on its right (a switch). */
+function SectionTitle({ title, aside }: { title: string; aside?: ReactNode }) {
+  return (
+    <div className="flex min-h-7 items-center justify-between gap-3">
+      <h3 className="font-heading text-sm font-semibold">{title}</h3>
+      {aside}
     </div>
   );
 }
@@ -301,39 +308,42 @@ export function NewItemForm({
 
   return (
     <form onSubmit={submit} noValidate>
-      <DialogHeader className="border-b px-5 pb-4 pt-5 text-start">
-        <DialogTitle className="font-heading">{t("heading")}</DialogTitle>
-        <DialogDescription>{t(`hint.${form.kind}`)}</DialogDescription>
+      <DialogHeader className="flex flex-col gap-4 border-b px-6 pb-4 pt-5 text-start sm:flex-row sm:items-center sm:justify-between sm:pe-14">
+        <div className="min-w-0 space-y-1">
+          <DialogTitle className="font-heading">{t("heading")}</DialogTitle>
+          <DialogDescription>{t(`hint.${form.kind}`)}</DialogDescription>
+        </div>
+        <div role="radiogroup" aria-label={t("kindLabel")} className="inline-flex w-fit shrink-0 gap-0.5 rounded-lg bg-muted/60 p-0.5">
+          {KINDS.map(({ key, icon: Icon }) => {
+            const on = form.kind === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => {
+                  set("kind", key);
+                  setServerError(null);
+                }}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium outline-none transition-[background-color,color,box-shadow] duration-150 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                  on ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className="size-4" />
+                {t(`kinds.${key}`)}
+              </button>
+            );
+          })}
+        </div>
       </DialogHeader>
 
-      <div className="space-y-6 px-5 py-5">
-        {/* Step 1: what */}
-        <section className="space-y-4">
-          <StepLabel n={1} label={t("steps.what")} />
-          <div role="radiogroup" aria-label={t("kindLabel")} className="grid grid-cols-3 gap-2">
-            {KINDS.map(({ key, icon: Icon }) => {
-              const on = form.kind === key;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  onClick={() => {
-                    set("kind", key);
-                    setServerError(null);
-                  }}
-                  className={cn(
-                    "flex h-14 flex-col items-center justify-center gap-1 rounded-lg border text-[13px] font-medium outline-none transition-colors duration-150 focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                    on ? "border-foreground bg-foreground text-background" : "bg-background text-muted-foreground hover:bg-accent hover:text-foreground dark:bg-input/30",
-                  )}
-                >
-                  <Icon className="size-4" />
-                  {t(`kinds.${key}`)}
-                </button>
-              );
-            })}
-          </div>
+      {/* Two columns from lg: what it is and who gets it on the left, when and how it moves on the right —
+          wide enough that the dialog doesn't need to scroll. */}
+      <div className="grid gap-x-10 gap-y-6 px-6 py-5 lg:grid-cols-2">
+        <div className="space-y-5">
+          <SectionTitle title={t("steps.what")} />
 
           <div className="space-y-1.5">
             <Label htmlFor={`${ids}-title`}>{tc("editor.fields.title")}</Label>
@@ -386,50 +396,77 @@ export function NewItemForm({
           )}
 
           {form.kind !== "reminder" && (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor={`${ids}-category`}>
-                  {t("fields.category")} <span className="font-normal text-muted-foreground">({tc("editor.optional")})</span>
-                </Label>
-                <Input
-                  id={`${ids}-category`}
-                  dir="auto"
-                  maxLength={CATEGORY_MAX}
-                  value={form.category}
-                  placeholder={t("fields.categoryPlaceholder")}
-                  onChange={(e) => set("category", e.target.value)}
+            <>
+              {/* The type takes what the priority switch leaves, so the four priorities stay on one line. */}
+              <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="space-y-1.5">
+                  <Label htmlFor={`${ids}-category`}>
+                    {t("fields.category")} <span className="font-normal text-muted-foreground">({tc("editor.optional")})</span>
+                  </Label>
+                  <Input
+                    id={`${ids}-category`}
+                    dir="auto"
+                    maxLength={CATEGORY_MAX}
+                    value={form.category}
+                    placeholder={t("fields.categoryPlaceholder")}
+                    onChange={(e) => set("category", e.target.value)}
+                  />
+                </div>
+                <Segmented
+                  label={t("fields.priority")}
+                  value={form.priority}
+                  items={PRIORITIES.map((p) => ({ value: p, label: t(`priorities.${p}`) }))}
+                  onChange={(v) => set("priority", v)}
                 />
               </div>
-              <Segmented
-                label={t("fields.priority")}
-                value={form.priority}
-                items={PRIORITIES.map((p) => ({ value: p, label: t(`priorities.${p}`) }))}
-                onChange={(v) => set("priority", v)}
-              />
-            </div>
-          )}
-        </section>
 
-        {/* Step 2: when */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <StepLabel n={2} label={form.kind === "reminder" ? t("steps.remind") : t("steps.when")} />
-            {form.kind === "event" && (
-              <label htmlFor={`${ids}-allday`} className="flex cursor-pointer items-center gap-2 text-sm">
-                {tc("allDay")}
-                <Switch id={`${ids}-allday`} checked={form.allDay} onCheckedChange={(v) => set("allDay", v)} />
-              </label>
-            )}
-            {form.kind === "task" && (
-              <label htmlFor={`${ids}-deadline`} className="flex cursor-pointer items-center gap-2 text-sm">
-                {t("fields.deadline")}
-                <Switch id={`${ids}-deadline`} checked={form.hasDeadline} onCheckedChange={(v) => set("hasDeadline", v)} />
-              </label>
-            )}
-          </div>
+              <div className="space-y-1.5">
+                <div className="flex items-baseline justify-between gap-3">
+                  <Label htmlFor={`${ids}-notes`}>
+                    {tc("editor.steps.details")} <span className="font-normal text-muted-foreground">({tc("editor.optional")})</span>
+                  </Label>
+                  <span className="text-[11px] tabular-nums text-muted-foreground">
+                    {form.notes.length}/{NOTES_MAX}
+                  </span>
+                </div>
+                <Textarea
+                  id={`${ids}-notes`}
+                  dir="auto"
+                  rows={3}
+                  maxLength={NOTES_MAX}
+                  value={form.notes}
+                  placeholder={tc("editor.fields.notesPlaceholder")}
+                  onChange={(e) => set("notes", e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) e.currentTarget.form?.requestSubmit();
+                  }}
+                  className="resize-none"
+                />
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="space-y-5">
+          <SectionTitle
+            title={form.kind === "reminder" ? t("steps.remind") : t("steps.when")}
+            aside={
+              form.kind === "event" ? (
+                <label htmlFor={`${ids}-allday`} className="flex cursor-pointer items-center gap-2 text-sm">
+                  {tc("allDay")}
+                  <Switch id={`${ids}-allday`} checked={form.allDay} onCheckedChange={(v) => set("allDay", v)} />
+                </label>
+              ) : form.kind === "task" ? (
+                <label htmlFor={`${ids}-deadline`} className="flex cursor-pointer items-center gap-2 text-sm">
+                  {t("fields.deadline")}
+                  <Switch id={`${ids}-deadline`} checked={form.hasDeadline} onCheckedChange={(v) => set("hasDeadline", v)} />
+                </label>
+              ) : undefined
+            }
+          />
 
           {form.kind === "reminder" ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <Segmented
                 label={t("fields.remindIn")}
                 value={form.remind}
@@ -440,7 +477,7 @@ export function NewItemForm({
                 onChange={(v) => set("remind", v)}
               />
               {form.remind === "at" && (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label>{t("fields.date")}</Label>
                     <DatePicker value={form.remindDate} onChange={(v) => set("remindDate", v)} />
@@ -454,8 +491,8 @@ export function NewItemForm({
               {fieldError(errors.remind)}
             </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)]">
-              <div className="space-y-1.5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className={cn("space-y-1.5", form.kind === "event" && !form.allDay && "sm:col-span-2")}>
                 <Label>{t("fields.date")}</Label>
                 <DatePicker value={form.date} onChange={(v) => set("date", v)} />
                 {fieldError(errors.date)}
@@ -470,7 +507,7 @@ export function NewItemForm({
                     <Label>{tc("editor.fields.to")}</Label>
                     <TimePicker value={form.endTime} onChange={(v) => set("endTime", v)} />
                   </div>
-                  <div className="sm:col-span-3">{fieldError(errors.end)}</div>
+                  <div className="sm:col-span-2 empty:hidden">{fieldError(errors.end)}</div>
                 </>
               )}
               {form.kind === "task" && form.hasDeadline && (
@@ -480,65 +517,61 @@ export function NewItemForm({
                 </div>
               )}
               {form.kind === "task" && !form.hasDeadline && (
-                <p className="self-end pb-2 text-xs text-muted-foreground sm:col-span-2">{t("fields.endOfDay")}</p>
+                <p className="self-end pb-2 text-xs text-muted-foreground">{t("fields.endOfDay")}</p>
               )}
             </div>
           )}
-        </section>
 
-        {/* Step 3: how (store tasks — a private task is only done or not), details (events, tasks) */}
-        {hasTaskRules && (
-          <section className="space-y-4">
-            <StepLabel n={3} label={t("steps.task")} />
-            <Segmented
-              label={t("fields.proof")}
-              value={form.proof}
-              items={[
-                { value: "none", label: t("proof.none") },
-                { value: "note", label: t("proof.note") },
-              ]}
-              onChange={(v) => set("proof", v)}
-            />
-            <label htmlFor={`${ids}-review`} className="flex cursor-pointer items-start justify-between gap-4">
-              <span className="space-y-0.5">
-                <span className="block text-sm font-medium leading-none">{t("fields.requiresReview")}</span>
-                <span className="block text-xs text-muted-foreground">{t("fields.requiresReviewHint")}</span>
-              </span>
-              <Switch id={`${ids}-review`} checked={form.requiresReview} onCheckedChange={(v) => set("requiresReview", v)} />
-            </label>
-          </section>
-        )}
-
-        {form.kind !== "reminder" && (
-          <section className="space-y-3">
-            <StepLabel n={hasTaskRules ? 4 : 3} label={tc("editor.steps.details")} optional={tc("editor.optional")} />
-            <Textarea
-              aria-label={tc("editor.fields.notes")}
-              dir="auto"
-              rows={3}
-              maxLength={NOTES_MAX}
-              value={form.notes}
-              placeholder={tc("editor.fields.notesPlaceholder")}
-              onChange={(e) => set("notes", e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) e.currentTarget.form?.requestSubmit();
-              }}
-              className="resize-none"
-            />
-            <p className="text-end text-[11px] tabular-nums text-muted-foreground">
-              {form.notes.length}/{NOTES_MAX}
-            </p>
-          </section>
-        )}
-
-        {serverError && (
-          <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {serverError}
-          </p>
-        )}
+          {/* How a store task moves (a private task is only done or not): the proof it asks for, who approves,
+              and the signs it will show along the way — the same icons as on the calendar. */}
+          {hasTaskRules && (
+            <div className="space-y-4 border-t pt-5">
+              <SectionTitle title={t("steps.task")} />
+              <Segmented
+                label={t("fields.proof")}
+                value={form.proof}
+                items={[
+                  { value: "none", label: t("proof.none") },
+                  { value: "note", label: t("proof.note") },
+                ]}
+                onChange={(v) => set("proof", v)}
+              />
+              <label htmlFor={`${ids}-review`} className="flex cursor-pointer items-start justify-between gap-4">
+                <span className="space-y-0.5">
+                  <span className="block text-sm font-medium leading-none">{t("fields.requiresReview")}</span>
+                  <span className="block text-xs text-muted-foreground">{t("fields.requiresReviewHint")}</span>
+                </span>
+                <Switch id={`${ids}-review`} checked={form.requiresReview} onCheckedChange={(v) => set("requiresReview", v)} />
+              </label>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">{t("flow.title")}</span>
+                <span className="inline-flex items-center gap-1">
+                  <Play className="size-3" aria-hidden />
+                  {tc("signs.started")}
+                </span>
+                <ArrowRight className="size-3 rtl:rotate-180" aria-hidden />
+                <span className="inline-flex items-center gap-1">
+                  <Send className="size-3" aria-hidden />
+                  {form.requiresReview ? tc("signs.submitted") : t("flow.submit")}
+                </span>
+                <ArrowRight className="size-3 rtl:rotate-180" aria-hidden />
+                <span className="inline-flex items-center gap-1">
+                  <Check className="size-3" aria-hidden />
+                  {form.requiresReview ? tc("signs.approved") : t("flow.autoDone")}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      <DialogFooter className="flex-row items-center gap-2 border-t px-5 py-3 sm:justify-end">
+      {serverError && (
+        <p role="alert" className="mx-6 mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {serverError}
+        </p>
+      )}
+
+      <DialogFooter className="flex-row items-center gap-2 border-t px-6 py-3 sm:justify-end">
         <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={saving}>
           {tc("editor.cancel")}
         </Button>
