@@ -106,14 +106,16 @@ export function useBusinessReports(): UseBusinessReportsResult {
 
     const svc = businessReportsService;
     // Fire-and-forget: each settles into its own section.
+    // Requests go out a few at a time (see the service): the order here is
+    // the order they start in — the summary first, then the small ones.
     void settle("sales", svc.getSales(params, signal));
+    void settle("payrollWeeks", svc.getPayrollWeeks(params, signal));
     void settle("operations", svc.getOperations(params, signal));
     void settle("menu", svc.getMenu(params, signal));
     void settle("orders", svc.getOrders(params, signal));
     void settle("quality", svc.getQuality(params, signal));
     void settle("debriefs", svc.getDebriefs(params, signal));
     void settle("labor", svc.getLabor(params, signal));
-    void settle("payrollWeeks", svc.getPayrollWeeks(params, signal));
     void settle("feedback", svc.getFeedback(params, signal));
     void settle("tickets", svc.getTickets(params, signal));
     void settle("skills", svc.getSkills(params, signal));
