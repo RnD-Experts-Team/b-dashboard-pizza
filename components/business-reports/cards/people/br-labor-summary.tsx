@@ -7,7 +7,7 @@ import { V1Metric } from "@/components/dashboard-v1/v1-ui";
 import { fmtCurrency, fmtHours, fmtNumber, fmtPercent } from "@/components/labor/labor-format";
 import { laborValue, useFinalLabor, type FinalLabor } from "@/components/business-reports/final-labor";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
-import { useReport } from "@/components/business-reports/report-context";
+import { useReport, useSection } from "@/components/business-reports/report-context";
 import { ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
 import { weekLabel } from "@/components/business-reports/report-format";
 import { cn } from "@/lib/utils";
@@ -173,13 +173,17 @@ function LaborSummaryDialog({ data, rows, onClose }: { data: LaborReport; rows: 
     [storeName, final],
   );
 
+  // A week's sales come from the Data service (Hiring's copy is per employee).
+  const salesWeeks = useSection("sales").data?.by_week;
+  const weekSales = useMemo(() => new Map((salesWeeks ?? []).map((w) => [w.week_start, w.sales])), [salesWeeks]);
+
   const weekColumns = useMemo<PagedColumn<LaborTrendWeek>[]>(
     () => [
       { key: "week", header: "Week", render: (w) => <span className="font-medium">{weekLabel(w, true)}</span>, sortValue: (w) => w.week_start },
       { key: "headcount", header: "Headcount", numeric: true, render: (w) => fmtNumber(w.headcount_active_end), sortValue: (w) => w.headcount_active_end },
       { key: "hours", header: "Hours", numeric: true, render: (w) => fmtHours(w.total_hours, 0), sortValue: (w) => w.total_hours },
       { key: "gross", header: "Gross Pay", numeric: true, render: (w) => fmtCurrency(w.total_gross_pay, 0), sortValue: (w) => w.total_gross_pay },
-      { key: "sales", header: "Sales", numeric: true, render: (w) => fmtCurrency(w.total_sales, 0), sortValue: (w) => w.total_sales },
+      { key: "sales", header: "Sales", numeric: true, render: (w) => fmtCurrency(weekSales.get(w.week_start) ?? null, 0), sortValue: (w) => weekSales.get(w.week_start) ?? null },
       {
         key: "labor",
         header: "Labor %",
@@ -193,7 +197,7 @@ function LaborSummaryDialog({ data, rows, onClose }: { data: LaborReport; rows: 
       { key: "turnover", header: "Turnover", numeric: true, render: (w) => fmtPercent(w.turnover_rate_percent), sortValue: (w) => w.turnover_rate_percent },
       { key: "pay", header: "Avg Hourly", numeric: true, render: (w) => fmtCurrency(w.average_hourly_pay), sortValue: (w) => w.average_hourly_pay },
     ],
-    [final],
+    [final, weekSales],
   );
 
   const net = s.headcount_end - s.headcount_start;

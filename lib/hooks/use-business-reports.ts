@@ -20,6 +20,7 @@ const SECTION_KEYS: SectionKey[] = [
   "debriefs",
   "storeScore",
   "labor",
+  "payrollWeeks",
   "feedback",
   "tickets",
   "skills",
@@ -112,6 +113,7 @@ export function useBusinessReports(): UseBusinessReportsResult {
     void settle("quality", svc.getQuality(params, signal));
     void settle("debriefs", svc.getDebriefs(params, signal));
     void settle("labor", svc.getLabor(params, signal));
+    void settle("payrollWeeks", svc.getPayrollWeeks(params, signal));
     void settle("feedback", svc.getFeedback(params, signal));
     void settle("tickets", svc.getTickets(params, signal));
     void settle("skills", svc.getSkills(params, signal));

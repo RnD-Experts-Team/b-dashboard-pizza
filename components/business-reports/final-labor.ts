@@ -7,8 +7,9 @@ import { useSection } from "./report-context";
  * FINAL labor % — the only labor figure Business Reports shows (no estimate):
  * total payroll ÷ royalty obligation × 100, added up over store-weeks, never
  * an average of weekly percentages. Payroll per store-week comes from Hiring's
- * payroll weeks model; royalty obligation per store-week from the sales
- * section. A store-week without payroll (or without royalty) is left out.
+ * payroll weeks model (its own small request); royalty obligation per
+ * store-week from the sales section. A store-week without payroll (or without
+ * royalty) is left out.
  */
 export interface FinalLabor {
   /** Every loaded store-week together; null with none. */
@@ -51,18 +52,16 @@ function ratioBy(rows: StoreWeek[], key: (r: StoreWeek) => string): Map<string, 
   );
 }
 
-/** null until both the Hiring labor report and the sales section have loaded. */
+/** null until both the payroll weeks and the sales section have loaded. */
 export function useFinalLabor(): FinalLabor | null {
-  const { data: labor } = useSection("labor");
+  const { data: payroll } = useSection("payrollWeeks");
   const { data: sales } = useSection("sales");
   return useMemo(() => {
-    if (!labor || !sales) return null;
-    const rows: StoreWeek[] = Object.entries(labor.by_store ?? {}).flatMap(([store, block]) =>
-      (block.final_labor ?? []).flatMap((w) => {
-        const royalty = sales.by_store_week?.[store]?.[w.week_start]?.sales ?? 0;
-        return w.payroll === null || w.payroll === undefined || royalty <= 0
-          ? []
-          : [{ store, week: w.week_start, payroll: w.payroll, royalty }];
+    if (!payroll || !sales) return null;
+    const rows: StoreWeek[] = Object.entries(payroll.by_store ?? {}).flatMap(([store, weeks]) =>
+      Object.entries(weeks).flatMap(([week, amount]) => {
+        const royalty = sales.by_store_week?.[store]?.[week]?.sales ?? 0;
+        return royalty > 0 ? [{ store, week, payroll: amount, royalty }] : [];
       }),
     );
     const byStoreWeek = new Map(
@@ -80,7 +79,7 @@ export function useFinalLabor(): FinalLabor | null {
       byStoreWeek,
       over,
     };
-  }, [labor, sales]);
+  }, [payroll, sales]);
 }
 
 /** The final labor to show; null (shown "—") when there is none — never an estimate. */

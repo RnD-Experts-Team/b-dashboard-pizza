@@ -26,7 +26,6 @@ const TREND_KEYS: ReadonlySet<string> = new Set<TrendKey>([
   "total_hours",
   "total_gross_pay",
   "turnover_rate_percent",
-  "total_sales",
   "average_performance_score",
   "average_hourly_pay",
   "average_labor_percent",

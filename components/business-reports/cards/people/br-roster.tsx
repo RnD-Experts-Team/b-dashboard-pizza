@@ -15,7 +15,7 @@ import { useReport } from "@/components/business-reports/report-context";
 import { ReportBlock, ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
 import { StoreChecklist, inStores } from "@/components/business-reports/store-checklist";
 import type { LaborReport, LaborRosterRow } from "@/types/business-reports.types";
-import { ActiveToggle, StoreTag, matchesActive, safeDay, type ActiveFilter } from "./br-people-kit";
+import { ActiveToggle, NOT_HIRING_COLUMNS, StoreTag, matchesActive, safeDay, type ActiveFilter } from "./br-people-kit";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  Employee Roster — everyone on the loaded stores' rosters over the range,
@@ -62,7 +62,7 @@ function EmployeeDetail({
   onClose: () => void;
 }) {
   const { storeName } = useReport();
-  const entries = Object.entries(row.metrics);
+  const entries = Object.entries(row.metrics).filter(([key]) => !NOT_HIRING_COLUMNS.has(key));
   const stats: ReportStat[] = [
     { label: "Status", value: <span className="capitalize">{row.status}</span>, sub: row.position ?? undefined },
     { label: "Tenure", value: fmtTenure(row.tenure_days), sub: `hired ${safeDay(row.hire_date)}` },

@@ -12,6 +12,7 @@ import type {
   MenuSection,
   OperationsSection,
   OrdersSection,
+  PayrollWeeks,
   QualitySection,
   SalesSection,
   StoreScoreSection,
@@ -66,14 +67,17 @@ async function postSection<T>(
   section: string,
   params: BusinessReportsParams,
   signal?: AbortSignal,
+  extra: Record<string, string> = {},
 ): Promise<T> {
-  const { data } = await axios.post<T>(`/api/reports/business/${section}`, body(params), {
+  const { data } = await axios.post<T>(`/api/reports/business/${section}`, { ...body(params), ...extra }, {
     headers: buildHeaders(),
     timeout: CLIENT_TIMEOUT_MS,
     signal,
   });
   return data;
 }
+
+const ORDER_PARTS = ["channels", "important_items_hnr", "upselling", "promo"] as const;
 
 function chunk<T>(items: T[], size: number): T[][] {
   return Array.from({ length: Math.ceil(items.length / size) }, (_, i) =>
@@ -86,7 +90,16 @@ export const businessReportsService = {
   getOperations: (p: BusinessReportsParams, s?: AbortSignal) =>
     postSection<OperationsSection>("operations", p, s),
   getMenu: (p: BusinessReportsParams, s?: AbortSignal) => postSection<MenuSection>("menu", p, s),
-  getOrders: (p: BusinessReportsParams, s?: AbortSignal) => postSection<OrdersSection>("orders", p, s),
+  /**
+   * The orders section is four big reads; asked for as four requests at once
+   * (Data's `part`), so they run side by side instead of one after another.
+   */
+  async getOrders(p: BusinessReportsParams, s?: AbortSignal): Promise<OrdersSection> {
+    const parts = await Promise.all(
+      ORDER_PARTS.map((part) => postSection<Partial<OrdersSection>>("orders", p, s, { part })),
+    );
+    return Object.assign({}, ...parts) as OrdersSection;
+  },
   getQuality: (p: BusinessReportsParams, s?: AbortSignal) => postSection<QualitySection>("quality", p, s),
   getDebriefs: (p: BusinessReportsParams, s?: AbortSignal) =>
     postSection<DebriefsSection>("debriefs", p, s),
@@ -131,6 +144,16 @@ export const businessReportsService = {
   /** GET /api/reports/labor — the Labor report (Hiring). */
   async getLabor(params: BusinessReportsParams, signal?: AbortSignal): Promise<LaborReport> {
     const { data } = await axios.get<LaborReport>(`/api/reports/labor?${query(params)}`, {
+      headers: buildHeaders(),
+      timeout: CLIENT_TIMEOUT_MS,
+      signal,
+    });
+    return data;
+  },
+
+  /** GET /api/reports/payroll-weeks — Hiring's payroll per store-week (final labor). */
+  async getPayrollWeeks(params: BusinessReportsParams, signal?: AbortSignal): Promise<PayrollWeeks> {
+    const { data } = await axios.get<PayrollWeeks>(`/api/reports/payroll-weeks?${query(params)}`, {
       headers: buildHeaders(),
       timeout: CLIENT_TIMEOUT_MS,
       signal,

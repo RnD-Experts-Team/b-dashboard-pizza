@@ -696,8 +696,6 @@ export interface LaborBlock {
     total_hours: number | null;
     tips_per_hour: number | null;
   };
-  /** Total payroll per week from Hiring's payroll weeks model; null for a week it has none. */
-  final_labor: Array<{ week_start: string; week_end: string; payroll: number | null }>;
   roster?: LaborRosterRow[];
   birthdays?: Array<{
     employee_id: number;
@@ -795,6 +793,11 @@ export interface WbrBulkResponse {
  *  The page's data
  * ══════════════════════════════════════════════════════════════════════ */
 
+/** Hiring: total payroll per store → week_start (store-weeks without payroll are absent). */
+export interface PayrollWeeks {
+  by_store: Record<string, Record<string, number>>;
+}
+
 export interface BusinessReportsData {
   sales: SalesSection;
   operations: OperationsSection;
@@ -804,6 +807,8 @@ export interface BusinessReportsData {
   debriefs: DebriefsSection;
   storeScore: StoreScoreSection;
   labor: LaborReport;
+  /** Payroll per store-week for final labor — its own small request, so labor never waits on `labor`. */
+  payrollWeeks: PayrollWeeks;
   feedback: WbrBulkResponse;
   /** Maintenance analytics summary over the range (recurring issues, statuses, per store). */
   tickets: AnalyticsSummary;
