@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { ListFilter } from "lucide-react";
+import { ChevronDown, ListFilter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { CALENDAR_CATEGORIES } from "@/lib/calendar/categories";
@@ -12,158 +13,225 @@ import { CATEGORY_KEYS, type CategoryKey } from "@/lib/calendar/types";
 import { useCalendarStore } from "@/lib/store/calendar.store";
 import { EventDot } from "./event-parts";
 
-/** Which ends of a horizontal scroller have hidden content (RTL-safe). */
-function useScrollEdges(ref: React.RefObject<HTMLElement | null>) {
-  const [edges, setEdges] = useState({ start: false, end: false });
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const measure = () => {
-      // RTL scrollLeft runs 0 → negative in Chromium/Firefox; abs() covers both.
-      const pos = Math.abs(el.scrollLeft);
-      const max = el.scrollWidth - el.clientWidth;
-      setEdges({ start: pos > 1, end: max - pos > 1 });
-    };
-    measure();
-    el.addEventListener("scroll", measure, { passive: true });
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    for (const child of Array.from(el.children)) ro.observe(child);
-    return () => {
-      el.removeEventListener("scroll", measure);
-      ro.disconnect();
-    };
-  }, [ref]);
-  return edges;
+/** Gap between chips in px: Tailwind `gap-1`, used by the row and by the hidden measuring copy. */
+const GAP = 4;
+
+type ChipKey = "all" | "custom" | CategoryKey;
+
+interface Chip {
+  key: ChipKey;
+  label: string;
+  active: boolean;
+  /** Events of this type in the visible range; undefined = not shown (the Year view). */
+  count?: number;
+}
+
+/** One chip's look. Quiet when off, a soft pill when on; the same classes style the hidden measuring copy. */
+const chipClass = (active: boolean) =>
+  cn(
+    "inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring/50",
+    active ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+  );
+
+function ChipBody({ chip, format }: { chip: Chip; format: (n: number) => string }) {
+  const isCategory = chip.key !== "all" && chip.key !== "custom";
+  return (
+    <>
+      {/* The colour dot only says "this one" — on the selected chip. The rest stay plain words. */}
+      {isCategory && chip.active && <EventDot category={chip.key as CategoryKey} />}
+      {chip.label}
+      {chip.count !== undefined && (
+        <span className="text-xs font-normal tabular-nums text-muted-foreground/80">{format(chip.count)}</span>
+      )}
+      {chip.key === "custom" && <X className="size-3.5 text-muted-foreground" aria-hidden />}
+    </>
+  );
 }
 
 /**
- * Category tabs: "All scheduled" or one type at a time. Counts cover the
- * visible range with search applied but categories NOT, so a hidden type
- * still shows how much it is hiding.
+ * Event-type filter: "All", or one type at a time (combinations come from the
+ * Filter popover and show as one "3 types ×" chip). Counts cover the visible
+ * range with search applied but types NOT, so a hidden type still shows how
+ * much it is hiding.
  *
- * The strip scrolls sideways when it can't fit (it shares the row with
- * search + Filter): edges fade only while there is more to see, the selected
- * tab scrolls into view, and ←/→ move focus between tabs.
+ * It never clips and never scrolls sideways: the row measures the room it has
+ * and moves what doesn't fit into a "N more" menu — the selected type always
+ * stays on the row. ←/→ move between the chips.
  */
 export function CategoryTabs({
   counts,
   total,
   hideCounts = false,
+  disabled = false,
 }: {
   counts: Record<CategoryKey, number>;
   total: number;
-  /** The Year view counts by status, not by type: its tabs carry no numbers. */
+  /** The Year view counts by status, not by type: its chips carry no numbers. */
   hideCounts?: boolean;
+  /** The Year view ignores types: the chips are shown but off. */
+  disabled?: boolean;
 }) {
   const t = useTranslations("calendar");
-  const rtl = useLocale() === "ar";
+  const tc = useTranslations("calendar.categories");
+  const locale = useLocale();
+  const rtl = locale === "ar";
+  const format = useMemo(() => {
+    const nf = new Intl.NumberFormat(locale);
+    return (n: number) => nf.format(n);
+  }, [locale]);
+
   const filters = useCalendarStore((s) => s.filters);
   const showAll = useCalendarStore((s) => s.showAll);
   const onlyCategory = useCalendarStore((s) => s.onlyCategory);
   const all = filters.length === CATEGORY_KEYS.length;
   const single = filters.length === 1 ? filters[0] : null;
-  const activeKey = all ? "all" : single;
+  const custom = !all && !single && filters.length > 0;
 
-  const scrollerRef = useRef<HTMLDivElement>(null);
-  const edges = useScrollEdges(scrollerRef);
+  const chips: Chip[] = useMemo(
+    () => [
+      { key: "all", label: t("tabs.all"), active: all, count: hideCounts ? undefined : total },
+      ...(custom ? [{ key: "custom" as const, label: t("tabs.custom", { n: filters.length }), active: true }] : []),
+      ...CALENDAR_CATEGORIES.map((c) => ({
+        key: c.key,
+        label: tc(c.key),
+        active: single === c.key,
+        count: hideCounts ? undefined : counts[c.key],
+      })),
+    ],
+    [t, tc, all, custom, filters.length, single, total, counts, hideCounts],
+  );
 
-  // Keep the selected tab visible: instantly on mount/resize, smoothly when it
-  // changes. Horizontal scrollBy only (physical px, so RTL works) — never
-  // scrollIntoView, which can also scroll the page.
-  const lastKey = useRef(activeKey);
-  useEffect(() => {
-    const sc = scrollerRef.current;
-    if (!sc) return;
-    const reveal = (behavior: ScrollBehavior) => {
-      const el = sc.querySelector<HTMLElement>('[aria-selected="true"]');
-      if (!el) return;
-      const pad = 24;
-      const er = el.getBoundingClientRect();
-      const sr = sc.getBoundingClientRect();
-      if (er.right > sr.right - pad) sc.scrollBy({ left: er.right - sr.right + pad, behavior });
-      else if (er.left < sr.left + pad) sc.scrollBy({ left: er.left - sr.left - pad, behavior });
+  /* ── Fit: which chips stay on the row; the rest go to "N more". `null` = not measured yet (all). ── */
+  const hostRef = useRef<HTMLDivElement>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
+  const [shown, setShown] = useState<ReadonlySet<ChipKey> | null>(null);
+  const signature = chips.map((c) => `${c.key}|${c.label}|${c.count ?? ""}|${c.active ? 1 : 0}`).join(";") + locale;
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    const ghost = ghostRef.current;
+    if (!host || !ghost) return;
+
+    const fit = () => {
+      const room = host.clientWidth - 4; // minus the 2px padding on each side
+      const width = new Map<string, number>();
+      for (const el of ghost.querySelectorAll<HTMLElement>("[data-chip]")) width.set(el.dataset.chip!, el.offsetWidth);
+      const moreWidth = ghost.querySelector<HTMLElement>("[data-more]")?.offsetWidth ?? 0;
+      const w = (c: Chip) => width.get(c.key) ?? 0;
+
+      const everything = chips.reduce((sum, c, i) => sum + w(c) + (i ? GAP : 0), 0);
+      if (everything <= room) {
+        setShown((prev) => (prev === null ? prev : null));
+        return;
+      }
+
+      // These always stay: All, the "N types" chip, and the selected type.
+      const keep = new Set<ChipKey>(chips.filter((c) => c.key === "all" || c.key === "custom" || c.active).map((c) => c.key));
+      let used = chips.filter((c) => keep.has(c.key)).reduce((sum, c, i) => sum + w(c) + (i ? GAP : 0), 0);
+      const budget = room - moreWidth - GAP;
+      // Then as many of the rest as fit, in their usual order (no gaps in the row).
+      for (const c of chips) {
+        if (keep.has(c.key)) continue;
+        if (used + GAP + w(c) > budget) break;
+        keep.add(c.key);
+        used += GAP + w(c);
+      }
+      setShown((prev) => (prev && prev.size === keep.size && [...keep].every((k) => prev.has(k)) ? prev : keep));
     };
-    reveal(lastKey.current === activeKey ? "instant" : "smooth");
-    lastKey.current = activeKey;
-    const ro = new ResizeObserver(() => reveal("instant"));
-    ro.observe(sc);
+
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(host);
     return () => ro.disconnect();
-  }, [activeKey]);
+    // `chips` is covered by `signature`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature]);
 
-  const items = [
-    { key: "all" as const, label: t("tabs.all"), active: all, count: total },
-    ...CALENDAR_CATEGORIES.map((c) => ({
-      key: c.key,
-      label: t(`categories.${c.key}`),
-      active: single === c.key,
-      count: counts[c.key],
-    })),
-  ];
+  const onRow = shown ? chips.filter((c) => shown.has(c.key)) : chips;
+  const overflow = shown ? chips.filter((c) => !shown.has(c.key)) : [];
 
-  const fade = 28;
-  const dir = rtl ? "to left" : "to right";
-  const mask =
-    edges.start || edges.end
-      ? `linear-gradient(${dir}, ${edges.start ? "transparent" : "#000"} 0, #000 ${edges.start ? fade : 0}px, #000 calc(100% - ${edges.end ? fade : 0}px), ${edges.end ? "transparent" : "#000"} 100%)`
-      : undefined;
+  const press = (c: Chip) => {
+    if (c.key === "all" || c.key === "custom") showAll();
+    else onlyCategory(c.key);
+  };
 
   return (
     <div
-      ref={scrollerRef}
-      role="tablist"
+      ref={hostRef}
+      role="group"
       aria-label={t("tabs.label")}
+      aria-disabled={disabled || undefined}
+      title={disabled ? t("tabs.yearOff") : undefined}
+      // Off in the Year view: not focusable, not clickable, and plainly dimmed.
+      inert={disabled}
       onKeyDown={(e) => {
         if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-        const tabs = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]'));
-        const i = tabs.indexOf(document.activeElement as HTMLElement);
+        const stops = Array.from(e.currentTarget.querySelectorAll<HTMLElement>("[data-stop]"));
+        const i = stops.indexOf(document.activeElement as HTMLElement);
         if (i < 0) return;
         // Stops the page's own ←/→ paging shortcut.
         e.preventDefault();
         const forward = (e.key === "ArrowRight") !== rtl;
-        tabs[(i + (forward ? 1 : -1) + tabs.length) % tabs.length].focus();
+        stops[(i + (forward ? 1 : -1) + stops.length) % stops.length].focus();
       }}
-      className="cal-no-scrollbar -mb-px flex overflow-x-auto pe-1"
-      style={{ maskImage: mask, WebkitMaskImage: mask }}
+      // Clipped, never spilling into the search box beside it; the 2px padding (and matching negative
+      // margin, so the chips still line up with the page) leaves room for a chip's focus ring.
+      className={cn("relative -mx-0.5 flex min-w-0 items-center gap-1 overflow-hidden px-0.5 py-0.5", disabled && "opacity-50")}
     >
-      {items.map((it) => (
+      {onRow.map((c) => (
         <button
-          key={it.key}
+          key={c.key}
           type="button"
-          role="tab"
-          aria-selected={it.active}
-          tabIndex={it.active || (!activeKey && it.key === "all") ? 0 : -1}
-          onClick={() => (it.key === "all" ? showAll() : onlyCategory(it.key))}
-          className={cn(
-            "inline-flex shrink-0 items-center gap-1 whitespace-nowrap border-b-2 px-1.5 pb-2.5 pt-1 text-[13px] font-medium outline-none transition-colors duration-200 focus-visible:text-foreground rounded-t-md focus-visible:bg-muted/50",
-            it.active
-              ? "border-foreground text-foreground"
-              : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
-          )}
+          data-stop=""
+          aria-pressed={c.active}
+          aria-label={c.key === "custom" ? t("tabs.clearCustom") : undefined}
+          onClick={() => press(c)}
+          className={chipClass(c.active)}
         >
-          {it.key !== "all" && (
-            <EventDot category={it.key} className={cn("transition-opacity duration-200", !it.active && "opacity-60")} />
-          )}
-          {it.label}
-          {!hideCounts && (
-            <span
-              className={cn(
-                "ms-0.5 min-w-4.5 rounded-full px-1 py-px text-center text-[10px] font-semibold tabular-nums transition-colors duration-200",
-                // Inactive counts only where the row has room for all of them.
-                it.active ? "bg-foreground text-background" : "hidden bg-muted text-muted-foreground 2xl:inline",
-              )}
-            >
-              {it.count}
-            </span>
-          )}
+          <ChipBody chip={c} format={format} />
         </button>
       ))}
+
+      {overflow.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" data-stop="" className={chipClass(false)}>
+              {t("tabs.more", { n: overflow.length })}
+              <ChevronDown className="size-3.5" aria-hidden />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-48">
+            {overflow.map((c) => (
+              <DropdownMenuItem key={c.key} onSelect={() => press(c)} className="gap-2">
+                {c.key !== "all" && c.key !== "custom" && <EventDot category={c.key} />}
+                <span className="min-w-0 flex-1 truncate">{c.label}</span>
+                {c.count !== undefined && (
+                  <span className={cn("text-xs tabular-nums text-muted-foreground", c.count === 0 && "opacity-60")}>{format(c.count)}</span>
+                )}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+
+      {/* A hidden copy of every chip, measured to decide what fits. It takes no room and no clicks. */}
+      <div ref={ghostRef} aria-hidden inert className="pointer-events-none invisible absolute start-0 top-0 flex gap-1 whitespace-nowrap">
+        {chips.map((c) => (
+          <span key={c.key} data-chip={c.key} className={chipClass(c.active)}>
+            <ChipBody chip={c} format={format} />
+          </span>
+        ))}
+        <span data-more="" className={chipClass(false)}>
+          {t("tabs.more", { n: CATEGORY_KEYS.length })}
+          <ChevronDown className="size-3.5" />
+        </span>
+      </div>
     </div>
   );
 }
 
 /** Filter popover: combine several event types, or pick "Only" one. (Stores: `StorePicker`.) */
-export function FilterPopover({ counts }: { counts: Record<CategoryKey, number> }) {
+export function FilterPopover({ counts, disabled = false }: { counts: Record<CategoryKey, number>; disabled?: boolean }) {
   const t = useTranslations("calendar.filter");
   const tc = useTranslations("calendar.categories");
   const scopeId = useId();
@@ -173,7 +241,7 @@ export function FilterPopover({ counts }: { counts: Record<CategoryKey, number> 
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" disabled={disabled}>
           <ListFilter className="size-4" />
           {t("button")}
           {!all && (

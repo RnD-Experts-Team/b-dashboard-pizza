@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { dayKey, isSameDay, isSameMonth, monthGrid42 } from "@/lib/calendar/dates";
-import { dayHeat, type DayCount, type DayHeat } from "@/lib/calendar/day-counts";
+import { attentionCount, type DayCount, type HeatLevel } from "@/lib/calendar/day-counts";
 import type { CalendarEvent } from "@/lib/calendar/types";
 import { useCalendarClock } from "./calendar-clock";
 import { DayDots } from "./event-parts";
@@ -11,14 +11,15 @@ import { usePeek } from "./event-peek";
 import { useCalendarFormat } from "./use-calendar-format";
 
 /**
- * A day's tint in the Year view, from its worst status. Red stays reserved for
- * overdue/missed (the calendar's one colour rule); the rest are neutral steps.
+ * A day's tint in the Year view: one hue (the calendar's red, kept for overdue or
+ * missed) in four steps of strength. The number stays in the normal text colour so
+ * it reads on every step; days with nothing overdue get no tint at all.
  */
-const HEAT: Record<DayHeat, string> = {
-  attention: "bg-destructive/15 font-semibold text-destructive dark:bg-destructive/25",
-  active: "bg-foreground/20 font-semibold",
-  open: "bg-muted font-medium",
-  done: "bg-muted/40 text-muted-foreground",
+export const HEAT_CLASS: Record<HeatLevel, string> = {
+  1: "bg-destructive/[0.07] dark:bg-destructive/10",
+  2: "bg-destructive/20 dark:bg-destructive/30",
+  3: "bg-destructive/35 dark:bg-destructive/50",
+  4: "bg-destructive/60 dark:bg-destructive/80",
 };
 
 /**
@@ -30,19 +31,25 @@ export function MiniMonth({
   month,
   grouped,
   counts,
+  levels,
   onPick,
   highlight,
   peek = false,
+  showOutside = true,
   cellClass = "h-8",
 }: {
   month: Date;
   grouped: Map<string, CalendarEvent[]>;
-  /** Year view: each day's numbers (`group=day`). The day is tinted and peeks its tally. */
+  /** Year view: each day's numbers (`group=day`). A counted day peeks its tally. */
   counts?: Map<string, DayCount>;
+  /** Year view: the tint level of each day with something overdue or missed (`heatLevels`). */
+  levels?: ReadonlyMap<string, HeatLevel>;
   onPick: (key: string) => void;
   highlight?: (d: Date) => boolean;
   /** Hovering a day with events previews them (Year view). */
   peek?: boolean;
+  /** Show the neighbouring months' days in the first and last week (the date picker does; the Year view doesn't). */
+  showOutside?: boolean;
   cellClass?: string;
 }) {
   const t = useTranslations("calendar");
@@ -55,7 +62,7 @@ export function MiniMonth({
   return (
     <div className="grid grid-cols-7 gap-y-0.5">
       {f.weekdayNames("narrow").map((n, i) => (
-        <span key={i} className="grid h-6 place-items-center text-[10px] font-semibold uppercase text-muted-foreground">
+        <span key={i} className="grid h-6 place-items-center text-[10px] font-medium uppercase text-muted-foreground/80">
           {n}
         </span>
       ))}
@@ -64,7 +71,7 @@ export function MiniMonth({
         if (!isSameMonth(d, month)) {
           return (
             <span key={k} aria-hidden className={cn("grid place-items-center text-[11px] tabular-nums text-muted-foreground/35", cellClass)}>
-              {d.getDate()}
+              {showOutside ? d.getDate() : null}
             </span>
           );
         }
@@ -76,22 +83,29 @@ export function MiniMonth({
         const list = grouped.get(k) ?? [];
         const today = isSameDay(d, now);
         const count = counts?.get(k);
-        const heat = count ? dayHeat(count) : null;
+        const counted = !!count && count.total > 0;
+        const level = levels?.get(k);
+        const weekend = col >= 5;
         // A counted day peeks its numbers; otherwise its events (if any).
         const peekBind = !peek
           ? null
-          : heat
+          : counted
             ? peekProps({ type: "counts", id: k }, { onActivate: () => onPick(k) })
             : list.length
               ? peekProps({ type: "day", id: k }, { onActivate: () => onPick(k) })
               : null;
+        // Not only colour: the label says how many items are overdue or missed.
+        const overdue = count ? attentionCount(count) : 0;
+        const label = count
+          ? `${f.longDate(d)}, ${t("year.total", { n: count.total })}${overdue ? `, ${t("year.overdueCount", { n: overdue })}` : ""}`
+          : f.longDate(d);
         return (
           <button
             key={k}
             type="button"
             {...peekBind}
             onClick={peekBind ? peekBind.onClick : () => onPick(k)}
-            aria-label={count ? `${f.longDate(d)}, ${t("year.total", { n: count.total })}` : f.longDate(d)}
+            aria-label={label}
             className={cn("group/day relative grid place-items-center outline-none", cellClass, band)}
           >
             <span
@@ -101,9 +115,16 @@ export function MiniMonth({
                   ? "bg-primary font-semibold text-primary-foreground"
                   : on
                     ? "font-semibold"
-                    : heat
-                      ? cn(HEAT[heat], "group-hover/day:ring-2 group-hover/day:ring-ring/40 group-data-[peek-open=true]/day:ring-2 group-data-[peek-open=true]/day:ring-ring/60")
-                      : "group-hover/day:bg-accent group-data-[peek-open=true]/day:bg-accent",
+                    : level
+                      ? cn(
+                          HEAT_CLASS[level],
+                          "font-medium group-hover/day:ring-2 group-hover/day:ring-ring/40 group-data-[peek-open=true]/day:ring-2 group-data-[peek-open=true]/day:ring-ring/60",
+                        )
+                      : cn(
+                          // Weekends step back a little so the weeks read at a glance.
+                          counts && weekend && "text-muted-foreground",
+                          "group-hover/day:bg-accent group-data-[peek-open=true]/day:bg-accent",
+                        ),
               )}
             >
               {d.getDate()}

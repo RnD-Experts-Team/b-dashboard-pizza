@@ -26,6 +26,12 @@ function buildHeaders() {
   return { Authorization: `Bearer ${token}`, Accept: "application/json" };
 }
 
+const REQUEST_TIMEOUT_MS = 15_000;
+/** Assembling every chunk into the final file takes longer than a plain request. */
+const FINALIZE_TIMEOUT_MS = 30_000;
+/** A chunk request that makes no progress for this long is aborted (and retried by the caller). */
+const CHUNK_STALL_MS = 45_000;
+
 const BASE = (storeId: string, station: number) =>
   `/api/screen-project/${storeId}/stations/${station}/media`;
 
@@ -44,7 +50,7 @@ export const screenProjectMediaService = {
   async listMedia(storeId: string, station: number): Promise<StationMedia[]> {
     const { data } = await axios.get<unknown>(BASE(storeId, station), {
       headers: buildHeaders(),
-      timeout: 15_000,
+      timeout: REQUEST_TIMEOUT_MS,
     });
     // Normalize: API may return a plain array or a wrapped object
     if (Array.isArray(data)) return data as StationMedia[];
@@ -61,7 +67,7 @@ export const screenProjectMediaService = {
   async listMediaPublic(storeId: string, station: number): Promise<StationMedia[]> {
     const { data } = await axios.get<unknown>(PUBLIC_BASE(storeId, station), {
       headers: { Accept: "application/json" },
-      timeout: 15_000,
+      timeout: REQUEST_TIMEOUT_MS,
     });
     if (Array.isArray(data)) return data as StationMedia[];
     const d = data as Record<string, unknown>;
@@ -82,7 +88,7 @@ export const screenProjectMediaService = {
     const { data } = await axios.post<{ upload_id: string }>(
       `${BASE(storeId, station)}/uploads`,
       { total_chunks },
-      { headers: buildHeaders(), timeout: 15_000 },
+      { headers: buildHeaders(), timeout: REQUEST_TIMEOUT_MS },
     );
     return data;
   },
@@ -91,6 +97,10 @@ export const screenProjectMediaService = {
    * Upload a single binary chunk.
    * POST /api/screen-project/{storeId}/stations/{station}/media/uploads/{uploadId}/chunks/{chunkIndex}
    * Body: multipart/form-data, field "chunk"
+   *
+   * No fixed total timeout: a store on a slow line may need minutes for a
+   * chunk. Instead the request is aborted when it stops moving for
+   * CHUNK_STALL_MS (no upload progress, or no answer after the last byte).
    */
   async uploadChunk(
     storeId: string,
@@ -101,17 +111,31 @@ export const screenProjectMediaService = {
   ): Promise<void> {
     const form = new FormData();
     form.append("chunk", chunk);
-    await axios.post(
-      `${BASE(storeId, station)}/uploads/${uploadId}/chunks/${chunkIndex}`,
-      form,
-      {
-        headers: {
-          ...buildHeaders(),
-          // Content-Type is set automatically by the browser for FormData
+
+    const controller = new AbortController();
+    let stallTimer: ReturnType<typeof setTimeout> | undefined;
+    const armStallTimer = () => {
+      clearTimeout(stallTimer);
+      stallTimer = setTimeout(() => controller.abort(), CHUNK_STALL_MS);
+    };
+
+    armStallTimer();
+    try {
+      await axios.post(
+        `${BASE(storeId, station)}/uploads/${uploadId}/chunks/${chunkIndex}`,
+        form,
+        {
+          headers: {
+            ...buildHeaders(),
+            // Content-Type is set automatically by the browser for FormData
+          },
+          signal: controller.signal,
+          onUploadProgress: armStallTimer,
         },
-        timeout: 60_000,
-      },
-    );
+      );
+    } finally {
+      clearTimeout(stallTimer);
+    }
   },
 
   /**
@@ -128,7 +152,7 @@ export const screenProjectMediaService = {
     const { data } = await axios.post<unknown>(
       `${BASE(storeId, station)}/uploads/complete-bulk`,
       { uploads },
-      { headers: buildHeaders(), timeout: 30_000 },
+      { headers: buildHeaders(), timeout: FINALIZE_TIMEOUT_MS },
     );
     return data;
   },
@@ -145,7 +169,7 @@ export const screenProjectMediaService = {
     await axios.post(
       `${BASE(storeId, station)}/${mediaId}/primary`,
       undefined,
-      { headers: buildHeaders(), timeout: 15_000 },
+      { headers: buildHeaders(), timeout: REQUEST_TIMEOUT_MS },
     );
   },
 
@@ -161,7 +185,7 @@ export const screenProjectMediaService = {
     await axios.delete(`${BASE(storeId, station)}/bulk`, {
       headers: buildHeaders(),
       data: { ids },
-      timeout: 15_000,
+      timeout: REQUEST_TIMEOUT_MS,
     });
   },
 };

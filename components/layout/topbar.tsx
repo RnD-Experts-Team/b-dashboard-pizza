@@ -11,8 +11,7 @@ import { Input } from "@/components/ui/input";
 import { ThemeToggleAnimated as ThemeToggle } from "@/components/shared/ThemeToggleAnimated";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { DriveThruButton } from "@/components/screen-project/drive-thru/drive-thru-button";
-// HIDDEN (commented out on request): restore this import and the mount below to show it again.
-// import { CalendarTopbarButton } from "@/components/calendar/calendar-topbar-button";
+import { CalendarTopbarButton } from "@/components/calendar/calendar-topbar-button";
 import { TopbarToolsCluster } from "./topbar-tools-cluster";
 import { ReportProblemTopbarButton } from "@/components/report-problem";
 import { LuminaEmbed } from "@/components/shared/lumina-embed";
@@ -106,7 +105,7 @@ export function Topbar({ onMenuClick, showLogo, alwaysShowMenu }: TopbarProps) {
         {/* <LuminaEmbed /> */}
         <TopbarToolsCluster />
         <DriveThruButton />
-        {/* <CalendarTopbarButton /> */}
+        <CalendarTopbarButton />
         <ReportProblemTopbarButton />
         <NotificationBell />
       </div>

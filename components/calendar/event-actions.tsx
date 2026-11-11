@@ -384,6 +384,10 @@ export function EventActions({
           <p className="text-xs">
             {perStore ? t("cancelAskStores", { store: storeName }) : cancelsAll ? t("cancelAskAll", { store: storeName }) : t("cancelAsk")}
           </p>
+          {/* A plain event cancelled for one store leaves it for good; a task stays there as "cancelled". */}
+          {perStore && ev.feedType === "calendar_event" && (
+            <p className="text-xs text-muted-foreground">{t("cancelEventNoUndo", { store: storeName })}</p>
+          )}
           <div className="flex flex-wrap items-center gap-1.5">
             <Button
               type="button"

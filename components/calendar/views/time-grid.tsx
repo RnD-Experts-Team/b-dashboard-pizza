@@ -21,6 +21,7 @@ import type { CalendarEvent } from "@/lib/calendar/types";
 import { useCalendarClock } from "../calendar-clock";
 import { AvatarStack, EVENT_FOCUS, EventBar, EventDot, LaneCell, MoreButton, PrivateMark } from "../event-parts";
 import { usePeek } from "../event-peek";
+import { EventSigns } from "../event-signs";
 import { StoreLabel } from "../store-label";
 import { useCalendarFormat } from "../use-calendar-format";
 
@@ -168,6 +169,7 @@ function EventBlock({
             <span dir="auto" className="truncate text-start font-medium text-foreground">
               {title}
             </span>
+            <EventSigns ev={ev} />
             <span className="hidden shrink-0 text-[10px] tabular-nums text-muted-foreground @[7rem]:inline">
               {f.time(ev.start)}
             </span>
@@ -209,6 +211,7 @@ function EventBlock({
               <StoreLabel ev={ev} className="me-1.5 align-[1px]" />
               <PrivateMark ev={ev} className="me-1 align-[-1px]" />
               {title}
+              <EventSigns ev={ev} className="ms-1.5" />
             </span>
             {rich && height >= 84 && (
               <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
