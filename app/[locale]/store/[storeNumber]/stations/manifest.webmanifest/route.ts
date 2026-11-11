@@ -17,7 +17,7 @@ export async function GET(
   return NextResponse.json(
     {
       id: `pizza-dashboard-station-${storeNumber}`,
-      name: "Pizza Dashboard — Station",
+      name: "Area 14 — Station",
       short_name: "Station",
       description: "Live station camera/audio for the Screen Project system.",
       start_url: stationUrl,

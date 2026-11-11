@@ -115,7 +115,7 @@ function ForbiddenWelcomeScreen() {
             <Pizza className="h-8 w-8 text-orange-600 sm:h-10 sm:w-10" />
           </div>
           <h2 className="text-xl font-semibold tracking-tight sm:text-3xl">
-            Welcome to Pizza Dashboard
+            Welcome to Area 14
           </h2>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground sm:text-base">
             Here you can see details about your stores.

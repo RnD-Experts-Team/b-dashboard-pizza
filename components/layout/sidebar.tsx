@@ -989,7 +989,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           >
             <Image
               src="/logo.svg"
-              alt="Pizza Dashboard Logo"
+              alt="Area 14 Logo"
               width={32}
               height={32}
               className="h-8 w-8"
@@ -1002,14 +1002,14 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           >
             <Image
               src="/logo.svg"
-              alt="Pizza Dashboard Logo"
+              alt="Area 14 Logo"
               width={32}
               height={32}
               className="h-8 w-8 shrink-0"
             />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-sidebar-foreground leading-none truncate">
-                Pizza Dashboard
+                Area 14
               </p>
               <p className="text-xs text-muted-foreground mt-0.5 truncate">
                 {currentStoreName}

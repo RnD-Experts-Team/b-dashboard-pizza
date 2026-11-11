@@ -43,12 +43,12 @@ export function Topbar({ onMenuClick, showLogo, alwaysShowMenu }: TopbarProps) {
         <div className="flex items-center gap-2 me-1">
           <Image
             src="/logo.svg"
-            alt="Pizza Dashboard"
+            alt="Area 14"
             width={28}
             height={28}
             className="h-7 w-7"
           />
-          <span className="hidden sm:inline text-sm font-semibold">Pizza Dashboard</span>
+          <span className="hidden sm:inline text-sm font-semibold">Area 14</span>
         </div>
       )}
 

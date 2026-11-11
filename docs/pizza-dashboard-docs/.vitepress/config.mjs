@@ -1,8 +1,8 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-  title: 'Pizza Dashboard Docs',
-  description: 'Developer documentation for the B-Dashboard Pizza project',
+  title: 'Area 14 Docs',
+  description: 'Developer documentation for the Area 14 project',
   base: '/docs/',
 
   themeConfig: {
