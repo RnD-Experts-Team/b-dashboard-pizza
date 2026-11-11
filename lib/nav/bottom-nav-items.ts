@@ -481,13 +481,15 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     groupKey: "toolbox",
   },
   // Mirrors the sidebar's Calendar item 1:1 (no gate: each feed layer is decided upstream).
-  {
-    id: "calendar",
-    href: (locale) => `/${locale}/dashboard/calendar`,
-    icon: CalendarDays,
-    titleKey: "calendar",
-    groupKey: "toolbox",
-  },
+  // HIDDEN: Calendar is hidden from navigation for now (sidebar item, its
+  // bottom-nav mirror and the topbar button). The page stays routable.
+  // {
+  //   id: "calendar",
+  //   href: (locale) => `/${locale}/dashboard/calendar`,
+  //   icon: CalendarDays,
+  //   titleKey: "calendar",
+  //   groupKey: "toolbox",
+  // },
   {
     id: "tickets",
     href: (locale) => `/${locale}/dashboard/tickets`,

@@ -179,13 +179,16 @@ function maintenanceTicketHref(locale: string, notification: Notification): stri
 /**
  * A calendar reminder's `action_url` is the page of the event it reminds about
  * (`/dashboard/...`, set when the reminder was made from that event's card), or
- * nothing. Only an in-app dashboard path is followed; anything else lands on the
- * Calendar itself, never on a URL taken from the notification.
+ * nothing. Only an in-app dashboard path is followed, never a URL taken from the
+ * notification. HIDDEN: while the Calendar is hidden it is not a fallback (it
+ * used to be): with no in-app path, or one into the Calendar, the reminder is
+ * not clickable.
  */
-function calendarReminderHref(locale: string, notification: Notification): string {
+function calendarReminderHref(locale: string, notification: Notification): string | null {
   const url = notification.action_url ?? "";
+  if (url.startsWith("/dashboard/calendar")) return null;
   if (/^\/dashboard(\/[\w%.~-]*)*(\?[^#\s]*)?$/.test(url)) return `/${locale}${url}`;
-  return `/${locale}/dashboard/calendar`;
+  return null;
 }
 
 /**
@@ -311,12 +314,13 @@ export function NotificationItem({
   const isTicketType = notification.type.startsWith("ticket_");
   const isMaintenanceType = notification.type.startsWith("maintenance_");
   const isCalendarType = notification.type.startsWith("calendar_");
+  const calendarHref = isCalendarType ? calendarReminderHref(locale, notification) : null;
   const isReportType = isReportNotification(notification);
   // Only these explicitly-coded type families are clickable — an uncoded
   // type must never guess a navigation target, it just displays safely.
   const isClickable =
     isDebriefType ||
-    isCalendarType ||
+    calendarHref !== null ||
     isAnnouncementType ||
     isHiringType ||
     isEmployeeType ||
@@ -336,8 +340,8 @@ export function NotificationItem({
       return;
     }
 
-    if (isCalendarType) {
-      router.push(calendarReminderHref(locale, notification));
+    if (calendarHref) {
+      router.push(calendarHref);
       return;
     }
 
