@@ -407,11 +407,13 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   // pizzasys decides each layer per feed (a layer the user can't see answers
   // 403 and is hidden). Mirrored 1:1 by the "calendar" entry in
   // lib/nav/bottom-nav-items.ts.
-  const calendarItem: NavItem = {
-    title: t("calendar"),
-    href: `/${locale}/dashboard/calendar`,
-    icon: CalendarDays,
-  };
+  // HIDDEN: Calendar is hidden from navigation for now (sidebar item, its
+  // bottom-nav mirror and the topbar button). The page stays routable.
+  // const calendarItem: NavItem = {
+  //   title: t("calendar"),
+  //   href: `/${locale}/dashboard/calendar`,
+  //   icon: CalendarDays,
+  // };
 
   /* ---- Collapsible groups ---- */
   // Dashboards — the DSPR dashboard keeps its existing `/dashboard` URL, so its
@@ -834,7 +836,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const toolboxGroup: NavGroup = {
     label: t("toolbox"),
     icon: Boxes,
-    items: [workbooksItem, breaksItem, calendarItem, ticketsItem],
+    items: [workbooksItem, breaksItem, /* calendarItem, */ ticketsItem],
   };
   // Dev tools navigation (controlled by feature flags)
   const devToolsItems: NavItem[] = [];
