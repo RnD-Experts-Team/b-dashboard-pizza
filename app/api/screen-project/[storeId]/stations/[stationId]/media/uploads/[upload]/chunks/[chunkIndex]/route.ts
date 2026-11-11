@@ -10,8 +10,9 @@ const SCREEN_PROJECT_BASE_URL =
   process.env.NEXT_PUBLIC_SCREEN_PROJECT_BASE_URL ||
   "https://control.screens.lcportal.cloud/api";
 
-// Chunks can be large; give upstream more time
-const UPSTREAM_TIMEOUT_MS = 60_000;
+// Only the hop from this server to Screens; the browser's own upload is
+// over by then (the body is read first).
+const UPSTREAM_TIMEOUT_MS = 120_000;
 
 /**
  * POST /api/screen-project/[storeId]/stations/[stationId]/media/uploads/[upload]/chunks/[chunkIndex]
@@ -37,40 +38,36 @@ export async function POST(
   const authorization = getAuthorizationHeader(request)!;
   const { storeId, stationId, upload, chunkIndex } = await params;
 
-  let formData: FormData;
-  try {
-    formData = await request.formData();
-  } catch {
+  const contentType = request.headers.get("Content-Type") ?? "";
+  if (!contentType.startsWith("multipart/form-data")) {
     return errorResponse("VALIDATION_ERROR", "Expected multipart/form-data body", 400);
   }
 
-  const chunkField = formData.get("chunk");
-  if (!chunkField || !(chunkField instanceof Blob)) {
-    return errorResponse("VALIDATION_ERROR", 'Missing or invalid "chunk" field', 400);
+  // Forward the multipart bytes as they came (the boundary is in the
+  // Content-Type): no parsing and rebuilding the form for every chunk.
+  let body: ArrayBuffer;
+  try {
+    body = await request.arrayBuffer();
+  } catch {
+    return errorResponse("VALIDATION_ERROR", "Could not read the chunk body", 400);
   }
 
-  // Re-build a clean FormData to forward upstream
-  const upstreamForm = new FormData();
-  upstreamForm.append("chunk", chunkField);
+  const path = [storeId, "stations", stationId, "media", "uploads", upload, "chunks", chunkIndex]
+    .map(encodeURIComponent)
+    .join("/");
 
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
-
-    const upstream = await fetch(
-      `${SCREEN_PROJECT_BASE_URL}/${storeId}/stations/${stationId}/media/uploads/${upload}/chunks/${chunkIndex}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: authorization,
-          Accept: "application/json",
-        },
-        body: upstreamForm,
-        signal: controller.signal,
+    const upstream = await fetch(`${SCREEN_PROJECT_BASE_URL}/${path}`, {
+      method: "POST",
+      headers: {
+        Authorization: authorization,
+        Accept: "application/json",
+        "Content-Type": contentType,
       },
-    );
-
-    clearTimeout(timer);
+      body,
+      // Stop when the browser gives up on this chunk (it will retry it).
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]),
+    });
 
     if (upstream.status === 204) {
       return new NextResponse(null, { status: 204 });
@@ -87,7 +84,7 @@ export async function POST(
       },
     });
   } catch (err) {
-    if (err instanceof DOMException && err.name === "AbortError") {
+    if (err instanceof DOMException && (err.name === "TimeoutError" || err.name === "AbortError")) {
       return errorResponse("TIMEOUT", "Chunk upload timed out", 504);
     }
     return errorResponse(

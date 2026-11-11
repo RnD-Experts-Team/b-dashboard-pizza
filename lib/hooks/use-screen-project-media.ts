@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import axios from "axios";
 import { screenProjectMediaService } from "@/lib/api/services/screen-project-media.service";
 import type {
   StationMedia,
@@ -8,7 +9,61 @@ import type {
   FinalizeUploadItem,
 } from "@/types/screen-project-media.types";
 
-const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
+// Small chunks: on a store's slow line a 2 MB chunk still goes through well
+// inside the stall window, and a retry re-sends little.
+const CHUNK_SIZE = 2 * 1024 * 1024;
+// Chunk requests in flight at once, across every file of the batch. Sending
+// them all together made each one share the line and time out together.
+const PARALLEL_CHUNKS = 3;
+// Attempts per request before the file is marked failed.
+const MAX_ATTEMPTS = 6;
+const RETRY_BASE_DELAY_MS = 1_000;
+const RETRY_MAX_DELAY_MS = 20_000;
+// A video whose metadata never loads must not hold the upload back.
+const VIDEO_METADATA_TIMEOUT_MS = 10_000;
+const HTTP_REQUEST_TIMEOUT = 408;
+const HTTP_TOO_MANY_REQUESTS = 429;
+const HTTP_SERVER_ERROR = 500;
+const MS_PER_SECOND = 1_000;
+const CLEAR_DONE_JOBS_AFTER_MS = 2_000;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Worth sending again: the network dropped, the request stalled or timed
+ * out, the server was busy (429) or failed (5xx). Any other 4xx answer will
+ * not change on a retry.
+ */
+function isRetryable(err: unknown): boolean {
+  if (!axios.isAxiosError(err)) return false;
+  const status = err.response?.status;
+  if (status === undefined) return true;
+  return (
+    status === HTTP_REQUEST_TIMEOUT ||
+    status === HTTP_TOO_MANY_REQUESTS ||
+    status >= HTTP_SERVER_ERROR
+  );
+}
+
+/** Retry-After in ms when the server sent one, else exponential backoff. */
+function retryDelay(err: unknown, attempt: number): number {
+  if (axios.isAxiosError(err)) {
+    const seconds = Number(err.response?.headers?.["retry-after"]);
+    if (Number.isFinite(seconds) && seconds > 0) return seconds * MS_PER_SECOND;
+  }
+  return Math.min(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1), RETRY_MAX_DELAY_MS);
+}
+
+async function withRetry<T>(send: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await send();
+    } catch (err) {
+      if (attempt >= MAX_ATTEMPTS || !isRetryable(err)) throw err;
+      await sleep(retryDelay(err, attempt));
+    }
+  }
+}
 
 /** Per-item result of a bulk finalize, as best we can read it. */
 interface BulkResultItem {
@@ -71,8 +126,36 @@ function getVideoDuration(file: File): Promise<number | null> {
       URL.revokeObjectURL(url);
       resolve(null);
     };
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    }, VIDEO_METADATA_TIMEOUT_MS);
     video.src = url;
   });
+}
+
+/** The finalize payload for one file, with its dimensions or duration read client-side. */
+async function describeUpload(
+  file: File,
+  uploadId: string,
+  totalChunks: number,
+): Promise<FinalizeUploadItem> {
+  const isImage = file.type.startsWith("image/");
+  const isVideo = file.type.startsWith("video/");
+  const dims = isImage ? await getImageDimensions(file) : null;
+  const duration_seconds = isVideo ? await getVideoDuration(file) : null;
+
+  return {
+    upload_id: uploadId,
+    file_name: file.name,
+    total_chunks: totalChunks,
+    total_size: file.size,
+    type: isImage ? "image" : "video",
+    mime_type: file.type || null,
+    width: dims?.width ?? null,
+    height: dims?.height ?? null,
+    duration_seconds,
+  };
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -127,22 +210,24 @@ export function useScreenProjectMedia(
     async (files: File[]) => {
       if (!storeId || stationNumber === null || files.length === 0) return;
 
-      // ── Step 1: init all uploads, build jobs ───────────────────────
-      const initResults: Array<{
-        file: File;
-        uploadId: string;
-        totalChunks: number;
-      }> = [];
+      const updateJob = (
+        uploadId: string,
+        patch: (j: MediaUploadJob) => Partial<MediaUploadJob>,
+      ) =>
+        setUploadJobs((prev) =>
+          prev.map((j) => (j.uploadId === uploadId ? { ...j, ...patch(j) } : j)),
+        );
+
+      // ── Step 1: init every upload, build jobs ───────────────────────
+      const uploads: Array<{ file: File; uploadId: string; totalChunks: number }> = [];
 
       for (const file of files) {
         const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
         try {
-          const { upload_id } = await screenProjectMediaService.initUpload(
-            storeId,
-            stationNumber,
-            totalChunks,
+          const { upload_id } = await withRetry(() =>
+            screenProjectMediaService.initUpload(storeId, stationNumber, totalChunks),
           );
-          initResults.push({ file, uploadId: upload_id, totalChunks });
+          uploads.push({ file, uploadId: upload_id, totalChunks });
           setUploadJobs((prev) => [
             ...prev,
             {
@@ -168,132 +253,80 @@ export function useScreenProjectMedia(
         }
       }
 
-      const validInits = initResults.filter(Boolean);
-      if (validInits.length === 0) return;
+      if (uploads.length === 0) return;
 
-      // ── Step 2: upload all chunks for all files in parallel ────────
-      await Promise.all(
-        validInits.map(async ({ file, uploadId, totalChunks }) => {
-          const chunkIndices = Array.from({ length: totalChunks }, (_, i) => i);
-          await Promise.all(
-            chunkIndices.map(async (i) => {
-              const start = i * CHUNK_SIZE;
-              const chunk = file.slice(start, start + CHUNK_SIZE);
-              try {
-                await screenProjectMediaService.uploadChunk(
-                  storeId,
-                  stationNumber,
-                  uploadId,
-                  i,
-                  chunk,
-                );
-                setUploadJobs((prev) =>
-                  prev.map((j) =>
-                    j.uploadId === uploadId
-                      ? { ...j, uploadedChunks: j.uploadedChunks + 1 }
-                      : j,
-                  ),
-                );
-              } catch {
-                setUploadJobs((prev) =>
-                  prev.map((j) =>
-                    j.uploadId === uploadId
-                      ? { ...j, status: "error", error: `Chunk ${i} failed` }
-                      : j,
-                  ),
-                );
-                throw new Error(`Chunk ${i} of "${file.name}" failed`);
-              }
-            }),
+      // ── Step 2: finalize one file as soon as all its chunks are in ──
+      const finalize = async ({ file, uploadId, totalChunks }: (typeof uploads)[number]) => {
+        updateJob(uploadId, () => ({ status: "finalizing" }));
+        const item = await describeUpload(file, uploadId, totalChunks);
+        try {
+          // Single attempt: the server deletes the chunks once it has built
+          // the file, so a retry after a lost answer could only fail.
+          const response = await screenProjectMediaService.finalizeUploadsBulk(
+            storeId,
+            stationNumber,
+            [item],
           );
-        }),
+          // A failed item comes back as { upload_id, error } inside a 2xx.
+          const result = extractBulkResults(response).find((r) => r.upload_id === uploadId);
+          const error = result?.error ?? (result?.success === false ? "Upload failed" : null);
+          updateJob(uploadId, () => (error ? { status: "error", error } : { status: "done" }));
+        } catch {
+          updateJob(uploadId, () => ({ status: "error", error: "Finalize failed" }));
+        }
+      };
+
+      // ── Step 3: send the chunks through a small worker pool ─────────
+      // One queue for the whole batch, files in order, so the first file
+      // finishes (and is finalized) first. A file whose chunk gives up is
+      // skipped from then on; the other files carry on.
+      const failed = new Set<string>();
+      const remaining = new Map(uploads.map((u) => [u.uploadId, u.totalChunks]));
+      const finalizes: Promise<void>[] = [];
+      const queue = uploads.flatMap((u) =>
+        Array.from({ length: u.totalChunks }, (_, index) => ({ upload: u, index })),
       );
 
-      // ── Step 3: extract dimensions/duration client-side ───────────
-      const finalizeItems: FinalizeUploadItem[] = await Promise.all(
-        validInits.map(async ({ file, uploadId, totalChunks }) => {
-          const isImage = file.type.startsWith("image/");
-          const isVideo = file.type.startsWith("video/");
-
-          let width: number | null = null;
-          let height: number | null = null;
-          let duration_seconds: number | null = null;
-
-          if (isImage) {
-            const dims = await getImageDimensions(file);
-            width = dims?.width ?? null;
-            height = dims?.height ?? null;
-          } else if (isVideo) {
-            duration_seconds = await getVideoDuration(file);
+      const worker = async () => {
+        for (let next = queue.shift(); next; next = queue.shift()) {
+          const { upload, index } = next;
+          const { file, uploadId, totalChunks } = upload;
+          if (failed.has(uploadId)) continue;
+          const start = index * CHUNK_SIZE;
+          try {
+            await withRetry(() =>
+              screenProjectMediaService.uploadChunk(
+                storeId,
+                stationNumber,
+                uploadId,
+                index,
+                file.slice(start, start + CHUNK_SIZE),
+              ),
+            );
+          } catch {
+            failed.add(uploadId);
+            updateJob(uploadId, () => ({
+              status: "error",
+              error: `Chunk ${index + 1} of ${totalChunks} failed`,
+            }));
+            continue;
           }
+          if (failed.has(uploadId)) continue;
+          updateJob(uploadId, (j) => ({ uploadedChunks: j.uploadedChunks + 1 }));
+          const left = (remaining.get(uploadId) ?? 0) - 1;
+          remaining.set(uploadId, left);
+          if (left === 0) finalizes.push(finalize(upload));
+        }
+      };
 
-          return {
-            upload_id: uploadId,
-            file_name: file.name,
-            total_chunks: totalChunks,
-            total_size: file.size,
-            type: isImage ? ("image" as const) : ("video" as const),
-            mime_type: file.type || null,
-            width,
-            height,
-            duration_seconds,
-          };
-        }),
-      );
+      await Promise.all(Array.from({ length: PARALLEL_CHUNKS }, worker));
+      await Promise.all(finalizes);
 
-      // ── Step 4: mark all jobs as finalizing ───────────────────────
-      setUploadJobs((prev) =>
-        prev.map((j) =>
-          validInits.some((v) => v.uploadId === j.uploadId)
-            ? { ...j, status: "finalizing" as const }
-            : j,
-        ),
-      );
-
-      // ── Step 5: bulk finalize ─────────────────────────────────────
-      try {
-        const response = await screenProjectMediaService.finalizeUploadsBulk(
-          storeId,
-          stationNumber,
-          finalizeItems,
-        );
-
-        // The request succeeded (2xx — axios throws otherwise), so every item
-        // is a success unless the response explicitly flags it as failed.
-        const results = extractBulkResults(response);
-        setUploadJobs((prev) =>
-          prev.map((j) => {
-            if (!validInits.some((v) => v.uploadId === j.uploadId)) return j;
-            const result = results.find((r) => r.upload_id === j.uploadId);
-            if (result && result.success === false) {
-              return {
-                ...j,
-                status: "error" as const,
-                error: result.error ?? "Upload failed",
-              };
-            }
-            return { ...j, status: "done" as const };
-          }),
-        );
-
-        // Refresh media list
-        await fetchMedia();
-
-        // Clear done jobs after 2 s
-        setTimeout(() => {
-          setUploadJobs((prev) =>
-            prev.filter((j) => j.status !== "done"),
-          );
-        }, 2000);
-      } catch {
-        setUploadJobs((prev) =>
-          prev.map((j) =>
-            validInits.some((v) => v.uploadId === j.uploadId)
-              ? { ...j, status: "error" as const, error: "Finalize failed" }
-              : j,
-          ),
-        );
-      }
+      // ── Step 4: refresh the grid, clear the finished jobs ──────────
+      await fetchMedia();
+      setTimeout(() => {
+        setUploadJobs((prev) => prev.filter((j) => j.status !== "done"));
+      }, CLEAR_DONE_JOBS_AFTER_MS);
     },
     [storeId, stationNumber, fetchMedia],
   );
