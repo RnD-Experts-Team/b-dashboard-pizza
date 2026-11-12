@@ -15,6 +15,7 @@ import {
   fmtTenure,
   reasonLabel,
 } from "@/components/labor/labor-format";
+import { PCT_DIGITS } from "@/components/business-reports/report-format";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
 import { useReport } from "@/components/business-reports/report-context";
 import { ReportBlock, ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
@@ -173,7 +174,7 @@ function TurnoverDialog({
       { key: "seps", header: "Separations", numeric: true, render: (r) => fmtNumber(r.separations), sortValue: (r) => r.separations },
       { key: "vol", header: "Voluntary", numeric: true, render: (r) => fmtNumber(r.voluntary), sortValue: (r) => r.voluntary },
       { key: "invol", header: "Involuntary", numeric: true, render: (r) => fmtNumber(r.involuntary), sortValue: (r) => r.involuntary },
-      { key: "rate", header: "Rate", numeric: true, render: (r) => fmtPercent(r.rate), sortValue: (r) => r.rate },
+      { key: "rate", header: "Rate", numeric: true, render: (r) => fmtPercent(r.rate, PCT_DIGITS), sortValue: (r) => r.rate },
       { key: "hc", header: "Headcount (end)", numeric: true, render: (r) => fmtNumber(r.headcount), sortValue: (r) => r.headcount },
     ],
     [storeName],
@@ -189,7 +190,7 @@ function TurnoverDialog({
         key: "share",
         header: "Share",
         numeric: true,
-        render: (r) => fmtPercent(share(r.count, t.separations_count)),
+        render: (r) => fmtPercent(share(r.count, t.separations_count), PCT_DIGITS),
         sortValue: (r) => r.count,
       },
     ],
@@ -201,7 +202,7 @@ function TurnoverDialog({
     { label: "Separations", value: fmtNumber(t.separations_count) },
     { label: "Voluntary", value: fmtNumber(t.voluntary_count) },
     { label: "Involuntary", value: fmtNumber(t.involuntary_count) },
-    { label: "Turnover rate", value: fmtPercent(t.turnover_rate_percent) },
+    { label: "Turnover rate", value: fmtPercent(t.turnover_rate_percent, PCT_DIGITS) },
     { label: "Notable", value: fmtNumber(notableCount), sub: "above-average performers", tone: notableCount > 0 ? "text-amber-600 dark:text-amber-400" : undefined },
     { label: "Stores", value: fmtNumber(storeRows.filter((r) => r.separations > 0).length), sub: "with a separation" },
   ];
@@ -338,7 +339,7 @@ export function BrTurnover({ data }: { data: LaborReport }) {
           <V1Metric label="Separations" value={fmtNumber(t.separations_count)} />
           <V1Metric label="Voluntary" value={fmtNumber(t.voluntary_count)} />
           <V1Metric label="Involuntary" value={fmtNumber(t.involuntary_count)} />
-          <V1Metric label="Rate" value={fmtPercent(t.turnover_rate_percent)} />
+          <V1Metric label="Rate" value={fmtPercent(t.turnover_rate_percent, PCT_DIGITS)} />
         </V1MetricGrid>
 
         {segments.length > 0 && (

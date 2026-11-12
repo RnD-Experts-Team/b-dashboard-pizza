@@ -8,7 +8,7 @@ import { CATEGORIES } from "@/components/dashboard-v1/category";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
 import { useReport } from "@/components/business-reports/report-context";
 import { ReportBlock, ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
-import { fmt$2, fmt$Compact, fmtNum, fmtPct2 } from "@/components/business-reports/report-format";
+import { fmt$2, fmt$Compact, fmtNum, fmtPct } from "@/components/business-reports/report-format";
 import { BarList, storeColumn, type BarRow } from "@/components/business-reports/cards/sales/br-dialog-kit";
 import type { MenuSection } from "@/types/business-reports.types";
 
@@ -73,7 +73,7 @@ export function BrPortioningCard({ data }: { data: MenuSection }) {
               <div
                 key={entry.ingredient_id}
                 className="min-w-0 rounded-md bg-background/45 px-2.5 py-2"
-                title={`${entry.ingredient_description}: ${fmtVariance(entry.variance_value)} (${fmtPct2(entry.percentage_of_theo_usage)} of theoretical)`}
+                title={`${entry.ingredient_description}: ${fmtVariance(entry.variance_value)} (${fmtPct(entry.percentage_of_theo_usage)} of theoretical)`}
               >
                 <p className="truncate text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
                   {entry.ingredient_description}
@@ -86,7 +86,7 @@ export function BrPortioningCard({ data }: { data: MenuSection }) {
                 >
                   <span className="truncate">{fmtVarianceCompact(entry.variance_value)}</span>
                   <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
-                    {fmtPct2(entry.percentage_of_theo_usage)}
+                    {fmtPct(entry.percentage_of_theo_usage)}
                   </span>
                 </p>
               </div>
@@ -126,7 +126,7 @@ function PortioningDialog({ data, onClose }: { data: MenuSection; onClose: () =>
           label: v.ingredient_description,
           value: v.variance_value,
           display: fmtVariance(v.variance_value),
-          sub: `${fmtPct2(v.percentage_of_theo_usage)} of theoretical`,
+          sub: `${fmtPct(v.percentage_of_theo_usage)} of theoretical`,
           color: v.variance_value > 0 ? OVER_COLOR : UNDER_COLOR,
           tone: varianceClass(v.variance_value),
         })),
@@ -152,7 +152,7 @@ function PortioningDialog({ data, onClose }: { data: MenuSection; onClose: () =>
         render: (r) => {
           const v = r.pct[ing.ingredient_id];
           if (v === undefined) return <span className="text-muted-foreground">—</span>;
-          return <span className={cn("font-medium", varianceClass(v))}>{fmtPct2(v)}</span>;
+          return <span className={cn("font-medium", varianceClass(v))}>{fmtPct(v)}</span>;
         },
       })),
     ],

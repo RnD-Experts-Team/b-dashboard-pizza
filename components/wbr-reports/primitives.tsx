@@ -68,9 +68,11 @@ export function ReportCard({
 export function DeltaBadge({
   value,
   suffix = "%",
+  digits = 1,
 }: {
   value: number;
   suffix?: string;
+  digits?: number;
 }) {
   const up = value > 0.05;
   const down = value < -0.05;
@@ -85,7 +87,7 @@ export function DeltaBadge({
       )}
     >
       <Icon className="h-3 w-3" />
-      {Math.abs(value).toFixed(1)}
+      {Math.abs(value).toFixed(digits)}
       {suffix}
     </span>
   );

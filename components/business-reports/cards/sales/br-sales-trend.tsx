@@ -20,6 +20,7 @@ import {
   fmt$2,
   fmtDay,
   fmtNum,
+  fmtPct,
   fmtRange,
   pctChangeOrNull,
   perStoreDay,
@@ -416,7 +417,7 @@ function TrendDialog({
     { label: "Guests", value: fmtNum(t.customer_count), sub: `${fmt$2(t.avg_ticket)} avg ticket` },
     {
       label: "Labor % · Final",
-      value: overallLabor.value === null ? "—" : `${overallLabor.value.toFixed(1)}%`,
+      value: overallLabor.value === null ? "—" : fmtPct(overallLabor.value),
       sub: "payroll ÷ royalty obligation",
     },
   ];

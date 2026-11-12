@@ -9,13 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import { V1Empty } from "@/components/dashboard-v1/v1-ui";
-import { DASH, fmtColumnValue, fmtDecimalString, fmtTenure } from "@/components/labor/labor-format";
+import { DASH, fmtDecimalString, fmtTenure } from "@/components/labor/labor-format";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
 import { useReport } from "@/components/business-reports/report-context";
 import { ReportBlock, ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
 import { StoreChecklist, inStores } from "@/components/business-reports/store-checklist";
 import type { LaborReport, LaborRosterRow } from "@/types/business-reports.types";
-import { ActiveToggle, NOT_HIRING_COLUMNS, StoreTag, matchesActive, safeDay, type ActiveFilter } from "./br-people-kit";
+import { ActiveToggle, NOT_HIRING_COLUMNS, fmtColumn, StoreTag, matchesActive, safeDay, type ActiveFilter } from "./br-people-kit";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  Employee Roster — everyone on the loaded stores' rosters over the range,
@@ -68,8 +68,8 @@ function EmployeeDetail({
     { label: "Tenure", value: fmtTenure(row.tenure_days), sub: `hired ${safeDay(row.hire_date)}` },
     { label: "Base pay", value: fmtDecimalString(row.base_pay) },
     { label: "Performance pay", value: fmtDecimalString(row.performance_pay) },
-    { label: "Hours", value: fmtColumnValue("total_hours", metricSum(row, "total_hours")) },
-    { label: "Gross pay", value: fmtColumnValue("gross_pay", metricSum(row, "gross_pay")) },
+    { label: "Hours", value: fmtColumn("total_hours", metricSum(row, "total_hours")) },
+    { label: "Gross pay", value: fmtColumn("gross_pay", metricSum(row, "gross_pay")) },
   ];
 
   return (
@@ -103,9 +103,9 @@ function EmployeeDetail({
               <div key={key} className="flex items-center justify-between gap-2 border-b border-border/40 py-1.5">
                 <span className="min-w-0 truncate text-[13px] text-muted-foreground">{m.label}</span>
                 <span className="shrink-0 text-[13px] font-semibold tabular-nums">
-                  {fmtColumnValue(key, m.sum)}
+                  {fmtColumn(key, m.sum)}
                   {m.avg !== null && m.avg !== m.sum && (
-                    <span className="ms-1 font-normal text-muted-foreground">(avg {fmtColumnValue(key, m.avg)})</span>
+                    <span className="ms-1 font-normal text-muted-foreground">(avg {fmtColumn(key, m.avg)})</span>
                   )}
                 </span>
               </div>
@@ -150,8 +150,8 @@ export function BrRoster({ data }: { data: LaborReport }) {
         render: (r) => fmtDecimalString(r.base_pay),
         sortValue: (r) => (r.base_pay === null || r.base_pay === "" ? null : Number(r.base_pay)),
       },
-      { key: "hours", header: "Hours", numeric: true, render: (r) => fmtColumnValue("total_hours", metricSum(r, "total_hours")), sortValue: (r) => metricSum(r, "total_hours") },
-      { key: "gross", header: "Gross Pay", numeric: true, render: (r) => fmtColumnValue("gross_pay", metricSum(r, "gross_pay")), sortValue: (r) => metricSum(r, "gross_pay") },
+      { key: "hours", header: "Hours", numeric: true, render: (r) => fmtColumn("total_hours", metricSum(r, "total_hours")), sortValue: (r) => metricSum(r, "total_hours") },
+      { key: "gross", header: "Gross Pay", numeric: true, render: (r) => fmtColumn("gross_pay", metricSum(r, "gross_pay")), sortValue: (r) => metricSum(r, "gross_pay") },
     ];
     const performance: PagedColumn<LaborRosterRow>[] = hasPerformance
       ? [
@@ -159,7 +159,7 @@ export function BrRoster({ data }: { data: LaborReport }) {
             key: "performance",
             header: "Perf. Avg",
             numeric: true,
-            render: (r) => fmtColumnValue("performance_score", metricAvg(r, "performance_score")),
+            render: (r) => fmtColumn("performance_score", metricAvg(r, "performance_score")),
             sortValue: (r) => metricAvg(r, "performance_score"),
           },
         ]

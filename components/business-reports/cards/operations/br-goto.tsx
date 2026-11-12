@@ -77,7 +77,7 @@ function GoToDialog({ data, onClose }: { data: OperationsSection; onClose: () =>
     [data.by_week],
   );
   const missedSeries = useMemo(
-    () => [{ name: "Missed %", data: data.by_week.map((w) => Number(missedPct(w).toFixed(1))), color: MISSED_COLOR }],
+    () => [{ name: "Missed %", data: data.by_week.map((w) => missedPct(w)), color: MISSED_COLOR }],
     [data.by_week],
   );
   const weekColumns = useMemo<PagedColumn<WeekRow>[]>(() => {
@@ -113,7 +113,7 @@ function GoToDialog({ data, onClose }: { data: OperationsSection; onClose: () =>
             <TrendChart kind="bar" stacked categories={categories} series={sourceSeries} format={fmtWhole} />
           </ReportBlock>
           <ReportBlock title="Missed % by week" description="Lower is better.">
-            <TrendChart categories={categories} series={missedSeries} format={fmtAxisPct} />
+            <TrendChart categories={categories} series={missedSeries} format={fmtAxisPct} tooltipFormat={fmtPct} />
           </ReportBlock>
         </div>
       ),

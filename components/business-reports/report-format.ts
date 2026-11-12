@@ -1,4 +1,6 @@
+import { createElement, type ReactElement } from "react";
 import { format, isValid, parseISO } from "date-fns";
+import { DeltaBadge } from "@/components/wbr-reports/primitives";
 import { toBusinessWeek } from "@/lib/utils/business-week";
 import type { ReportWeek } from "@/types/business-reports.types";
 
@@ -12,15 +14,23 @@ export {
   fmt$2,
   fmtNum,
   fmtNumD,
-  fmtPct,
-  fmtPct2,
   fmtDate,
   pctChangeOrNull,
-  Delta,
 } from "@/components/dspr/wbr-format";
 export { LABOR_ZONES, laborColor, laborLabel } from "@/components/dashboard-v1/cards/v1-labor";
 
 const PERCENT = 100;
+
+/** Every percentage on Business Reports shows 3 decimals ("21.374%"). */
+export const PCT_DIGITS = 3;
+
+export const fmtPct = (n: number | null | undefined): string => `${(n ?? 0).toFixed(PCT_DIGITS)}%`;
+
+/** A % (or pp) change pill; a muted dash without a value. */
+export function Delta({ value, suffix = "%" }: { value: number | null; suffix?: string }): ReactElement {
+  if (value === null || value === undefined) return createElement("span", { className: "text-muted-foreground" }, "—");
+  return createElement(DeltaBadge, { value, suffix, digits: PCT_DIGITS });
+}
 
 /**
  * Null-safe text compare for sorts. Upstream rows (hooks forms, HR events,

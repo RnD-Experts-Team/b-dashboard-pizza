@@ -9,7 +9,7 @@ import { ApexChart, useChartTheme } from "@/components/business-reports/chart";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
 import { useReport } from "@/components/business-reports/report-context";
 import { ReportBlock, ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
-import { share } from "@/components/business-reports/report-format";
+import { PCT_DIGITS, share } from "@/components/business-reports/report-format";
 import { StoreChecklist, inStores } from "@/components/business-reports/store-checklist";
 import type { LaborBlock, LaborReport, LaborRosterRow } from "@/types/business-reports.types";
 import { PEOPLE, StoreTag, TALL_ROW_HEIGHT, peopleBarOptions, safeDay } from "./br-people-kit";
@@ -131,7 +131,7 @@ function TenureDialog({
             <span className={count === 0 ? "text-muted-foreground" : undefined}>
               {fmtNumber(count)}
               {count > 0 && (
-                <span className="ms-1 text-[11px] text-muted-foreground">({fmtPercent(share(count, r.employees), 0)})</span>
+                <span className="ms-1 text-[11px] text-muted-foreground">({fmtPercent(share(count, r.employees), PCT_DIGITS)})</span>
               )}
             </span>
           );
@@ -165,7 +165,7 @@ function TenureDialog({
   const stats: ReportStat[] = [
     { label: "Average tenure", value: fmtTenure(t.average_tenure_days), sub: t.average_tenure_days === null ? undefined : `${fmtNumber(t.average_tenure_days)} days` },
     { label: "Active employees", value: fmtNumber(total) },
-    { label: "Most common", value: top?.bucket ?? DASH, sub: top ? `${fmtPercent(top.pct, 0)} of active` : undefined },
+    { label: "Most common", value: top?.bucket ?? DASH, sub: top ? `${fmtPercent(top.pct, PCT_DIGITS)} of active` : undefined },
     { label: "Newest hire", value: newest ? fmtTenure(newest.tenure_days) : DASH, sub: newest ? `${newest.name} · ${storeName(newest.store)}` : undefined },
     { label: "Longest tenured", value: longest ? fmtTenure(longest.tenure_days) : DASH, sub: longest ? `${longest.name} · ${storeName(longest.store)}` : undefined },
     { label: "Stores", value: fmtNumber(storeRows.length) },
@@ -318,7 +318,7 @@ export function BrTenure({ data }: { data: LaborReport }) {
           <V1Metric
             label="Most Common"
             value={top?.bucket ?? DASH}
-            sub={top ? `${fmtPercent(top.pct, 0)} of ${fmtNumber(total)} active` : undefined}
+            sub={top ? `${fmtPercent(top.pct, PCT_DIGITS)} of ${fmtNumber(total)} active` : undefined}
           />
           <V1Metric
             label="Longest Tenured"

@@ -8,7 +8,7 @@ import { DASH } from "@/components/labor/labor-format";
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
 import { useReport, useSection } from "@/components/business-reports/report-context";
 import { ReportBlock, ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
-import { fmtNumD, weekLabel } from "@/components/business-reports/report-format";
+import { fmtNumD, fmtPct, weekLabel } from "@/components/business-reports/report-format";
 import { cn } from "@/lib/utils";
 import type { ReportWeek, StoreScoreSection, StoreScoreWeek } from "@/types/business-reports.types";
 import { GRID_TD, StoreWeekGrid } from "./br-store-week-grid";
@@ -174,7 +174,7 @@ function WeekDetail({
                       <span className="w-60 shrink-0 truncate text-[13px] text-muted-foreground">
                         {d.label}
                         {d.actual_percent !== null && d.actual_percent !== undefined && (
-                          <span className="ms-1 text-xs text-muted-foreground/70">({fmtNumD(d.actual_percent)}%)</span>
+                          <span className="ms-1 text-xs text-muted-foreground/70">({fmtPct(d.actual_percent)})</span>
                         )}
                       </span>
                       <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">

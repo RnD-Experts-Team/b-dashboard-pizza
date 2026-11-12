@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import { V1Empty, V1Metric } from "@/components/dashboard-v1/v1-ui";
 import {
-  fmtColumnValue,
   fmtCurrency,
   fmtHours,
   fmtNumber,
@@ -16,7 +15,7 @@ import { PagedTable, type PagedColumn } from "@/components/business-reports/page
 import { useReport } from "@/components/business-reports/report-context";
 import { ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
 import type { LaborBlock, LaborColumnStats, LaborReport } from "@/types/business-reports.types";
-import { LaborPctValue, NOT_HIRING_COLUMNS, ROW_CARD_HEIGHT, STORE_SCORE_COLUMNS, TWO_DP, fmtMoneyTile } from "./br-people-kit";
+import { LaborPctValue, NOT_HIRING_COLUMNS, fmtColumn, ROW_CARD_HEIGHT, STORE_SCORE_COLUMNS, TWO_DP, fmtMoneyTile } from "./br-people-kit";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  Labor & Performance — the payroll/performance highlights for the range,
@@ -61,10 +60,10 @@ function PerformanceDialog({
   const metricColumns = useMemo<PagedColumn<ColumnRow>[]>(
     () => [
       { key: "label", header: "Metric", render: (r) => <span className="font-medium">{r.label}</span>, sortValue: (r) => r.label },
-      { key: "sum", header: "Sum", numeric: true, render: (r) => <span className={statClass(r.key, "sum")}>{fmtColumnValue(r.key, r.sum)}</span>, sortValue: (r) => r.sum },
-      { key: "avg", header: "Avg", numeric: true, render: (r) => <span className={statClass(r.key, "avg")}>{fmtColumnValue(r.key, r.avg)}</span>, sortValue: (r) => r.avg },
-      { key: "min", header: "Min", numeric: true, render: (r) => fmtColumnValue(r.key, r.min), sortValue: (r) => r.min },
-      { key: "max", header: "Max", numeric: true, render: (r) => fmtColumnValue(r.key, r.max), sortValue: (r) => r.max },
+      { key: "sum", header: "Sum", numeric: true, render: (r) => <span className={statClass(r.key, "sum")}>{fmtColumn(r.key, r.sum)}</span>, sortValue: (r) => r.sum },
+      { key: "avg", header: "Avg", numeric: true, render: (r) => <span className={statClass(r.key, "avg")}>{fmtColumn(r.key, r.avg)}</span>, sortValue: (r) => r.avg },
+      { key: "min", header: "Min", numeric: true, render: (r) => fmtColumn(r.key, r.min), sortValue: (r) => r.min },
+      { key: "max", header: "Max", numeric: true, render: (r) => fmtColumn(r.key, r.max), sortValue: (r) => r.max },
       { key: "count", header: "Readings", numeric: true, render: (r) => fmtNumber(r.count), sortValue: (r) => r.count },
     ],
     [],

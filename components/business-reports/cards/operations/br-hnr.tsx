@@ -123,7 +123,7 @@ function HnrDialog({ ops, orders, onClose }: { ops: OperationsSection; orders: O
   const weeks = useMemo<WeekRow[]>(() => withPrev(source.byWeek).map(({ row, prev }) => ({ week: row, prev })), [source.byWeek]);
   const categories = useMemo(() => source.byWeek.map((w) => labelOf(w.week_start)), [source.byWeek, labelOf]);
   const series = useMemo(
-    () => [{ name: "Promise met %", data: source.byWeek.map((w) => Number(w.hnr_promise_met_percent.toFixed(1))), color: MET_COLOR }],
+    () => [{ name: "Promise met %", data: source.byWeek.map((w) => w.hnr_promise_met_percent), color: MET_COLOR }],
     [source.byWeek],
   );
   const weekColumns = useMemo<PagedColumn<WeekRow>[]>(
@@ -156,7 +156,7 @@ function HnrDialog({ ops, orders, onClose }: { ops: OperationsSection; orders: O
       label: "Overview",
       content: bar(
         <ReportBlock title="Promise met % by week" description={scope === "special" ? "Special items only." : "Every Hot-N-Ready item."}>
-          <TrendChart key={scope} categories={categories} series={series} format={fmtAxisPct} />
+          <TrendChart key={scope} categories={categories} series={series} format={fmtAxisPct} tooltipFormat={fmtPct} />
         </ReportBlock>,
       ),
     },
