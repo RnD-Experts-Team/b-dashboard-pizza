@@ -58,6 +58,8 @@ export default function BusinessReportsPage() {
 
   const [selection, setSelection] = useState<StoreSelection>("all");
   const [range, setRange] = useState<DateRange>(() => lastCompleteWeeks());
+  // Store scores are slow on big ranges: off unless asked for.
+  const [withStoreScore, setWithStoreScore] = useState(false);
   // The full selection to go back to after focusing one store.
   const [beforeFocus, setBeforeFocus] = useState<{ params: BusinessReportsParams; selection: StoreSelection } | null>(null);
 
@@ -70,7 +72,7 @@ export default function BusinessReportsPage() {
 
   const handleLoad = () => {
     setBeforeFocus(null);
-    load({ startDate: range.start, endDate: range.end, stores: storesFor(selection) });
+    load({ startDate: range.start, endDate: range.end, stores: storesFor(selection), withStoreScore });
   };
 
   const focusStore = useCallback(
@@ -122,6 +124,8 @@ export default function BusinessReportsPage() {
         onRangeChange={setRange}
         onLoad={handleLoad}
         onStop={stop}
+        withStoreScore={withStoreScore}
+        onWithStoreScoreChange={setWithStoreScore}
         busy={busy}
         hasLoaded={loadedParams !== null}
       />

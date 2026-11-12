@@ -32,6 +32,8 @@ export interface BusinessReportsParams {
   endDate: string;
   /** Store numbers, e.g. "03795-00001". */
   stores: string[];
+  /** Also load the store-score grid — slow on big ranges, so only when asked for. */
+  withStoreScore: boolean;
 }
 
 /* ══════════════════════════════════════════════════════════════════════
