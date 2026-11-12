@@ -110,8 +110,8 @@ function WeeklyDialog({ ops, orders, onClose }: { ops: OperationsSection; orders
   const categories = useMemo(() => chronological.map((r) => labelOf(r.week.week_start)), [chronological, labelOf]);
   const series = useMemo(
     () => [
-      { name: "Portal %", data: chronological.map((r) => Number(r.week.in_portal_on_time_percent.toFixed(1))), color: PORTAL_COLOR },
-      { name: "HNR %", data: chronological.map((r) => (r.hnr ? Number(r.hnr.hnr_promise_met_percent.toFixed(1)) : null)), color: HNR_COLOR },
+      { name: "Portal %", data: chronological.map((r) => r.week.in_portal_on_time_percent), color: PORTAL_COLOR },
+      { name: "HNR %", data: chronological.map((r) => (r.hnr ? r.hnr.hnr_promise_met_percent : null)), color: HNR_COLOR },
     ],
     [chronological],
   );
@@ -155,7 +155,7 @@ function WeeklyDialog({ ops, orders, onClose }: { ops: OperationsSection; orders
       label: "Overview",
       content: bar(
         <ReportBlock title="Portal % and HNR % by week" description={`Portal % = in-portal on time; HNR % = promise met${scopeNote}.`}>
-          <TrendChart key={scope} categories={categories} series={series} format={fmtAxisPct} />
+          <TrendChart key={scope} categories={categories} series={series} format={fmtAxisPct} tooltipFormat={fmtPct} />
         </ReportBlock>,
       ),
     },

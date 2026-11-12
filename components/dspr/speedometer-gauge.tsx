@@ -158,6 +158,10 @@ export function SpeedometerGauge({
   
   // Value text color: white in dark mode, light gray in light mode for contrast
   const valueTextColor = isDark ? "#ffffff" : "#747474";
+  // The animated number keeps the decimals of `valueDisplay` ("21.4%" → 1, "21.374%" → 3);
+  // the secondary reading shows at least one.
+  const displayDecimals = valueDisplay?.split(".")[1]?.split("%")[0]?.length ?? 0;
+  const secondaryDecimals = Math.max(1, displayDecimals);
 
   // Build zone arc paths
   const zoneArcs = useMemo(
@@ -268,9 +272,8 @@ export function SpeedometerGauge({
           className="speedometer-value-text"
         >
           {(() => {
-            const decimals = valueDisplay && valueDisplay.includes(".") ? 1 : 0;
             const suffix = valueDisplay && valueDisplay.includes("%") ? "%" : "";
-            return `${animValue.toFixed(decimals)}${suffix}`;
+            return `${animValue.toFixed(displayDecimals)}${suffix}`;
           })()}
         </text>
       </svg>
@@ -296,7 +299,7 @@ export function SpeedometerGauge({
           {angle2 != null && (
             <div className="flex items-center gap-1">
               {/* <span className="w-2 h-2 rounded-full" style={{ background: secondaryColor || DEFAULT_SECONDARY_NEEDLE }} /> */}
-              <span className="text-[10px] text-muted-foreground">{secondaryLabel ? `${secondaryLabel} ${(animSecondary ?? 0).toFixed(1)}${valueDisplay && valueDisplay.includes('%') ? '%' : ''}` : `${(animSecondary ?? 0).toFixed(1)}${valueDisplay && valueDisplay.includes('%') ? '% On Time' : ''}`}</span>
+              <span className="text-[10px] text-muted-foreground">{secondaryLabel ? `${secondaryLabel} ${(animSecondary ?? 0).toFixed(secondaryDecimals)}${valueDisplay && valueDisplay.includes('%') ? '%' : ''}` : `${(animSecondary ?? 0).toFixed(secondaryDecimals)}${valueDisplay && valueDisplay.includes('%') ? '% On Time' : ''}`}</span>
             </div>
           )}
         </div>

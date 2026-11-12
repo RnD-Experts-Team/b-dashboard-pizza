@@ -5,10 +5,10 @@ import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import { V1Empty } from "@/components/dashboard-v1/v1-ui";
-import { DASH, TREND_METRICS, fmtDelta, type TrendMetricConfig } from "@/components/labor/labor-format";
+import { DASH, TREND_METRICS, fmtDelta, fmtPercent, type TrendMetricConfig } from "@/components/labor/labor-format";
 import { ApexChart, useChartTheme } from "@/components/business-reports/chart";
 import { useFinalLabor } from "@/components/business-reports/final-labor";
-import { pctChangeOrNull, weekLabel } from "@/components/business-reports/report-format";
+import { PCT_DIGITS, pctChangeOrNull, weekLabel } from "@/components/business-reports/report-format";
 import { cn } from "@/lib/utils";
 import type { LaborReport, LaborTrendWeek } from "@/types/business-reports.types";
 import { ROW_CARD_HEIGHT, peopleLineOptions } from "./br-people-kit";
@@ -35,7 +35,10 @@ function isTrendKey(key: string): key is TrendKey {
   return TREND_KEYS.has(key);
 }
 
-const METRICS = TREND_METRICS.filter((m) => isTrendKey(m.key));
+// Percent metrics read with Business Reports' 3 decimals.
+const METRICS = TREND_METRICS.filter((m) => isTrendKey(m.key)).map((m) =>
+  m.key.endsWith("_percent") ? { ...m, format: (v: number | null | undefined) => fmtPercent(v, PCT_DIGITS) } : m,
+);
 const CHART_PX = 190;
 const LABOR_KEY = "average_labor_percent";
 
@@ -168,7 +171,7 @@ export function BrLaborTrend({ data }: { data: LaborReport }) {
               <Callout label="Worst week" value={config.format(stats.worst.value)} sub={weekLabel(stats.worst.week, true)} tone="bad" />
               <Callout
                 label="First → last week"
-                value={stats.delta === null ? DASH : fmtDelta(stats.delta)}
+                value={stats.delta === null ? DASH : fmtDelta(stats.delta, PCT_DIGITS)}
                 sub={`${config.format(stats.first.value)} → ${config.format(stats.last.value)}`}
                 tone={deltaTone(stats.delta, config)}
                 icon={deltaIcon(stats.delta)}

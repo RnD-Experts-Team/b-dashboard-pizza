@@ -9,7 +9,7 @@ import { laborValue, useFinalLabor, type FinalLabor } from "@/components/busines
 import { PagedTable, type PagedColumn } from "@/components/business-reports/paged-table";
 import { useReport, useSection } from "@/components/business-reports/report-context";
 import { ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
-import { weekLabel } from "@/components/business-reports/report-format";
+import { PCT_DIGITS, weekLabel } from "@/components/business-reports/report-format";
 import { cn } from "@/lib/utils";
 import type { LaborBlock, LaborReport, LaborTrendWeek } from "@/types/business-reports.types";
 import { LaborPctValue, fmtMoneyTile } from "./br-people-kit";
@@ -124,7 +124,7 @@ function LaborSummaryDialog({ data, rows, onClose }: { data: LaborReport; rows: 
         key: "turnover",
         header: "Turnover",
         numeric: true,
-        render: (r) => fmtPercent(r.block.summary.turnover_rate_percent),
+        render: (r) => fmtPercent(r.block.summary.turnover_rate_percent, PCT_DIGITS),
         sortValue: (r) => r.block.summary.turnover_rate_percent,
       },
       {
@@ -194,7 +194,7 @@ function LaborSummaryDialog({ data, rows, onClose }: { data: LaborReport; rows: 
         },
         sortValue: (w) => laborValue(final?.byWeek.get(w.week_start)).value,
       },
-      { key: "turnover", header: "Turnover", numeric: true, render: (w) => fmtPercent(w.turnover_rate_percent), sortValue: (w) => w.turnover_rate_percent },
+      { key: "turnover", header: "Turnover", numeric: true, render: (w) => fmtPercent(w.turnover_rate_percent, PCT_DIGITS), sortValue: (w) => w.turnover_rate_percent },
       { key: "pay", header: "Avg Hourly", numeric: true, render: (w) => fmtCurrency(w.average_hourly_pay), sortValue: (w) => w.average_hourly_pay },
     ],
     [final, weekSales],
@@ -205,7 +205,7 @@ function LaborSummaryDialog({ data, rows, onClose }: { data: LaborReport; rows: 
     { label: "Headcount", value: `${fmtNumber(s.headcount_start)} → ${fmtNumber(s.headcount_end)}`, sub: `${signed(net)} net`, tone: netAccent(net) },
     { label: "New hires", value: fmtNumber(s.new_hires), tone: s.new_hires > 0 ? EMERALD : undefined },
     { label: "Separations", value: fmtNumber(s.separations), sub: `${fmtNumber(s.notable_departures)} notable`, tone: s.separations > 0 ? ROSE : undefined },
-    { label: "Turnover", value: fmtPercent(s.turnover_rate_percent) },
+    { label: "Turnover", value: fmtPercent(s.turnover_rate_percent, PCT_DIGITS) },
     { label: "Avg weekly gross", value: fmtMoneyTile(s.avg_weekly_gross_pay), sub: `${fmtHours(s.avg_weekly_hours, 0)} / week` },
     {
       label: "Final labor",
@@ -293,7 +293,7 @@ export function BrLaborSummary({ data }: { data: LaborReport }) {
           sub={s.notable_departures > 0 ? "above-avg performers" : "none"}
           accent={s.notable_departures > 0 ? AMBER : undefined}
         />
-        <V1Metric label="Turnover Rate" value={fmtPercent(s.turnover_rate_percent)} />
+        <V1Metric label="Turnover Rate" value={fmtPercent(s.turnover_rate_percent, PCT_DIGITS)} />
         <V1Metric
           label="Avg Weekly Gross"
           value={<span title={fmtCurrency(s.avg_weekly_gross_pay, 0)}>{fmtMoneyTile(s.avg_weekly_gross_pay)}</span>}

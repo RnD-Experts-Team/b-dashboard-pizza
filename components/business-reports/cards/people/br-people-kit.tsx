@@ -5,10 +5,10 @@ import type { ApexOptions } from "apexcharts";
 import { CATEGORIES } from "@/components/dashboard-v1/category";
 import { V1Toggle } from "@/components/dashboard-v1/v1-ui";
 import { buildTooltipCustom } from "@/components/labor/labor-chart";
-import { DASH } from "@/components/labor/labor-format";
+import { DASH, fmtColumnValue, fmtPercent } from "@/components/labor/labor-format";
 import type { useChartTheme } from "@/components/business-reports/chart";
 import { useReport } from "@/components/business-reports/report-context";
-import { fmt$Compact, fmtDay, fmtPct, laborColor } from "@/components/business-reports/report-format";
+import { PCT_DIGITS, fmt$Compact, fmtDay, fmtPct, laborColor } from "@/components/business-reports/report-format";
 import { cn } from "@/lib/utils";
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -19,6 +19,11 @@ import { cn } from "@/lib/utils";
  * ────────────────────────────────────────────────────────────────────────── */
 
 export const PEOPLE = CATEGORIES.people;
+
+/** A Labor metric column's value, the labor % with Business Reports' 3 decimals. */
+export function fmtColumn(key: string, v: number | null | undefined): string {
+  return key === "labor" ? fmtPercent(v, PCT_DIGITS) : fmtColumnValue(key, v);
+}
 export const PEOPLE_COLORS = PEOPLE.chartColors;
 
 /** Height shared by the cards that sit in one row (turnover, overtime, trend…). */

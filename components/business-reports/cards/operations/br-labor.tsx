@@ -84,7 +84,7 @@ function LaborDialog({ sales, final, onClose }: { sales: SalesSection; final: Fi
 
   const categories = useMemo(() => weeks.map((w) => labelOf(w.week_start)), [weeks, labelOf]);
   const series = useMemo(
-    () => [{ name: "Labor %", data: weeks.map((w) => (w.final === null ? 0 : Number(w.final.toFixed(1)))), color: FINAL_COLOR }],
+    () => [{ name: "Labor %", data: weeks.map((w) => w.final ?? 0), color: FINAL_COLOR }],
     [weeks],
   );
   const barColors = useMemo(() => weeks.map((w) => (w.final === null ? NO_FINAL_COLOR : laborColor(w.final))), [weeks]);
@@ -116,7 +116,7 @@ function LaborDialog({ sales, final, onClose }: { sales: SalesSection; final: Fi
           title="Final labor % by week"
           description="Total payroll ÷ royalty obligation × 100; a week without payroll is left out. Green band = target 19–24%."
         >
-          <TrendChart kind="bar" categories={categories} series={series} barColors={barColors} band={TARGET_BAND} format={fmtLaborAxis} />
+          <TrendChart kind="bar" categories={categories} series={series} barColors={barColors} band={TARGET_BAND} format={fmtLaborAxis} tooltipFormat={fmtPct} />
         </ReportBlock>
       ),
     },

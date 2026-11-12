@@ -9,6 +9,7 @@ import { PagedTable, type PagedColumn } from "@/components/business-reports/page
 import { useReport } from "@/components/business-reports/report-context";
 import { ReportBlock, ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
 import {
+  PCT_DIGITS,
   bucketWeeks,
   compareText,
   fmt$,
@@ -32,7 +33,6 @@ import type { OperationsMetrics, OperationsSection, ReportWeek } from "@/types/b
 export const BR_ORDERS_VS_SALES_SPAN: V1Span = 2;
 
 const MAX_POINTS = 120;
-const PP_DIGITS = 1;
 const CHART_KEYS = ["sales", "blue_line_total", "pepsi_total"] as const;
 const [BLUE_COLOR, PEPSI_COLOR] = CATEGORIES.sales.chartColors;
 const PCT_LINE_COLOR = "#0ea5e9";
@@ -62,7 +62,7 @@ function PpChange({ value, size = "sm" }: { value: number | null; size?: "sm" | 
       )}
     >
       {value > 0 ? "+" : ""}
-      {value.toFixed(PP_DIGITS)}pp
+      {value.toFixed(PCT_DIGITS)}pp
     </span>
   );
 }
@@ -229,7 +229,7 @@ function OrdersDialog({ data, weeks, onClose }: { data: OperationsSection; weeks
       ],
       line: {
         name: "Blue Line % of sales",
-        data: buckets.map((b) => Number(share(b.blue_line_total, b.sales).toFixed(PP_DIGITS))),
+        data: buckets.map((b) => share(b.blue_line_total, b.sales)),
         color: PCT_LINE_COLOR,
       },
     };

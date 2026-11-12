@@ -64,8 +64,8 @@ function PortalDialog({ data, onClose }: { data: OperationsSection; onClose: () 
   const categories = useMemo(() => data.by_week.map((w) => labelOf(w.week_start)), [data.by_week, labelOf]);
   const series = useMemo(
     () => [
-      { name: "Put into portal %", data: data.by_week.map((w) => Number(w.put_into_portal_percent.toFixed(1))), color: PUT_COLOR },
-      { name: "On-time %", data: data.by_week.map((w) => Number(w.in_portal_on_time_percent.toFixed(1))), color: ONTIME_COLOR },
+      { name: "Put into portal %", data: data.by_week.map((w) => w.put_into_portal_percent), color: PUT_COLOR },
+      { name: "On-time %", data: data.by_week.map((w) => w.in_portal_on_time_percent), color: ONTIME_COLOR },
     ],
     [data.by_week],
   );
@@ -90,7 +90,7 @@ function PortalDialog({ data, onClose }: { data: OperationsSection; onClose: () 
       label: "Overview",
       content: (
         <ReportBlock title="Portal % by week" description="Put into portal and in-portal on time, each week of the range.">
-          <TrendChart categories={categories} series={series} format={fmtAxisPct} />
+          <TrendChart categories={categories} series={series} format={fmtAxisPct} tooltipFormat={fmtPct} />
         </ReportBlock>
       ),
     },

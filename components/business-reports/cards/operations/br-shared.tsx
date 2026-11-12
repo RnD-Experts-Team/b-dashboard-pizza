@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { businessWeekStart, toBusinessWeek } from "@/lib/utils/business-week";
 import { ApexChart, useChartTheme } from "@/components/business-reports/chart";
 import { useReport } from "@/components/business-reports/report-context";
-import { fmt$2, fmt$Compact, fmtNum, weekLabel } from "@/components/business-reports/report-format";
+import { PCT_DIGITS, fmt$2, fmt$Compact, fmtNum, fmtPct, weekLabel } from "@/components/business-reports/report-format";
 
 /**
  * Small pieces shared by the Business Reports Operations, Finance and Quality
@@ -24,7 +24,7 @@ export const CARD_LIST_LIMIT = 12;
 
 const SCORE_GOOD = 80;
 const SCORE_FAIR = 50;
-const PP_EPSILON = 0.05;
+const PP_EPSILON = 0.0005;
 
 const THOUSAND = 1_000;
 const MILLION = 1_000_000;
@@ -103,7 +103,7 @@ export function PpDelta({
   return (
     <span className={cn("tabular-nums", deltaTone(d, goodWhen))}>
       {d > 0 ? "+" : ""}
-      {d.toFixed(1)}pp
+      {d.toFixed(PCT_DIGITS)}pp
     </span>
   );
 }
@@ -226,13 +226,15 @@ export interface TrendSeries {
 /**
  * The dialogs' weekly trend: one or more series over the week labels, as
  * lines or bars. `barColors` colours each bar on its own (one series only);
- * `band` shades a target range.
+ * `band` shades a target range. `tooltipFormat` (default `format`) shows the
+ * exact value where the axis keeps round ticks.
  */
 export function TrendChart({
   categories,
   series,
   kind = "line",
   format,
+  tooltipFormat = format,
   barColors,
   band,
   stacked = false,
@@ -242,6 +244,7 @@ export function TrendChart({
   series: TrendSeries[];
   kind?: "line" | "bar";
   format: (v: number) => string;
+  tooltipFormat?: (v: number) => string;
   barColors?: string[];
   band?: { from: number; to: number; color: string };
   stacked?: boolean;
@@ -291,10 +294,10 @@ export function TrendChart({
         : {},
       tooltip: {
         theme: theme.mode,
-        y: { formatter: (v: number) => (typeof v === "number" ? format(v) : NO_VALUE) },
+        y: { formatter: (v: number) => (typeof v === "number" ? tooltipFormat(v) : NO_VALUE) },
       },
     }),
-    [kind, stacked, theme.label, theme.mode, theme.axis, theme.grid, barColors, series, categories, format, band],
+    [kind, stacked, theme.label, theme.mode, theme.axis, theme.grid, barColors, series, categories, format, tooltipFormat, band],
   );
   if (categories.length === 0) return <DialogEmpty>No weeks in this range.</DialogEmpty>;
   return <ApexChart key={theme.key} type={kind} height={height} options={options} series={apexSeries} />;
@@ -312,8 +315,8 @@ export interface ShareRow {
 }
 
 const SHARE_SIZES = {
-  sm: { row: "gap-2 py-0.5", label: "text-[11px]", value: "text-[11px]", share: "text-[10px] w-9", bar: "h-1.5 w-16" },
-  lg: { row: "gap-3 py-1.5", label: "text-sm", value: "text-sm", share: "text-xs w-12", bar: "h-2.5 w-40" },
+  sm: { row: "gap-2 py-0.5", label: "text-[11px]", value: "text-[11px]", share: "text-[10px] w-14", bar: "h-1.5 w-16" },
+  lg: { row: "gap-3 py-1.5", label: "text-sm", value: "text-sm", share: "text-xs w-16", bar: "h-2.5 w-40" },
 } as const;
 
 /** A ranked list: label, a share-of-total bar, the count and its share. */
@@ -348,7 +351,7 @@ export function ShareBars({
               />
             </span>
             <span className={cn("shrink-0 text-end font-semibold tabular-nums", cls.value)}>{r.display ?? fmtNum(r.value)}</span>
-            <span className={cn("shrink-0 text-end tabular-nums text-muted-foreground", cls.share)}>{pct.toFixed(0)}%</span>
+            <span className={cn("shrink-0 text-end tabular-nums text-muted-foreground", cls.share)}>{fmtPct(pct)}</span>
           </div>
         );
       })}
@@ -393,8 +396,8 @@ export function ScoreBars({ rows, color }: { rows: ScoreRow[]; color: string }) 
               style={{ width: `${Math.min(PERCENT, Math.max(0, r.score))}%`, backgroundColor: color }}
             />
           </span>
-          <span className={cn("w-16 shrink-0 text-end text-sm font-semibold tabular-nums", scoreColor(r.score))}>
-            {r.score.toFixed(1)}%
+          <span className={cn("w-20 shrink-0 text-end text-sm font-semibold tabular-nums", scoreColor(r.score))}>
+            {fmtPct(r.score)}
           </span>
           {r.sub !== undefined && <span className="w-28 shrink-0 text-end text-xs tabular-nums text-muted-foreground">{r.sub}</span>}
         </div>
