@@ -21,7 +21,7 @@ const FULL: V1Span = 4;
 const ONE_FULL: V1Span[] = [FULL];
 
 export function StoresSection() {
-  const { rangeLabel } = useReport();
+  const { rangeLabel, params } = useReport();
   const sales = useSection("sales");
   const storeScore = useSection("storeScore");
   const [open, setOpen] = useState(true);
@@ -43,9 +43,12 @@ export function StoresSection() {
             <SectionSlot state={sales} spans={ONE_FULL} label="Sales">
               {(data) => <BrStoreComparison data={data} />}
             </SectionSlot>
-            <SectionSlot state={storeScore} spans={ONE_FULL} label="Store score">
-              {(data) => <BrStoreScoreWeeks data={data} />}
-            </SectionSlot>
+            {/* Only when "Load store scores" was ticked for this load. */}
+            {params.withStoreScore && (
+              <SectionSlot state={storeScore} spans={ONE_FULL} label="Store score">
+                {(data) => <BrStoreScoreWeeks data={data} />}
+              </SectionSlot>
+            )}
             {/* A failed sales load is already reported by the comparison slot. */}
             {!sales.error && (
               <SectionSlot state={sales} spans={ONE_FULL} label="Sales">

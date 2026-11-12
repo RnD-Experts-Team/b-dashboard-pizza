@@ -81,7 +81,7 @@ export function BrStoreComparison({ data }: { data: SalesSection }) {
   const columns = useMemo<PagedColumn<Row>[]>(() => {
     const opsPending = (r: Row) => (operations.loading && !r.ops ? PENDING : DASH);
     const show = (v: number | null, f: (n: number) => string, fallback: string = DASH) => (v === null ? fallback : f(v));
-    return [
+    const all: PagedColumn<Row>[] = [
       {
         key: "rank",
         header: "#",
@@ -188,7 +188,9 @@ export function BrStoreComparison({ data }: { data: SalesSection }) {
         sortValue: (r) => r.score,
       },
     ];
-  }, [storeName, operations.loading, storeScore.loading]);
+    // The Score column only when store scores were loaded.
+    return params.withStoreScore ? all : all.filter((c) => c.key !== "score");
+  }, [storeName, operations.loading, storeScore.loading, params.withStoreScore]);
 
   return (
     <V1Card

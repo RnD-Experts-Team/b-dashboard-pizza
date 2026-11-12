@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { RefreshCw, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { WeekSelect } from "@/components/shared/week-select";
 import { AnalyticsControls } from "@/components/maintenance-tickets/analytics/analytics-controls";
 import { RANGE_PRESETS, localDay } from "@/lib/maintenance-tickets/local-range";
@@ -33,6 +34,8 @@ export function BusinessReportsControls({
   onRangeChange,
   onLoad,
   onStop,
+  withStoreScore,
+  onWithStoreScoreChange,
   busy,
   hasLoaded,
 }: {
@@ -44,6 +47,9 @@ export function BusinessReportsControls({
   onLoad: () => void;
   /** Cancel the load in progress (what already landed stays). */
   onStop: () => void;
+  /** Load the store-score grid too (slow on big ranges; off by default). */
+  withStoreScore: boolean;
+  onWithStoreScoreChange: (value: boolean) => void;
   busy: boolean;
   hasLoaded: boolean;
 }) {
@@ -85,16 +91,24 @@ export function BusinessReportsControls({
         </>
       }
     >
+      <label className="ms-auto flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+        <Checkbox
+          checked={withStoreScore}
+          onCheckedChange={(v) => onWithStoreScoreChange(v === true)}
+          disabled={busy}
+        />
+        Load store scores
+      </label>
       {/* While loading, Load becomes Stop: cancel any time, change the filters, load again. */}
       {busy ? (
-        <Button type="button" variant="outline" onClick={onStop} className="ms-auto" title="Stop loading; what already loaded stays">
+        <Button type="button" variant="outline" onClick={onStop} title="Stop loading; what already loaded stays">
           <RefreshCw className="me-1.5 h-3.5 w-3.5 animate-spin" />
           Loading…
           <Square className="ms-2 h-3 w-3 fill-current" />
           Stop
         </Button>
       ) : (
-        <Button type="button" onClick={onLoad} disabled={Boolean(blockedReason)} title={blockedReason} className="ms-auto">
+        <Button type="button" onClick={onLoad} disabled={Boolean(blockedReason)} title={blockedReason}>
           <RefreshCw className="me-1.5 h-3.5 w-3.5" />
           {hasLoaded ? "Refresh" : "Load"}
         </Button>
