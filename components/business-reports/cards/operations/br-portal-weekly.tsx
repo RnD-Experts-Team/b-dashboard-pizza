@@ -21,7 +21,6 @@ import {
   NO_VALUE,
   PpDelta,
   TrendChart,
-  meanOf,
   plural,
   storeSearch,
   useStoreFocus,
@@ -121,6 +120,7 @@ function WeeklyDialog({ ops, orders, onClose }: { ops: OperationsSection; orders
     [labelOf],
   );
   const hnrStores = hnrSource(scope, ops, orders).byStore;
+  const hnrTotals = hnrSource(scope, ops, orders).totals;
   const opsStores = useStoreRows(ops.by_store);
   const stores = useMemo<StoreWeeklyRow[]>(
     () =>
@@ -139,8 +139,9 @@ function WeeklyDialog({ ops, orders, onClose }: { ops: OperationsSection; orders
   );
   const focus = useStoreFocus<StoreWeeklyRow>();
   const latest = rows[0];
-  const avgPortal = meanOf(rows.map((r) => r.week.in_portal_on_time_percent));
-  const avgHnr = meanOf(rows.map((r) => r.hnr?.hnr_promise_met_percent));
+  // Over the whole range: sums ÷ sums, never a mean of weekly percentages.
+  const rangePortal = ops.totals.portal_used_orders > 0 ? ops.totals.in_portal_on_time_percent : null;
+  const rangeHnr = hnrTotals.hnr_transactions > 0 ? hnrTotals.hnr_promise_met_percent : null;
   const scopeNote = scope === "special" ? " (Special Items)" : "";
   const bar = (children: ReactNode) => (
     <ScopeBar scope={scope} onChange={setScope} hasSpecial={Boolean(orders)}>
@@ -205,8 +206,8 @@ function WeeklyDialog({ ops, orders, onClose }: { ops: OperationsSection; orders
           value: latest?.hnr ? fmtPct(latest.hnr.hnr_promise_met_percent) : NO_VALUE,
           sub: latest ? `${labelOf(latest.week.week_start)}${scopeNote}` : undefined,
         },
-        { label: "Avg Portal %", value: avgPortal === null ? NO_VALUE : fmtPct(avgPortal), sub: "mean of weeks" },
-        { label: "Avg HNR %", value: avgHnr === null ? NO_VALUE : fmtPct(avgHnr), sub: `mean of weeks${scopeNote}` },
+        { label: "Portal %", value: rangePortal === null ? NO_VALUE : fmtPct(rangePortal), sub: "on time ÷ used, whole range" },
+        { label: "HNR %", value: rangeHnr === null ? NO_VALUE : fmtPct(rangeHnr), sub: `met ÷ transactions, whole range${scopeNote}` },
       ]}
       tabs={tabs}
     />

@@ -12,6 +12,7 @@ import type {
   MenuSection,
   OperationsSection,
   OrdersSection,
+  PayrollWeeks,
   QualitySection,
   SalesSection,
   StoreScoreSection,
@@ -62,18 +63,56 @@ function query(params: BusinessReportsParams): string {
   ]).toString();
 }
 
+/**
+ * At most this many Business Reports requests in flight at once, across every
+ * service: they all share one MySQL server with few connections, so a page
+ * load must never open a burst of them. The rest wait their turn, in the order
+ * they were asked for.
+ */
+const MAX_IN_FLIGHT = 3;
+let inFlight = 0;
+const waiting: Array<() => void> = [];
+
+async function limited<T>(run: () => Promise<T>): Promise<T> {
+  if (inFlight < MAX_IN_FLIGHT) {
+    inFlight += 1;
+  } else {
+    // The slot is handed over directly when a running request ends.
+    await new Promise<void>((resolve) => waiting.push(resolve));
+  }
+  try {
+    return await run();
+  } finally {
+    const next = waiting.shift();
+    if (next) next();
+    else inFlight -= 1;
+  }
+}
+
+async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+  const { data } = await limited(() =>
+    axios.get<T>(url, { headers: buildHeaders(), timeout: CLIENT_TIMEOUT_MS, signal }),
+  );
+  return data;
+}
+
 async function postSection<T>(
   section: string,
   params: BusinessReportsParams,
   signal?: AbortSignal,
+  extra: Record<string, string> = {},
 ): Promise<T> {
-  const { data } = await axios.post<T>(`/api/reports/business/${section}`, body(params), {
-    headers: buildHeaders(),
-    timeout: CLIENT_TIMEOUT_MS,
-    signal,
-  });
+  const { data } = await limited(() =>
+    axios.post<T>(`/api/reports/business/${section}`, { ...body(params), ...extra }, {
+      headers: buildHeaders(),
+      timeout: CLIENT_TIMEOUT_MS,
+      signal,
+    }),
+  );
   return data;
 }
+
+const ORDER_PARTS = ["channels", "important_items_hnr", "upselling", "promo"] as const;
 
 function chunk<T>(items: T[], size: number): T[][] {
   return Array.from({ length: Math.ceil(items.length / size) }, (_, i) =>
@@ -86,7 +125,17 @@ export const businessReportsService = {
   getOperations: (p: BusinessReportsParams, s?: AbortSignal) =>
     postSection<OperationsSection>("operations", p, s),
   getMenu: (p: BusinessReportsParams, s?: AbortSignal) => postSection<MenuSection>("menu", p, s),
-  getOrders: (p: BusinessReportsParams, s?: AbortSignal) => postSection<OrdersSection>("orders", p, s),
+  /**
+   * The orders section is four big reads, asked for as four requests (Data's
+   * `part`) so each one is short and they share the in-flight limit with the
+   * rest of the page instead of one long request.
+   */
+  async getOrders(p: BusinessReportsParams, s?: AbortSignal): Promise<OrdersSection> {
+    const parts = await Promise.all(
+      ORDER_PARTS.map((part) => postSection<Partial<OrdersSection>>("orders", p, s, { part })),
+    );
+    return Object.assign({}, ...parts) as OrdersSection;
+  },
   getQuality: (p: BusinessReportsParams, s?: AbortSignal) => postSection<QualitySection>("quality", p, s),
   getDebriefs: (p: BusinessReportsParams, s?: AbortSignal) =>
     postSection<DebriefsSection>("debriefs", p, s),
@@ -129,34 +178,29 @@ export const businessReportsService = {
   },
 
   /** GET /api/reports/labor — the Labor report (Hiring). */
-  async getLabor(params: BusinessReportsParams, signal?: AbortSignal): Promise<LaborReport> {
-    const { data } = await axios.get<LaborReport>(`/api/reports/labor?${query(params)}`, {
-      headers: buildHeaders(),
-      timeout: CLIENT_TIMEOUT_MS,
-      signal,
-    });
-    return data;
+  getLabor(params: BusinessReportsParams, signal?: AbortSignal): Promise<LaborReport> {
+    return getJson<LaborReport>(`/api/reports/labor?${query(params)}`, signal);
+  },
+
+  /** GET /api/reports/payroll-weeks — Hiring's payroll per store-week (final labor). */
+  getPayrollWeeks(params: BusinessReportsParams, signal?: AbortSignal): Promise<PayrollWeeks> {
+    return getJson<PayrollWeeks>(`/api/reports/payroll-weeks?${query(params)}`, signal);
   },
 
   /** GET /api/reports/wbr-bulk — feedback, complaints & money owed (hooks). */
-  async getFeedback(params: BusinessReportsParams, signal?: AbortSignal): Promise<WbrBulkResponse> {
-    const { data } = await axios.get<WbrBulkResponse>(`/api/reports/wbr-bulk?${query(params)}`, {
-      headers: buildHeaders(),
-      timeout: CLIENT_TIMEOUT_MS,
-      signal,
-    });
-    return data;
+  getFeedback(params: BusinessReportsParams, signal?: AbortSignal): Promise<WbrBulkResponse> {
+    return getJson<WbrBulkResponse>(`/api/reports/wbr-bulk?${query(params)}`, signal);
   },
 
   /** Maintenance analytics summary for the range: tickets, recurring issues, statuses, per store. */
   getTickets(params: BusinessReportsParams, signal?: AbortSignal): Promise<AnalyticsSummary> {
     const range = daysToInstants(params.startDate, params.endDate);
     if (!range) throw new Error("Invalid date range.");
-    return maintenanceTicketsService.getAnalyticsSummary({ stores: params.stores, ...range }, signal);
+    return limited(() => maintenanceTicketsService.getAnalyticsSummary({ stores: params.stores, ...range }, signal));
   },
 
   /** Skills and their coverage by employees (Operations) for every loaded store, in one call. */
   getSkills(params: BusinessReportsParams, signal?: AbortSignal): Promise<StoreSkillsOverview> {
-    return schedulingService.getSkillsOverview(params.stores, signal);
+    return limited(() => schedulingService.getSkillsOverview(params.stores, signal));
   },
 };

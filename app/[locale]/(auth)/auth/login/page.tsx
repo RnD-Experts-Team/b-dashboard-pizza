@@ -494,7 +494,7 @@ export default function LoginPage() {
             />
           </div>
           <h2 className="text-xl font-semibold text-foreground">
-            Pizza Dashboard
+            Area 14
           </h2>
           <p className="text-sm text-muted-foreground text-center max-w-60">
             Manage your stores, track performance, and streamline operations.

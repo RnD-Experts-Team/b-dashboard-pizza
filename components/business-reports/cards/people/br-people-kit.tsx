@@ -129,9 +129,28 @@ export function fmtMoneyTile(v: number | null | undefined): string {
 }
 
 /** An employee's display name — upstream names can be null. */
+/**
+ * Hiring metric columns that are one STORE figure copied onto every
+ * employee's row, owned by another source: sales (royalty obligation) comes
+ * from the Data service and labor from payroll ÷ royalty. Summed per employee
+ * they are wrong, so Business Reports never shows Hiring's copies.
+ */
+export const NOT_HIRING_COLUMNS: ReadonlySet<string> = new Set(["sales", "labor"]);
+
+/** Hiring metric columns that are one store score repeated per employee: a sum of them means nothing. */
+export const STORE_SCORE_COLUMNS: ReadonlySet<string> = new Set([
+  "customer_service",
+  "upselling",
+  "inventory",
+  "lc_audit",
+  "pne_audit_fail",
+  "final_score",
+]);
+
 export function employeeName(name: string | null | undefined, id: number | null | undefined): string {
   if (name) return name;
-  return id === null || id === undefined ? "Unknown" : `Employee #${id}`;
+  // No name: metrics exist under an id Hiring has no employee for (a data issue).
+  return id === null || id === undefined ? "Unknown" : `Unknown employee #${id}`;
 }
 
 /** Small muted store label used next to names in lists: always "number · name". */

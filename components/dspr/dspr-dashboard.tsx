@@ -266,7 +266,7 @@ function ForbiddenWelcomeScreen({ locale }: { locale: string }) {
           </div>
 
           <h2 className="text-xl font-semibold tracking-tight sm:text-3xl">
-            Welcome to Pizza Dashboard
+            Welcome to Area 14
           </h2>
 
           <p className="mt-2 max-w-xl text-sm text-muted-foreground sm:text-base">

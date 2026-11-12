@@ -16,7 +16,7 @@ import { PagedTable, type PagedColumn } from "@/components/business-reports/page
 import { useReport } from "@/components/business-reports/report-context";
 import { ReportDialog, type ReportStat } from "@/components/business-reports/report-dialog";
 import type { LaborBlock, LaborColumnStats, LaborReport } from "@/types/business-reports.types";
-import { LaborPctValue, ROW_CARD_HEIGHT, TWO_DP, fmtMoneyTile } from "./br-people-kit";
+import { LaborPctValue, NOT_HIRING_COLUMNS, ROW_CARD_HEIGHT, STORE_SCORE_COLUMNS, TWO_DP, fmtMoneyTile } from "./br-people-kit";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  Labor & Performance — the payroll/performance highlights for the range,
@@ -167,7 +167,10 @@ export function BrLaborPerformance({ data }: { data: LaborReport }) {
   const final = useFinalLabor();
   const { highlights: h, by_column } = data.combined.labor;
   const rows = useMemo<ColumnRow[]>(
-    () => Object.entries(by_column).map(([key, stats]) => ({ ...stats, key })),
+    () =>
+      Object.entries(by_column)
+        .filter(([key]) => !NOT_HIRING_COLUMNS.has(key))
+        .map(([key, stats]) => ({ ...stats, key, sum: STORE_SCORE_COLUMNS.has(key) ? null : stats.sum })),
     [by_column],
   );
   const labor = laborValue(final?.overall);

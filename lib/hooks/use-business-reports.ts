@@ -20,6 +20,7 @@ const SECTION_KEYS: SectionKey[] = [
   "debriefs",
   "storeScore",
   "labor",
+  "payrollWeeks",
   "feedback",
   "tickets",
   "skills",
@@ -105,7 +106,10 @@ export function useBusinessReports(): UseBusinessReportsResult {
 
     const svc = businessReportsService;
     // Fire-and-forget: each settles into its own section.
+    // Requests go out a few at a time (see the service): the order here is
+    // the order they start in — the summary first, then the small ones.
     void settle("sales", svc.getSales(params, signal));
+    void settle("payrollWeeks", svc.getPayrollWeeks(params, signal));
     void settle("operations", svc.getOperations(params, signal));
     void settle("menu", svc.getMenu(params, signal));
     void settle("orders", svc.getOrders(params, signal));

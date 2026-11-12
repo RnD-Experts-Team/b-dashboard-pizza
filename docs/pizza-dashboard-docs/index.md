@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: "Pizza Dashboard"
+  name: "Area 14"
   text: "Developer Documentation"
   tagline: "Internal reference for features, APIs, and module architecture"
   actions:
