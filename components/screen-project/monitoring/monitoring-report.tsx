@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { eachDayOfInterval, format, parseISO } from "date-fns";
 import {
-  AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, CalendarClock, Camera, Clock, EyeOff, Lightbulb, Mic, MonitorOff, MonitorPlay, Store, UserCheck, Users,
+  AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, CalendarClock, Camera, Clock, EyeOff, Lightbulb, Mic, MonitorOff, MonitorPlay, Store, UserCheck, Users, X,
 } from "lucide-react";
 import { AnalyticsCard, CardEmpty } from "@/components/maintenance-tickets/analytics/analytics-card";
 import { AnalyticsBarChart } from "@/components/maintenance-tickets/analytics/analytics-bar-chart";
@@ -12,9 +12,10 @@ import { KpiTile, type Kpi } from "@/components/maintenance-tickets/analytics/an
 import { Pager, ReportTable, TD, TH, usePaged } from "@/components/maintenance-tickets/analytics/analytics-sections";
 import { scrollToSection } from "@/lib/maintenance-tickets/scroll-to-section";
 import { cn } from "@/lib/utils";
-import { USAGE_COLORS, formatDuration, percent, share, toHours } from "@/lib/screen-usage/format";
+import { USAGE_COLORS, formatDuration, formatShare, percent, share, toHours } from "@/lib/screen-usage/format";
 import type { UsageReport, UsageScreenRow, UsageStoreRow, UsageUserRow } from "@/lib/screen-usage/types";
 import { MANAGER_DAILY_TARGET_S, openSeconds, startedDays, storeOpenHours } from "@/lib/screen-usage/open-hours";
+import { groupScreens, screenKey, type ScreenGroup } from "@/lib/screen-usage/screen-groups";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { daysToInstants } from "@/lib/maintenance-tickets/local-range";
 import { BreakdownChart, DailyPresenceChart, HoursHeatmap, ScreenSharesChart, SegmentedToggle, type ChartBasis } from "./usage-charts";
@@ -30,6 +31,13 @@ const MIN_ON_SCREEN_FOR_RANKING = 30 * 60;
 const STORES_PAGE_SIZE = 10;
 /** Screens per page of the presence-by-screen chart, so it never needs a long scroll. */
 const SCREEN_CHART_PAGE_SIZE = 10;
+/** Screens shown one per name over every store, or one per station in each store. */
+type ScreenView = "all" | "store";
+/** The presence-by-screen chart's hint, by screen view and chart basis. */
+const SHARES_HINT: Record<ScreenView, Record<ChartBasis, string>> = {
+  all: { open: "sections.screenSharesHintOpenAll", connected: "sections.screenSharesHintConnectedAll" },
+  store: { open: "sections.screenSharesHintOpen", connected: "sections.screenSharesHintConnected" },
+};
 
 /**
  * The monitoring report, laid out like the maintenance analytics page: the
@@ -96,6 +104,20 @@ export function MonitoringReport({
   const [basis, setBasis] = useState<ChartBasis>("open");
   const chartBasis: ChartBasis = hasOpenHours ? basis : "connected";
   const managerTarget = MANAGER_DAILY_TARGET_S * startedDays(startDate, endDate);
+  // Screens: one per name over every store (the default), or one per station in each store.
+  const [screenView, setScreenView] = useState<ScreenView>("all");
+  /** In the each-store view, only the stations of this screen (a screenKey), picked from the all-stores table. */
+  const [screenFilter, setScreenFilter] = useState<string | null>(null);
+  const screenGroups = useMemo(() => groupScreens(report.screens, openByStore), [report.screens, openByStore]);
+  const showScreen = (group: ScreenGroup) => {
+    setScreenFilter(group.key);
+    setScreenView("store");
+  };
+  const changeScreenView = (view: ScreenView) => {
+    setScreenFilter(null);
+    setScreenView(view);
+  };
+  const filteredGroup = screenGroups.find((g) => g.key === screenFilter) ?? null;
   const avgOnScreen = k.managers ? k.on_screen / k.managers : 0;
 
   // The priority numbers: present and talking out of the stores' open hours, then out of connected time.
@@ -204,13 +226,25 @@ export function MonitoringReport({
     }
     const top = report.screens[0];
     if (top && top.main > 0) out.push({ text: t("glance.topScreen", { name: top.name, store: top.store ?? "", duration: formatDuration(top.main) }), target: "screens" });
+    const topGroup = [...screenGroups].sort((a, b) => b.main - a.main)[0];
+    if (topGroup && topGroup.main > 0 && topGroup.stores > 1) {
+      out.push({
+        text: t("glance.topScreenAll", {
+          name: topGroup.name,
+          stores: topGroup.stores,
+          duration: formatDuration(topGroup.main),
+          share: formatShare(topGroup.present_open_share),
+        }),
+        target: "screens",
+      });
+    }
     const neglected = report.screens.filter((s) => s.main === 0).length;
     if (neglected > 0) out.push({ text: t("glance.neglected", { count: neglected, total: report.screens.length }), target: "screens", tone: "warn" });
     const trouble = k.no_face + k.covered;
     if (trouble > 0) out.push({ text: t("glance.cameraTrouble", { duration: formatDuration(trouble) }), target: "camera", tone: "warn" });
     if (k.dead_mic > 0) out.push({ text: t("glance.deadMic", { duration: formatDuration(k.dead_mic) }), target: "mic", tone: "warn" });
     return out;
-  }, [report, k, t]);
+  }, [report, k, t, screenGroups]);
 
   // Each screen's present and talking time, out of its store's open hours and out of its own connected time.
   const screenRows = useMemo<ScreenRowView[]>(
@@ -233,19 +267,30 @@ export function MonitoringReport({
   const onScreen = k.on_screen;
   const byOpen = chartBasis === "open";
 
-  // The per-screen chart: screens that were in a main tile, highest presence first, a page at a time.
-  const shareRows = useMemo(
-    () =>
-      screenRows
-        .filter((s) => s.connected > 0)
-        .map((s) => ({
-          label: `${s.name} · ${s.store ?? ""}`,
-          present: (byOpen ? s.present_open_share : s.present_connected_share) ?? 0,
-          talking: (byOpen ? s.talking_open_share : s.talking_connected_share) ?? 0,
-        }))
-        .sort((a, b) => b.present - a.present),
-    [screenRows, byOpen],
+  // The stations shown in the each-store view: all of them, or one screen's picked from the all-stores table.
+  const storeScreenRows = useMemo(
+    () => (screenFilter === null ? screenRows : screenRows.filter((s) => screenKey(s.name) === screenFilter)),
+    [screenRows, screenFilter],
   );
+  const allStores = screenView === "all";
+
+  // The per-screen chart: screens that were in a main tile, highest presence first, a page at a time.
+  const shareRows = useMemo(() => {
+    const source = allStores
+      ? screenGroups.map((g) => ({ ...g, label: t("screenView.storesCount", { name: g.name, count: g.stores }) }))
+      : storeScreenRows.map((s) => ({ ...s, label: `${s.name} · ${s.store ?? ""}` }));
+    return source
+      .filter((s) => s.connected > 0)
+      .map((s) => ({
+        label: s.label,
+        present: (byOpen ? s.present_open_share : s.present_connected_share) ?? 0,
+        talking: (byOpen ? s.talking_open_share : s.talking_connected_share) ?? 0,
+      }))
+      .sort((a, b) => b.present - a.present);
+  }, [allStores, screenGroups, storeScreenRows, byOpen, t]);
+  const topScreenRows = allStores
+    ? screenGroups.filter((g) => g.main > 0).sort((a, b) => b.main - a.main).map((g) => ({ label: g.name, value: toHours(g.main) }))
+    : storeScreenRows.filter((s) => s.main > 0).sort((a, b) => b.main - a.main).map((s) => ({ label: `${s.name} · ${s.store ?? ""}`, value: toHours(s.main) }));
   const sharesPaged = usePaged(shareRows, shareRows.length, SCREEN_CHART_PAGE_SIZE);
   // Of open hours, the donuts gain the open time nobody was connected for, so they add up to the open hours.
   const notConnected = byOpen
@@ -358,11 +403,40 @@ export function MonitoringReport({
 
       <StoresCard report={report} openByStore={openByStore} openSoFar={openSoFar} />
 
-      <AnalyticsCard icon={MonitorPlay} title={t("sections.topScreens")} description={t("sections.topScreensHint")} center>
-        {report.screens.some((s) => s.main > 0) ? (
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-sm text-muted-foreground">{t("screenView.label")}</span>
+        <SegmentedToggle
+          label={t("screenView.label")}
+          value={screenView}
+          onChange={changeScreenView}
+          options={[
+            { value: "all", label: t("screenView.all") },
+            { value: "store", label: t("screenView.store") },
+          ]}
+        />
+        {!allStores && filteredGroup && (
+          <button
+            type="button"
+            onClick={() => setScreenFilter(null)}
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border bg-muted/50 px-3 py-1 text-sm hover:bg-muted"
+          >
+            {t("screenView.only", { name: filteredGroup.name })}
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="sr-only">{t("screenView.clear")}</span>
+          </button>
+        )}
+      </div>
+
+      <AnalyticsCard
+        icon={MonitorPlay}
+        title={t("sections.topScreens")}
+        description={t(allStores ? "sections.topScreensHintAll" : "sections.topScreensHint")}
+        center
+      >
+        {topScreenRows.length > 0 ? (
           <AnalyticsBarChart
             title={t("sections.topScreens")}
-            rows={report.screens.filter((s) => s.main > 0).map((s) => ({ label: `${s.name} · ${s.store ?? ""}`, value: toHours(s.main) }))}
+            rows={topScreenRows}
             valueLabel={t("units.hours")}
             format={(v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 1 })}h`}
           />
@@ -375,7 +449,7 @@ export function MonitoringReport({
         id="screen-shares"
         icon={UserCheck}
         title={t("sections.screenShares")}
-        description={t(byOpen ? "sections.screenSharesHintOpen" : "sections.screenSharesHintConnected")}
+        description={t(SHARES_HINT[allStores ? "all" : "store"][chartBasis])}
       >
         {sharesPaged.total > 0 ? (
           <>
@@ -394,7 +468,11 @@ export function MonitoringReport({
         )}
       </AnalyticsCard>
 
-      <ScreensTable report={report} rows={screenRows} openSoFar={openSoFar} />
+      {allStores ? (
+        <ScreenGroupsTable groups={screenGroups} openSoFar={openSoFar} onOpen={showScreen} />
+      ) : (
+        <ScreensTable report={report} rows={storeScreenRows} openSoFar={openSoFar} />
+      )}
 
       <ManagerSheet
         key={openUser?.user_id ?? "none"}
@@ -466,6 +544,114 @@ type ScreenRowView = UsageScreenRow & {
 };
 
 const STORE_TEXT_KEYS: (keyof StoreRowView)[] = ["store"];
+const GROUP_TEXT_KEYS: (keyof ScreenGroup & string)[] = ["name"];
+const SCREENS_PAGE_SIZE = 10;
+
+/** The lowest and highest store's present share of open hours, or one figure when every store shows the same. */
+function StoreRange({ group: g }: { group: ScreenGroup }) {
+  const t = useTranslations("screenMonitoring");
+  if (!g.low || !g.high) return "—";
+  const low = formatShare(g.low.share);
+  const high = formatShare(g.high.share);
+  if (low === high) return t("columns.rangeSame", { share: low });
+  return t("columns.rangeValue", { low, lowStore: g.low.store, high, highStore: g.high.store });
+}
+
+/** Each screen added up over every store that has it; a row opens that screen store by store. */
+function ScreenGroupsTable({
+  groups,
+  openSoFar,
+  onOpen,
+}: {
+  groups: ScreenGroup[];
+  /** The range runs past now: open hours count only up to now. */
+  openSoFar: boolean;
+  onOpen: (group: ScreenGroup) => void;
+}) {
+  const t = useTranslations("screenMonitoring");
+  const { rows, head } = useSortable(groups, "present_open_share", GROUP_TEXT_KEYS);
+  const paged = usePaged(rows, rows.length, SCREENS_PAGE_SIZE);
+  const maxMain = Math.max(1, ...groups.map((g) => g.main));
+  return (
+    <ReportTable
+      id="screens"
+      title={t("sections.screens")}
+      count={groups.length}
+      unit={t("units.screens")}
+      description={t("sections.screensAllHint", {
+        watched: groups.filter((g) => g.main > 0).length,
+        total: groups.length,
+      })}
+    >
+      <table className="w-full text-sm [&_td]:whitespace-nowrap">
+        <thead className="border-b bg-muted/40">
+          <tr>
+            {head("name", t("columns.screen"))}
+            {head("watched_stores", t("columns.storesWatched"), "text-end")}
+            {head("present_open_share", t("columns.presentOpenShare"), "text-end")}
+            {head("talking_open_share", t("columns.talkingOpenShare"), "text-end")}
+            <th className={cn(TH, "text-end")}>{t("columns.storeRange")}</th>
+            {head("present_connected_share", t("columns.presentConnectedShare"), "text-end")}
+            {head("talking_connected_share", t("columns.talkingConnectedShare"), "text-end")}
+            {head("present", t("columns.present"), "text-end")}
+            {head("talking", t("columns.talking"), "text-end")}
+            {head("connected", t("columns.connectedInMain"), "text-end")}
+            {head("open_hours", t(openSoFar ? "columns.openHoursSoFar" : "columns.openHours"), "text-end")}
+            {head("main", t("columns.mainTile"), "min-w-48")}
+            {head("mic", t("columns.micOpen"), "text-end")}
+            {head("camera", t("columns.camera"), "text-end")}
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {paged.rows.map((g) => (
+            <tr
+              key={g.key}
+              tabIndex={0}
+              onClick={() => onOpen(g)}
+              onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onOpen(g)}
+              className="cursor-pointer hover:bg-muted/30 focus-visible:bg-muted/30 focus-visible:outline-none"
+              title={t("screenView.openHint")}
+            >
+              <td className={cn(TD, "font-medium")}>
+                {g.name}
+                {g.main === 0 && (
+                  <span className="ms-2 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-normal text-amber-700 dark:text-amber-400">
+                    {t("neverWatched")}
+                  </span>
+                )}
+              </td>
+              <td className={cn(TD, "text-end tabular-nums", g.watched_stores < g.stores && "text-amber-700 dark:text-amber-400")}>
+                {t("columns.ofStores", { watched: g.watched_stores, total: g.stores })}
+              </td>
+              <td className={cn(TD, "text-end font-semibold tabular-nums")}>{formatShare(g.present_open_share)}</td>
+              <td className={cn(TD, "text-end font-semibold tabular-nums")}>{formatShare(g.talking_open_share)}</td>
+              <td className={cn(TD, "text-end text-xs tabular-nums text-muted-foreground")}>
+                <StoreRange group={g} />
+              </td>
+              <td className={cn(TD, "text-end tabular-nums")}>{formatShare(g.present_connected_share)}</td>
+              <td className={cn(TD, "text-end tabular-nums")}>{formatShare(g.talking_connected_share)}</td>
+              <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(g.present)}</td>
+              <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(g.talking)}</td>
+              <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(g.connected)}</td>
+              <td className={cn(TD, "text-end tabular-nums")}>{g.open_hours === null ? "—" : formatDuration(g.open_hours)}</td>
+              <td className={TD}>
+                <div className="flex items-center gap-2">
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                    <div className="h-full rounded-full bg-blue-600" style={{ width: `${share(g.main, maxMain)}%` }} />
+                  </div>
+                  <span className="w-16 text-end text-xs tabular-nums">{formatDuration(g.main)}</span>
+                </div>
+              </td>
+              <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(g.mic)}</td>
+              <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(g.camera)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <Pager page={paged.page} pages={paged.pages} from={paged.from} to={paged.to} total={paged.total} onPage={paged.setPage} />
+    </ReportTable>
+  );
+}
 const SCREEN_TEXT_KEYS: (keyof ScreenRowView & string)[] = ["name", "store"];
 
 function StoresCard({
@@ -550,16 +736,16 @@ function ScreensTable({
 }) {
   const t = useTranslations("screenMonitoring");
   const { rows, head } = useSortable(screenRows, "present_open_share", SCREEN_TEXT_KEYS);
-  const paged = usePaged(rows, rows.length, 10);
+  const paged = usePaged(rows, rows.length, SCREENS_PAGE_SIZE);
   const maxMain = Math.max(1, ...report.screens.map((s) => s.main));
   const ofOpen = (seconds: number, open: number | null) => (open === null ? "—" : percent(seconds, open));
   return (
     <ReportTable
       id="screens"
       title={t("sections.screens")}
-      count={report.screens.length}
+      count={screenRows.length}
       unit={t("units.screens")}
-      description={t("sections.screensHint", { watched: report.totals.screens_watched, total: report.totals.screens })}
+      description={t("sections.screensHint", { watched: screenRows.filter((s) => s.main > 0).length, total: screenRows.length })}
     >
       <table className="w-full text-sm [&_td]:whitespace-nowrap">
         <thead className="border-b bg-muted/40">

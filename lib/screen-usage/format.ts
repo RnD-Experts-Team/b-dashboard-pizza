@@ -21,6 +21,11 @@ export function percent(part: number, whole: number): string {
   return whole > 0 ? `${Math.round((part / whole) * 100)}%` : "—";
 }
 
+/** A 0–100 share as "62%", or "—" when there is none. */
+export function formatShare(value: number | null): string {
+  return value === null ? "—" : `${Math.round(value)}%`;
+}
+
 /** Share as a 0–100 number (0 when undefined), for sorting and bars. */
 export function share(part: number, whole: number): number {
   return whole > 0 ? (part / whole) * 100 : 0;

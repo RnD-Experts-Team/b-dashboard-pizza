@@ -2027,6 +2027,7 @@
       "leastPresent": "{name} is the least present: a face on camera only {share} of the time.",
       "peakHour": "Managers are most present on {day} around {hour}.",
       "topScreen": "The most watched screen is {name} ({store}): {duration} in the main tile.",
+      "topScreenAll": "Over all {stores} stores, {name} is watched the most: {duration} in the main tile, present {share} of open hours.",
       "neglected": "{count, plural, one {# screen was} other {# screens were}} never in the main tile (of {total}).",
       "cameraTrouble": "Cameras were on with no one in front, or covered, for {duration}.",
       "deadMic": "Mics were open with no sound at all (muted or covered) for {duration}."
@@ -2045,12 +2046,16 @@
       "managersHint": "Every number per manager. Click a row for the full picture and any day minute by minute.",
       "topScreens": "Most watched screens",
       "topScreensHint": "Hours each screen spent in the big main tile.",
+      "topScreensHintAll": "Hours each screen spent in the big main tile, added up over all stores.",
       "screenShares": "Presence and talking by screen",
       "screenSharesHintOpen": "Present and talking while each screen was in the main tile, as a share of its store's open hours.",
       "screenSharesHintConnected": "Present and talking while each screen was in the main tile, as a share of that connected time.",
+      "screenSharesHintOpenAll": "Present and talking while each screen was in the main tile, added up over all stores, as a share of those stores' open hours.",
+      "screenSharesHintConnectedAll": "Present and talking while each screen was in the main tile, added up over all stores, as a share of that connected time.",
       "stores": "By store",
       "screens": "Screens",
       "screensHint": "{watched} of {total} screens were in the main tile at least once.",
+      "screensAllHint": "Each screen added up over every store that has it; open hours are those stores' together. {watched} of {total} screens were in the main tile at least once. Click a screen to see it store by store.",
       "dayTimeline": "Day timeline",
       "figures": "Figures"
     },
@@ -2092,7 +2097,21 @@
       "talkingOpenShare": "Talking % of open",
       "presentConnectedShare": "Present % of connected",
       "talkingConnectedShare": "Talking % of connected",
-      "connectedInMain": "Connected (main tile)"
+      "connectedInMain": "Connected (main tile)",
+      "storesWatched": "Stores watched",
+      "ofStores": "{watched} of {total}",
+      "storeRange": "Present % by store",
+      "rangeValue": "{low} ({lowStore}) to {high} ({highStore})",
+      "rangeSame": "{share} in every store"
+    },
+    "screenView": {
+      "label": "Screens",
+      "all": "All stores together",
+      "store": "Each store",
+      "only": "Only {name}",
+      "clear": "Show every screen",
+      "openHint": "See this screen store by store",
+      "storesCount": "{name} · {count, plural, one {# store} other {# stores}}"
     },
     "legend": {
       "present": "Present",
