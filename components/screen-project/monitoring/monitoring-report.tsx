@@ -427,52 +427,55 @@ export function MonitoringReport({
         )}
       </div>
 
-      <AnalyticsCard
-        icon={MonitorPlay}
-        title={t("sections.topScreens")}
-        description={t(allStores ? "sections.topScreensHintAll" : "sections.topScreensHint")}
-        center
-      >
-        {topScreenRows.length > 0 ? (
-          <AnalyticsBarChart
-            title={t("sections.topScreens")}
-            rows={topScreenRows}
-            valueLabel={t("units.hours")}
-            format={(v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 1 })}h`}
-          />
-        ) : (
-          <CardEmpty icon={MonitorOff}>{t("noScreenTime")}</CardEmpty>
-        )}
-      </AnalyticsCard>
-
-      <AnalyticsCard
-        id="screen-shares"
-        icon={UserCheck}
-        title={t("sections.screenShares")}
-        description={t(SHARES_HINT[allStores ? "all" : "store"][chartBasis])}
-      >
-        {sharesPaged.total > 0 ? (
-          <>
-            <ScreenSharesChart rows={sharesPaged.rows} />
-            <Pager
-              page={sharesPaged.page}
-              pages={sharesPaged.pages}
-              from={sharesPaged.from}
-              to={sharesPaged.to}
-              total={sharesPaged.total}
-              onPage={sharesPaged.setPage}
-            />
-          </>
-        ) : (
-          <CardEmpty icon={MonitorOff}>{t("noScreenTime")}</CardEmpty>
-        )}
-      </AnalyticsCard>
-
       {allStores ? (
         <ScreenGroupsTable groups={screenGroups} openSoFar={openSoFar} onOpen={showScreen} />
       ) : (
         <ScreensTable report={report} rows={storeScreenRows} openSoFar={openSoFar} />
       )}
+
+      <div className="grid gap-6 @4xl:grid-cols-2">
+        <AnalyticsCard
+          icon={MonitorPlay}
+          title={t("sections.topScreens")}
+          description={t(allStores ? "sections.topScreensHintAll" : "sections.topScreensHint")}
+          center
+        >
+          {topScreenRows.length > 0 ? (
+            <AnalyticsBarChart
+              title={t("sections.topScreens")}
+              rows={topScreenRows}
+              valueLabel={t("units.hours")}
+              format={(v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 1 })}h`}
+            />
+          ) : (
+            <CardEmpty icon={MonitorOff}>{t("noScreenTime")}</CardEmpty>
+          )}
+        </AnalyticsCard>
+  
+        <AnalyticsCard
+          id="screen-shares"
+          icon={UserCheck}
+          title={t("sections.screenShares")}
+          description={t(SHARES_HINT[allStores ? "all" : "store"][chartBasis])}
+          center
+        >
+          {sharesPaged.total > 0 ? (
+            <>
+              <ScreenSharesChart rows={sharesPaged.rows} />
+              <Pager
+                page={sharesPaged.page}
+                pages={sharesPaged.pages}
+                from={sharesPaged.from}
+                to={sharesPaged.to}
+                total={sharesPaged.total}
+                onPage={sharesPaged.setPage}
+              />
+            </>
+          ) : (
+            <CardEmpty icon={MonitorOff}>{t("noScreenTime")}</CardEmpty>
+          )}
+        </AnalyticsCard>
+      </div>
 
       <ManagerSheet
         key={openUser?.user_id ?? "none"}
