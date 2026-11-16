@@ -156,6 +156,12 @@ import {
   conflictedShiftIds,
   mergeActualShifts,
 } from "@/lib/scheduling/utils";
+import {
+  draftFromCopy,
+  type CopyTargetCheck,
+  type ShiftCopySource,
+  type ShiftCopyTarget,
+} from "@/lib/scheduling/shift-copy";
 import type {
   Shift,
   ScheduleTemplate,
@@ -1042,6 +1048,35 @@ export function SchedulingManager() {
       toast.info("Unsaved shift removed");
     },
     [removeDraft, storeId, week.start]
+  );
+
+  /**
+   * A shift was dragged onto another cell: make an unsaved copy there.
+   *
+   * A copy is an ordinary draft — nothing is sent until Save, and it counts in
+   * the totals and the plan row straight away. Only time and label travel (see
+   * `draftFromCopy`). A blocked person (leave, or unavailable at that time) is
+   * a warning, not a refusal, the same as adding a shift over a block; someone
+   * who is not set up yet is refused, because their draft could only fail on
+   * Save.
+   */
+  const handleCopyShift = useCallback(
+    (
+      source: ShiftCopySource,
+      target: ShiftCopyTarget,
+      check: CopyTargetCheck,
+    ) => {
+      if (!storeId) return;
+      if (check.status === "unsynced") {
+        toast.error(check.reason);
+        return;
+      }
+      addDraft(storeId, week.start, draftFromCopy(source, target));
+      if (check.status === "blocked") {
+        toast.warning(`Shift copied — ${check.reason}.`);
+      }
+    },
+    [storeId, week.start, addDraft]
   );
 
   /** One-click "worked exactly as planned" — no dialog, addresses the assignment. */
@@ -2628,6 +2663,7 @@ export function SchedulingManager() {
             draftShifts={drafts}
             onEditDraft={handleEditDraft}
             onDeleteDraft={handleDeleteDraft}
+            onCopyShift={handleCopyShift}
             weekPlan={isPlannedOnly ? weekPlan : null}
             weekPlanLoading={isPlannedOnly && insights.isLoading && !weekPlan}
             skillsByEmployee={skillsByEmployee}
