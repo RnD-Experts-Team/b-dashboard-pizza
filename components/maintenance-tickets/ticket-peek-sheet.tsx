@@ -28,7 +28,7 @@ export function TicketPeekSheet({
   const t = useTranslations("maintenanceSystem.peek");
   const title = ticket?.issues[0]?.title ?? ticket?.issueTitles[0] ?? "";
   const more = ticket ? Math.max(0, ticket.issueCount - 1) : 0;
-  const store = ticket?.storeId ?? ticket?.otherStore ?? "—";
+  const store = ticket?.storeId ?? ticket?.storageLocation?.name ?? ticket?.otherStore ?? "—";
   const priority = ticket ? topPriority(ticket.issues) : null;
   const href = ticket
     ? `/${locale}/dashboard/maintenance-tickets/${ticket.id}${ticket.storeId ? `?store=${encodeURIComponent(ticket.storeId)}` : ""}`

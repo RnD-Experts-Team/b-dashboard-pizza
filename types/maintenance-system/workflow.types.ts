@@ -305,6 +305,8 @@ export interface TimelineEntry {
   actor: string | IdName | null;
   /** Present on notes: MOS-only notes show a lock. */
   isPrivate?: boolean;
+  /** The files that came with this step (a note's, a question's, an answer's, a batch of photos). */
+  attachments?: TicketAttachment[];
 }
 
 /* ── The issue ───────────────────────────────────────────────────────────── */
@@ -488,6 +490,8 @@ export interface TicketIssueLookupRow {
   statusLabel: string;
   priority: MEnum<Priority> | null;
   store: StoreRef | null;
+  /** For a ticket at one of our storage locations. */
+  storageLocation: { id: number; name: string } | null;
   otherStore: string | null;
 }
 

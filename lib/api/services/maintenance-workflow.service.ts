@@ -41,16 +41,20 @@ import type {
   WorkDonePayload,
   WorkflowResult,
 } from "@/types/maintenance-system";
-import type { TicketAttachment, TicketNote, TroubleshootingSnapshot } from "@/types/maintenance-tickets.types";
+import { ticketPath } from "@/lib/api/services/maintenance-tickets.service";
+import type { StorageLocationRef, TicketAttachment, TicketNote, TroubleshootingSnapshot } from "@/types/maintenance-tickets.types";
 
-/** Which issue: the store number, the ticket, the ticket issue. */
+/**
+ * Which issue: the store number (null for a ticket at no store -- a storage
+ * location or a place written in words), the ticket, the ticket issue.
+ */
 export interface IssueKey {
-  store: string;
+  store: string | null;
   ticketId: number;
   issueId: number;
 }
 
-const issuePath = (k: IssueKey) => `/stores/${seg(k.store)}/tickets/${seg(k.ticketId)}/issues/${seg(k.issueId)}`;
+const issuePath = (k: IssueKey) => `${ticketPath(k.store, k.ticketId)}/issues/${seg(k.issueId)}`;
 
 /* ── Normalising the few fields whose wire shape varies ──────────────────── */
 
@@ -162,6 +166,8 @@ export interface TicketHeaderInfo {
   /** Store number, the route key every store-scoped path binds on. */
   storeNumber: string | null;
   otherStore: string | null;
+  /** The storage location, for a ticket at no store. */
+  storageLocation: StorageLocationRef | null;
   status: MEnum<TicketIssueDetail["status"]["value"]>;
   type: MEnum | null;
   creator: { id: number; name: string } | null;
@@ -177,6 +183,7 @@ type RawTicketHeader = {
   storeId: number | string | null;
   store?: { id: number | string; storeNumber: string } | null;
   otherStore?: string | null;
+  storageLocation?: StorageLocationRef | null;
   status?: RawEnum;
   type?: RawEnum;
   creator?: { id: number; name: string } | null;
@@ -194,6 +201,7 @@ function normaliseTicketHeader(raw: RawTicketHeader): TicketHeaderInfo {
     storeId: numeric == null || numeric === "" ? null : Number(numeric),
     storeNumber: raw.store?.storeNumber ?? null,
     otherStore: raw.otherStore ?? null,
+    storageLocation: raw.storageLocation ?? null,
     status: toMEnum(raw.status) ?? { value: "new", label: "New" },
     type: toMEnum(raw.type),
     creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name } : null,
@@ -213,6 +221,7 @@ function normaliseLookupRow(raw: RawLookupRow): TicketIssueLookupRow {
     statusLabel: raw.statusLabel ?? raw.status,
     priority: toMEnum<Priority>(raw.priority),
     store: raw.store ?? null,
+    storageLocation: raw.storageLocation ?? null,
     otherStore: raw.otherStore ?? null,
   };
 }
@@ -252,7 +261,7 @@ export const maintenanceWorkflowService = {
 
   /** Every issue of a ticket, each fully presented. */
   async listIssues(store: string, ticketId: number, signal?: AbortSignal): Promise<TicketIssueDetail[]> {
-    const rows = await http.rows<RawIssue>(`/stores/${seg(store)}/tickets/${seg(ticketId)}/issues`, { signal });
+    const rows = await http.rows<RawIssue>(`${ticketPath(store, ticketId)}/issues`, { signal });
     return rows.map(normaliseIssue);
   },
 

@@ -5858,7 +5858,8 @@
         "before": "Before",
         "after": "After"
       },
-      "loading": "Loading…"
+      "loading": "Loading…",
+      "readMore": "Read more"
     },
     "names": {
       "duplicateTechnician": "There is already a technician called {name}.",
@@ -5921,6 +5922,9 @@
         }
       },
       "create": {
+        "storagePlace": "Storage",
+        "storagePick": "Pick the storage location",
+        "storageRequired": "Pick which storage location the problem is at.",
         "impact": "How much does it hurt the store?",
         "impactPlaceholder": "Choose one…",
         "impactHelp": "Helps the maintenance team decide what to fix first.",
@@ -5962,6 +5966,7 @@
         "paste": "Paste"
       },
       "page": {
+        "storageLocation": "Storage: {name}",
         "back": "All tickets",
         "ticketNumber": "Ticket #{id}",
         "storeNumber": "Store {store}",
@@ -5976,7 +5981,6 @@
         "deleted": "Ticket deleted",
         "notFound": "This ticket doesn't exist, or you don't have access to it.",
         "noIssues": "This ticket has no issues to show.",
-        "otherStoreReadOnly": "This ticket is for a place outside our stores, so its steps can't be run from here.",
         "readOnly": "You can follow this ticket here. The maintenance team runs its steps; you'll be asked when they need you.",
         "issueSwitcher": "Issues on this ticket",
         "progress": "Progress",

@@ -149,6 +149,7 @@ function transformTicket(raw: ApiTicket): Ticket {
     id: raw.id,
     storeId: raw.store_id != null ? (raw.store?.store_number ?? String(raw.store_id)) : null,
     otherStore: raw.other_store ?? null,
+    storageLocation: raw.storage_location ?? null,
     type: raw.type ? transformEnumField(raw.type) : null,
     status: transformEnumField(raw.status),
     notes: (raw.notes ?? []).map(transformNote),
@@ -484,11 +485,18 @@ export function transformNote(raw: ApiTicketNote): TicketNote {
 /* ────────────────────────────────────────────────────────────────────────── */
 
 
+/**
+ * One ticket's path. A ticket at a store is reached under its store; one at
+ * a storage location or a place written in words has no store (`null`) and
+ * is reached without that segment (upstream's storeless twin, MOS only).
+ */
+export function ticketPath(store: string | null, ticket: number): string {
+  return store ? `/stores/${encodeURIComponent(store)}/tickets/${ticket}` : `/tickets/${ticket}`;
+}
+
 export const entityPaths = {
-  ticket: (store: string, ticket: number) =>
-    `/stores/${encodeURIComponent(store)}/tickets/${ticket}`,
-  ticketIssue: (store: string, ticket: number, issue: number) =>
-    `/stores/${encodeURIComponent(store)}/tickets/${ticket}/issues/${issue}`,
+  ticket: (store: string | null, ticket: number) => ticketPath(store, ticket),
+  ticketIssue: (store: string | null, ticket: number, issue: number) => `${ticketPath(store, ticket)}/issues/${issue}`,
   diagnosis: (store: string, ticket: number, id: number) =>
     `/stores/${encodeURIComponent(store)}/tickets/${ticket}/diagnoses/${id}`,
   attendance: (store: string, ticket: number, id: number) =>
@@ -497,10 +505,8 @@ export const entityPaths = {
     `/stores/${encodeURIComponent(store)}/tickets/${ticket}/part-usages/${id}`,
   payEntry: (store: string, ticket: number, id: number) =>
     `/stores/${encodeURIComponent(store)}/tickets/${ticket}/pay-entries/${id}`,
-  warranty: (store: string, ticket: number, id: number) =>
-    `/stores/${encodeURIComponent(store)}/tickets/${ticket}/warranties/${id}`,
-  assignment: (store: string, ticket: number, id: number) =>
-    `/stores/${encodeURIComponent(store)}/tickets/${ticket}/assignments/${id}`,
+  warranty: (store: string | null, ticket: number, id: number) => `${ticketPath(store, ticket)}/warranties/${id}`,
+  assignment: (store: string | null, ticket: number, id: number) => `${ticketPath(store, ticket)}/assignments/${id}`,
   store: (store: string) => `/stores/${encodeURIComponent(store)}`,
   catalogIssue: (id: number) => `/catalog/issues/${id}`,
   technician: (id: number) => `/catalog/technicians/${id}`,
@@ -643,14 +649,18 @@ export const maintenanceTicketsService = {
     }
   },
 
-  /** Create a ticket for a location that is not a system store ("Others" flow) */
+  /**
+   * Create a ticket at no store: at one of our storage locations, or at a
+   * place written in words ("Other place").
+   */
   async createTicketOther(
-    otherStore: string,
+    place: { storageLocationId: number } | { otherStore: string },
     payload: CreateTicketPayload
   ): Promise<{ data: Ticket }> {
     const token = requireToken();
     const form = buildTicketFormData(payload);
-    form.append("other_store", otherStore);
+    if ("storageLocationId" in place) form.append("storage_location_id", String(place.storageLocationId));
+    else form.append("other_store", place.otherStore);
     try {
       const res = await axios.post<{ data: ApiTicket }>(
         `/api/maintenance-tickets/tickets`,
@@ -708,11 +718,11 @@ export const maintenanceTicketsService = {
    * what it sits on. `all` reads the locked ones too: ask for it only when the
    * auth rules allow it (GET .../notes/all), the normal list otherwise.
    */
-  async getTicketNotes(storeNumber: string, ticketId: number, all: boolean, signal?: AbortSignal): Promise<TicketNoteWithOwner[]> {
+  async getTicketNotes(storeNumber: string | null, ticketId: number, all: boolean, signal?: AbortSignal): Promise<TicketNoteWithOwner[]> {
     const token = requireToken();
     try {
       const res = await axios.get<{ data: ApiTicketNoteWithOwner[] }>(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeNumber)}/tickets/${ticketId}/notes${all ? "/all" : ""}`,
+        `/api/maintenance-tickets${ticketPath(storeNumber, ticketId)}/notes${all ? "/all" : ""}`,
         { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000, signal }
       );
       return (res.data.data ?? []).map((raw) => ({ ...transformNote(raw), owner: raw.owner }));
@@ -721,11 +731,11 @@ export const maintenanceTicketsService = {
     }
   },
 
-  async setNotePrivacy(storeNumber: string, ticketId: number, noteId: number, isPrivate: boolean): Promise<TicketNote> {
+  async setNotePrivacy(storeNumber: string | null, ticketId: number, noteId: number, isPrivate: boolean): Promise<TicketNote> {
     const token = requireToken();
     try {
       const res = await axios.patch<{ data: ApiTicketNote }>(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeNumber)}/tickets/${ticketId}/notes/${noteId}/privacy`,
+        `/api/maintenance-tickets${ticketPath(storeNumber, ticketId)}/notes/${noteId}/privacy`,
         { is_private: isPrivate },
         { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
       );
@@ -1067,11 +1077,11 @@ export const maintenanceTicketsService = {
   /* ── Ticket lifecycle ──────────────────────────────────────────────────── */
 
   /** Restore a soft-deleted ticket */
-  async restoreTicket(storeId: string, ticketId: number): Promise<void> {
+  async restoreTicket(storeId: string | null, ticketId: number): Promise<void> {
     const token = requireToken();
     try {
       await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/restore`,
+        `/api/maintenance-tickets${ticketPath(storeId, ticketId)}/restore`,
         {},
         { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
       );
@@ -1079,11 +1089,11 @@ export const maintenanceTicketsService = {
   },
 
   /** Cancel a ticket (terminal status) */
-  async cancelTicket(storeId: string, ticketId: number, payload?: { reason?: string }): Promise<void> {
+  async cancelTicket(storeId: string | null, ticketId: number, payload?: { reason?: string }): Promise<void> {
     const token = requireToken();
     try {
       await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/cancel`,
+        `/api/maintenance-tickets${ticketPath(storeId, ticketId)}/cancel`,
         payload ?? {},
         { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
       );

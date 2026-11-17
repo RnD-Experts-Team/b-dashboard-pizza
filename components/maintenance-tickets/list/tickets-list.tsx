@@ -45,7 +45,7 @@ function viewOf(ticket: Ticket): RowView {
     ticket,
     title: ticket.issues[0]?.title ?? ticket.issueTitles[0] ?? `#${ticket.id}`,
     more: Math.max(0, ticket.issueCount - 1),
-    store: ticket.storeId ?? ticket.otherStore ?? "—",
+    store: ticket.storeId ?? ticket.storageLocation?.name ?? ticket.otherStore ?? "—",
     priority: topPriority(ticket.issues),
     assigned: assignedNames(ticket.issues),
     target,

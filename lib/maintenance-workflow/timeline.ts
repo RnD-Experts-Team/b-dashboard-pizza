@@ -33,6 +33,7 @@ const KIND_META: Record<string, TimelineKindMeta> = {
   purchase: { icon: "ShoppingBag", tone: "money" },
   stock_used: { icon: "Package", tone: "neutral" },
   note: { icon: "StickyNote", tone: "neutral" },
+  files_added: { icon: "Paperclip", tone: "neutral" },
   store_confirmed: { icon: "Store", tone: "done" },
 };
 
@@ -57,8 +58,6 @@ export function actorName(actor: TimelineEntry["actor"]): string | null {
   return typeof actor === "string" ? actor : (actor as IdName).name ?? null;
 }
 
-const NOTE_PREVIEW = 200;
-
 /**
  * The server's timeline with the private notes woven in by time (newest
  * first). Notes already public are on the server's timeline as "Note: …",
@@ -70,9 +69,10 @@ export function withPrivateNotes(timeline: readonly TimelineEntry[], notes: read
     .map((n) => ({
       at: n.createdAt,
       kind: "note",
-      text: n.body.length > NOTE_PREVIEW ? `${n.body.slice(0, NOTE_PREVIEW)}…` : n.body,
+      text: n.body,
       actor: n.creator?.name ?? null,
       isPrivate: true,
+      attachments: n.attachments,
     }));
   if (!extra.length) return [...timeline];
   const time = (e: TimelineEntry) => {

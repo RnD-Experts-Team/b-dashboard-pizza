@@ -10,6 +10,7 @@ import type { TicketAttachment, TicketNote } from "@/types/maintenance-tickets.t
 import { AttachmentGallery } from "../attachment-gallery";
 import { LocalTimestamp } from "../local-timestamp";
 import { NotesList } from "../notes-list";
+import { ReadMoreText } from "../read-more-text";
 import { TroubleshootingSteps } from "../troubleshooting/troubleshooting-steps";
 import { formatDay } from "./format";
 
@@ -113,7 +114,7 @@ export function OverviewTab({
       <Section title={t("common.description")} icon={FileText}>
         <div className="space-y-3">
           {issue.description ? (
-            <p className="whitespace-pre-wrap text-sm">{issue.description}</p>
+            <ReadMoreText text={issue.description} title={t("common.description")} size="long" className="text-sm" />
           ) : (
             <p className="text-sm text-muted-foreground">{t("tickets.overview.noDescription")}</p>
           )}
@@ -177,7 +178,7 @@ export function OverviewTab({
               .filter((w) => !w.mistaken)
               .map((w) => (
                 <li key={w.id} className="text-sm">
-                  {w.body ? <p className="whitespace-pre-wrap">{w.body}</p> : null}
+                  {w.body ? <ReadMoreText text={w.body} title={t("tickets.overview.warranties")} attachments={w.attachments} /> : null}
                   <p className="text-xs text-muted-foreground">{t("tickets.overview.warrantyUntil", { date: formatDay(w.expiryDate) })}</p>
                 </li>
               ))}

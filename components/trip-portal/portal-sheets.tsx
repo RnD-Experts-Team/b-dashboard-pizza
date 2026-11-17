@@ -492,7 +492,7 @@ function NoteForm({ trip, run, onDone }: { trip: PublicTrip; run: PortalRun; onD
       {!!stops.length && (
         <BigField label={t("tripPortal.aboutWhichStore")}>
           <div className="grid grid-cols-2 gap-2">
-            {[{ id: null as number | null, name: t("tripPortal.wholeTrip") }, ...stops.map((s) => ({ id: s.id as number | null, name: s.store ? t("trips.storeN", { number: s.store.storeNumber }) : s.otherStore ?? "" }))].map(
+            {[{ id: null as number | null, name: t("tripPortal.wholeTrip") }, ...stops.map((s) => ({ id: s.id as number | null, name: s.store ? t("trips.storeN", { number: s.store.storeNumber }) : s.storageLocation?.name ?? s.otherStore ?? "" }))].map(
               (o) => (
                 <button
                   key={o.id ?? "trip"}
