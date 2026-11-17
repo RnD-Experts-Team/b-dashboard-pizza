@@ -33,7 +33,9 @@ type TabId = (typeof TABS)[number];
 const MENU_STEPS = new Set(["jump", "cancel"]);
 
 const P = "placeholder";
-const ISSUE_PATH = `/stores/${P}/tickets/${P}/issues/${P}`;
+/** Rule paths are written for a store ticket; a storeless ticket's drop the /stores/{store} part. */
+const STORE_PREFIX = `/stores/${P}`;
+const ISSUE_PATH = `${STORE_PREFIX}/tickets/${P}/issues/${P}`;
 
 /** The ticket page's shape while it loads: header, badges, progress, tabs, two cards. */
 export function TicketPageSkeleton() {
@@ -84,7 +86,8 @@ export function TicketPage() {
   const ticketStoreId = ticket?.storeId ?? null;
   const allowedAt = useCallback(
     (method: string, path: string) => {
-      if (!storeNumber) return false;
+      // At no store: the storeless twin of the route, unscoped (the MOS).
+      if (!storeNumber) return canAccessRoute({ service: "Maintenance", method, path: path.replace(STORE_PREFIX, "") });
       const numericId = overviewStores.find((s) => s.storeId === storeNumber)?.id ?? (ticketStoreId != null ? String(ticketStoreId) : storeNumber);
       return [numericId, storeNumber].some((storeId) => canAccessRoute({ service: "Maintenance", method, path, storeId }));
     },
@@ -102,8 +105,8 @@ export function TicketPage() {
 
   /* ── MOS-only notes (never on the server's timeline) ────────────────── */
   const privateNotes = useMaintenanceResource(
-    readsAllNotes && storeNumber && ticket ? `ticket-notes-all:${storeNumber}:${ticket.id}:${ticket.updatedAt}` : null,
-    (signal) => maintenanceTicketsService.getTicketNotes(storeNumber as string, ticketId, true, signal),
+    readsAllNotes && ticket ? `ticket-notes-all:${storeNumber ?? ""}:${ticket.id}:${ticket.updatedAt}` : null,
+    (signal) => maintenanceTicketsService.getTicketNotes(storeNumber, ticketId, true, signal),
   );
   const timeline = useMemo(() => {
     if (!issue) return [];
@@ -181,16 +184,13 @@ export function TicketPage() {
   }
 
   const status = issue.status.value;
-  const canRun = Boolean(storeNumber);
-  const footerNext: WorkflowNextAction[] = canRun
-    ? (issue.workflow?.next ?? []).filter((a) => {
-        if (MENU_STEPS.has(a.action) || !hasDialog(a.action)) return false;
-        if (isMos) return true;
-        return (a.action === "answer" && canAnswer) || (a.action === "confirmation" && canConfirm);
-      })
-    : [];
+  const footerNext: WorkflowNextAction[] = (issue.workflow?.next ?? []).filter((a) => {
+    if (MENU_STEPS.has(a.action) || !hasDialog(a.action)) return false;
+    if (isMos) return true;
+    return (a.action === "answer" && canAnswer) || (a.action === "confirmation" && canConfirm);
+  });
   const reviewNow = isMos && (issue.workflow?.next ?? []).some((a) => a.action === "review");
-  const jumpAllowed = canRun && canJump && (issue.workflow?.next ?? []).some((a) => a.action === "jump");
+  const jumpAllowed = canJump && (issue.workflow?.next ?? []).some((a) => a.action === "jump");
 
   // What each tab holds, so the tab row says where things are before you open them.
   const live = <T extends { mistaken?: boolean }>(rows: T[]) => rows.filter((r) => !r.mistaken).length;
@@ -212,7 +212,7 @@ export function TicketPage() {
         backHref={backHref}
         isRefreshing={page.isRefreshing}
         onRefresh={refreshAll}
-        permissions={{ canJump: jumpAllowed, canCancel: canRun && canCancel }}
+        permissions={{ canJump: jumpAllowed, canCancel: canCancel }}
         onJump={() => setOpenAction({ id: "jump" })}
         onCancelIssue={() => setOpenAction({ id: "cancel" })}
         onCancelTicket={() => setOpenAction({ id: "cancel_ticket" })}
@@ -224,8 +224,8 @@ export function TicketPage() {
         issue={issue}
         next={footerNext}
         isMos={isMos}
-        canAnswer={canRun && canAnswer}
-        canConfirm={canRun && canConfirm}
+        canAnswer={canAnswer}
+        canConfirm={canConfirm}
         run={act}
         disabled={page.pending}
         actionsRef={panelActionsRef}
@@ -234,13 +234,7 @@ export function TicketPage() {
         onRecordPayment={canPay ? () => setPaymentOpen(true) : undefined}
       />
 
-      {!canRun ? (
-        <p className="flex items-start gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-          <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          {t("tickets.page.otherStoreReadOnly")}
-        </p>
-      ) : null}
-      {canRun && !isMos ? (
+      {!isMos ? (
         <p className="flex items-start gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
           <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           {t("tickets.page.readOnly")}
@@ -264,7 +258,7 @@ export function TicketPage() {
         <TabsContent value="overview" className="mt-4">
           <OverviewTab
             issue={issue}
-            canEditDetails={canRun && reviewNow}
+            canEditDetails={reviewNow}
             onEditDetails={() => setOpenAction({ id: "review" })}
             ticketNotes={ticketNotes}
             ticketAttachments={ticket.attachments}
@@ -273,8 +267,8 @@ export function TicketPage() {
         <TabsContent value="work" className="mt-4">
           <WorkTab
             issue={issue}
-            isMos={canRun && isMos}
-            canUseStock={canRun && canUseStock}
+            isMos={isMos}
+            canUseStock={canUseStock}
             onSecondOpinion={() => setOpenAction({ id: "second_opinion" })}
             onRecordResult={(inspectionId) => setOpenAction({ id: "inspection_result", inspectionId })}
             onMove={(scheduleId) => setOpenAction({ id: "move", scheduleId })}
@@ -302,7 +296,8 @@ export function TicketPage() {
         onOpenChange={setPaymentOpen}
         prefill={{
           storeId: ticket.storeId ?? undefined,
-          otherStore: ticket.storeId == null ? (ticket.otherStore ?? undefined) : undefined,
+          // At no store, the line is spent at the place by name: the storage location's, or the words typed.
+          otherStore: ticket.storeId == null ? (ticket.storageLocation?.name ?? ticket.otherStore ?? undefined) : undefined,
           ticketIssueIds: [issue.id],
           // Whoever did the work (latest work booking), else whoever looked at it.
           technicianId:
@@ -325,7 +320,7 @@ export function TicketPage() {
       <TicketFooter
         next={footerNext}
         status={status}
-        canAddUpdate={canRun && canNote}
+        canAddUpdate={canNote}
         disabled={page.pending}
         hideSteps={panelActionsOnScreen}
         onAction={(a) => setOpenAction({ id: a.action })}

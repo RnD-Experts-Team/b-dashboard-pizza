@@ -37,11 +37,12 @@ export interface PlannerIssue {
 }
 
 export interface PlannerStore {
-  /** "s:12" (numeric stores.id) or "o:Warehouse" (a place with no store). */
+  /** "s:12" (numeric stores.id), "l:3" (a storage location) or "o:Warehouse" (a place written in words). */
   key: string;
   storeId: number | null;
   storeNumber: string | null;
   storeName: string | null;
+  storageLocation: { id: number; name: string } | null;
   otherStore: string | null;
   /** Open issues known from the newest-issues lookup (a store's own list may hold more). */
   issues: PlannerIssue[];
@@ -51,6 +52,7 @@ export interface StopDraft {
   key: string;
   storeId: number | null;
   storeNumber: string | null;
+  storageLocation: { id: number; name: string } | null;
   otherStore: string | null;
   issueIds: number[];
   purpose: SchedulePurpose;
@@ -62,6 +64,7 @@ function toPlannerIssue(row: TicketIssueLookupRow): PlannerIssue {
 
 function keyOfRow(row: TicketIssueLookupRow): string | null {
   if (row.store) return `s:${row.store.id}`;
+  if (row.storageLocation) return `l:${row.storageLocation.id}`;
   return row.otherStore ? `o:${row.otherStore}` : null;
 }
 
@@ -75,6 +78,7 @@ export function draftFor(store: PlannerStore): StopDraft {
     key: store.key,
     storeId: store.storeId,
     storeNumber: store.storeNumber,
+    storageLocation: store.storageLocation,
     otherStore: store.otherStore,
     issueIds: store.issues.map((i) => i.id),
     purpose: defaultPurpose(store.issues),
@@ -83,11 +87,12 @@ export function draftFor(store: PlannerStore): StopDraft {
 
 /** A typed place with no store. */
 export function otherDraft(name: string): StopDraft {
-  return { key: `o:${name}`, storeId: null, storeNumber: null, otherStore: name, issueIds: [], purpose: "work" };
+  return { key: `o:${name}`, storeId: null, storeNumber: null, storageLocation: null, otherStore: name, issueIds: [], purpose: "work" };
 }
 
 function byNumber(a: PlannerStore, b: PlannerStore): number {
-  return (a.storeNumber ?? a.otherStore ?? "").localeCompare(b.storeNumber ?? b.otherStore ?? "", undefined, { numeric: true });
+  const label = (s: PlannerStore) => s.storeNumber ?? s.storageLocation?.name ?? s.otherStore ?? "";
+  return label(a).localeCompare(label(b), undefined, { numeric: true });
 }
 
 /**
@@ -102,7 +107,7 @@ export function useTripStores(search: string) {
     const byKey = new Map<string, PlannerStore>(
       dashboardStores.map((s) => [
         `s:${s.id}`,
-        { key: `s:${s.id}`, storeId: s.id, storeNumber: s.storeNumber, storeName: s.name, otherStore: null, issues: [] },
+        { key: `s:${s.id}`, storeId: s.id, storeNumber: s.storeNumber, storeName: s.name, storageLocation: null, otherStore: null, issues: [] },
       ]),
     );
     lookup.issues.forEach((row) => {
@@ -115,7 +120,8 @@ export function useTripStores(search: string) {
           storeId: row.store?.id ?? null,
           storeNumber: row.store?.storeNumber ?? null,
           storeName: null,
-          otherStore: row.store ? null : row.otherStore,
+          storageLocation: row.store ? null : row.storageLocation,
+          otherStore: row.store || row.storageLocation ? null : row.otherStore,
           issues: [],
         } satisfies PlannerStore);
       store.issues.push(toPlannerIssue(row));
@@ -129,7 +135,7 @@ export function useTripStores(search: string) {
     () =>
       q
         ? all.filter((s) =>
-            [s.storeNumber, s.storeName, s.otherStore, ...s.issues.map((i) => i.title)].some((text) => nameKey(text).includes(q)),
+            [s.storeNumber, s.storeName, s.storageLocation?.name, s.otherStore, ...s.issues.map((i) => i.title)].some((text) => nameKey(text).includes(q)),
           )
         : all,
     [all, q],
@@ -195,7 +201,7 @@ export function StoreChoices({
                 >
                   <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                   <span className="shrink-0 font-medium">
-                    {store.storeNumber ? t("trips.storeN", { number: store.storeNumber }) : store.otherStore}
+                    {store.storeNumber ? t("trips.storeN", { number: store.storeNumber }) : store.storageLocation?.name ?? store.otherStore}
                   </span>
                   {store.storeName && <span className="min-w-0 truncate text-muted-foreground">{store.storeName}</span>}
                   <span className="shrink-0 text-muted-foreground tabular-nums">

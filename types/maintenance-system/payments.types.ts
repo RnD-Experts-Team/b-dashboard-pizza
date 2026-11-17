@@ -282,6 +282,8 @@ export interface IssueInspectionLookupRow {
     ticketId: number;
     title: string;
     store: StoreRef | null;
+    /** For a ticket at one of our storage locations. */
+    storageLocation?: IdName | null;
     otherStore: string | null;
   } | null;
   technician: IdName | null;

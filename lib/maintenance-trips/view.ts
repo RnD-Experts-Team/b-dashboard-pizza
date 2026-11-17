@@ -102,8 +102,8 @@ export function officeTripState(trip: Pick<Trip, "sessions" | "openSessionId" | 
 /* ── Stops ───────────────────────────────────────────────────────────────── */
 
 /** "12" for a store stop, the typed place otherwise. */
-export function stopPlace(stop: Pick<TripStop, "store" | "otherStore">): { storeNumber: string | null; other: string | null } {
-  return { storeNumber: stop.store?.storeNumber ?? null, other: stop.store ? null : stop.otherStore };
+export function stopPlace(stop: Pick<TripStop, "store" | "storageLocation" | "otherStore">): { storeNumber: string | null; other: string | null } {
+  return { storeNumber: stop.store?.storeNumber ?? null, other: stop.store ? null : (stop.storageLocation?.name ?? stop.otherStore) };
 }
 
 /** Stops that count (not removed as a mistake). */

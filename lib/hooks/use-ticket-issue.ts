@@ -97,15 +97,17 @@ export function useTicketPage(ticketId: number | null, storeFromLink: string | n
     [setData],
   );
 
+  // A ticket at no store (storage, a place written in words) runs on the
+  // storeless routes: its key carries store null.
   const mutation = useMaintenanceMutation(async (fn: (key: IssueKey) => Promise<WorkflowResult>) => {
-    if (!store || !ticketId || !issue) throw new Error("No issue selected.");
+    if (!ticket || !ticketId || !issue) throw new Error("No issue selected.");
     const result = await fn({ store, ticketId, issueId: issue.id });
     replaceIssue(result.issue);
     if (result.tripLink) setLastTripLink(result.tripLink);
     return result;
   });
 
-  const key: IssueKey | null = store && ticketId && issue ? { store, ticketId, issueId: issue.id } : null;
+  const key: IssueKey | null = ticket && ticketId && issue ? { store, ticketId, issueId: issue.id } : null;
 
   return {
     ...res,
