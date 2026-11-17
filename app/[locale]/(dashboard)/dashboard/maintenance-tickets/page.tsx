@@ -245,7 +245,7 @@ function MaintenanceTicketsPageInner() {
         open={createOpen}
         storeId={activeStoreId ?? ""}
         catalogIssues={catalogIssues}
-        stores={!isSingleStore ? activeStores : undefined}
+        stores={activeStores}
         onClose={() => setCreateOpen(false)}
         onSuccess={onMutationSuccess}
       />
