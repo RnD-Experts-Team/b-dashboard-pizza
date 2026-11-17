@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Shuffle,
   Store,
+  Warehouse,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
@@ -67,7 +68,8 @@ export function TicketHeader({
 }) {
   const t = useTranslations("maintenanceSystem");
   const priority = effectivePriority(issue);
-  const store = ticket.storeNumber ?? ticket.otherStore ?? "—";
+  const store = ticket.storeNumber ?? ticket.storageLocation?.name ?? ticket.otherStore ?? "—";
+  const PlaceIcon = ticket.storageLocation ? Warehouse : Store;
   const terminal = issue.status.value === "closed" || issue.status.value === "cancelled";
   const hasMenu = permissions.canJump || permissions.canCancel;
 
@@ -123,8 +125,8 @@ export function TicketHeader({
           <StatusBadge status={issue.status.value} label={issue.status.label} />
           <PriorityBadge priority={priority.value} label={priority.label} />
           <span className={cn(PILL, "border bg-card text-foreground")}>
-            <Store className="h-3 w-3" aria-hidden="true" />
-            {ticket.storeNumber ? t("tickets.page.storeNumber", { store }) : store}
+            <PlaceIcon className="h-3 w-3" aria-hidden="true" />
+            {ticket.storeNumber ? t("tickets.page.storeNumber", { store }) : ticket.storageLocation ? t("tickets.page.storageLocation", { name: store }) : store}
           </span>
           {issue.impact ? (
             <span className={cn(PILL, "border bg-card text-foreground")}>

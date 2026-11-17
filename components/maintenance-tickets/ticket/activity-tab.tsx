@@ -15,6 +15,7 @@ import {
   MessageCircleQuestion,
   MessageCircleReply,
   Package,
+  Paperclip,
   ScanSearch,
   ShoppingBag,
   Stamp,
@@ -27,7 +28,9 @@ import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { TIMELINE_TONE_CLASS, actorName, timelineKindMeta } from "@/lib/maintenance-workflow";
 import type { TimelineEntry } from "@/types/maintenance-system";
+import { AttachmentGallery } from "../attachment-gallery";
 import { LocalTimestamp } from "../local-timestamp";
+import { ReadMoreText } from "../read-more-text";
 
 const ICONS: Record<string, LucideIcon> = {
   ArrowRightLeft,
@@ -42,6 +45,7 @@ const ICONS: Record<string, LucideIcon> = {
   MessageCircleQuestion,
   MessageCircleReply,
   Package,
+  Paperclip,
   ScanSearch,
   ShoppingBag,
   Stamp,
@@ -53,6 +57,7 @@ const ICONS: Record<string, LucideIcon> = {
 /** One vertical timeline, newest first: a dot and a card per event. */
 export function ActivityTab({ entries }: { entries: TimelineEntry[] }) {
   const t = useTranslations("maintenanceSystem.tickets.activity");
+  const tTabs = useTranslations("maintenanceSystem.workflow.tabs");
 
   if (!entries.length) {
     return (
@@ -69,6 +74,12 @@ export function ActivityTab({ entries }: { entries: TimelineEntry[] }) {
         const meta = timelineKindMeta(e.kind);
         const Icon = ICONS[meta.icon] ?? Circle;
         const who = actorName(e.actor);
+        const when = (
+          <span className="flex flex-wrap items-center gap-x-2">
+            <LocalTimestamp iso={e.at} showZone={false} />
+            {who ? <span>· {who}</span> : null}
+          </span>
+        );
         return (
           <li key={`${e.at}-${e.kind}-${index}`} className="relative">
             <span
@@ -78,10 +89,10 @@ export function ActivityTab({ entries }: { entries: TimelineEntry[] }) {
               <Icon className="h-4 w-4" />
             </span>
             <div className={cn("rounded-lg border bg-card px-3 py-2", e.isPrivate && "border-dashed border-amber-500/50")}>
-              <p className="whitespace-pre-wrap break-words text-sm">{e.text}</p>
+              <ReadMoreText text={e.text} title={tTabs("activity")} meta={when} attachments={e.attachments} className="text-sm" />
+              {e.attachments?.length ? <AttachmentGallery attachments={e.attachments} /> : null}
               <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                <LocalTimestamp iso={e.at} showZone={false} />
-                {who ? <span>· {who}</span> : null}
+                {when}
                 {e.isPrivate ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-px text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
                     <Lock className="h-2.5 w-2.5" aria-hidden="true" />

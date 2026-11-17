@@ -128,7 +128,7 @@ function InspectionRow({ row, on, onPick }: { row: IssueInspectionLookupRow; on:
   const issue = row.ticketIssue;
   const done = shortDay(row.doneAt);
   const booked = shortDay(row.scheduledDate);
-  const where = issue?.store ? t("trips.storeN", { number: issue.store.storeNumber }) : issue?.otherStore ?? null;
+  const where = issue?.store ? t("trips.storeN", { number: issue.store.storeNumber }) : issue?.storageLocation?.name ?? issue?.otherStore ?? null;
   const when =
     [
       done && t("payments.inspection.doneOn", { date: done }),

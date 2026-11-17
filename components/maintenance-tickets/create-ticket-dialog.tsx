@@ -35,6 +35,13 @@ import type { Impact } from "@/types/maintenance-system";
 import { IMPACTS, PRIORITIES, vocabOptions, vocabText } from "@/lib/maintenance/vocabulary";
 import { useDiscardGuard } from "@/components/storage/discard-guard";
 import { PRIORITY_ACCENT, PRIORITY_ORDER } from "./status-accent";
+import { useStorageLocations } from "@/components/maintenance-payments/use-payment-lookups";
+
+/** The store picker's two choices that are not a store. */
+const OTHER_PLACE = "__other__";
+const STORAGE_PLACE = "__storage__";
+/** The storage location list scrolls past this height. */
+const STORAGE_LIST_MAX_PX = 240;
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                   */
@@ -81,7 +88,7 @@ interface CreateTicketDialogProps {
   /** Pre-selected store. When empty (all-stores mode), a store selector is shown inside the dialog. */
   storeId: string;
   catalogIssues: CatalogIssue[];
-  /** When provided, a store selector is shown inside the dialog (used in all-stores mode). */
+  /** The stores the selector offers (all-stores mode, and the MOS's place choice). */
   stores?: OverviewStore[];
   onClose: () => void;
   onSuccess: () => void;
@@ -182,25 +189,40 @@ export function CreateTicketDialog({
   }, [view]);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  // When storeId prop is empty (all-stores mode), the user picks a store inside the dialog.
+  /** Storage locations are the MOS's: Storage shows only for who may list them. */
+  const canPickStorage = canAccessRoute({ service: "Maintenance", method: "GET", path: "/storage-locations" });
+  // With no store given (all-stores mode) the user picks one here. The MOS
+  // gets the choice even when a store is given: that store comes picked, and
+  // Storage / Other place are one click away.
   const needsStorePick = !storeId && !!stores?.length;
+  const showPlace = needsStorePick || (Boolean(storeId) && canPickStorage);
   const [pickedStoreId, setPickedStoreId] = useState<string>("");
   const [ticketType, setTicketType] = useState<TicketType>("normal");
   const [otherStoreText, setOtherStoreText] = useState("");
-  const isOtherStore = pickedStoreId === "__other__";
-  const activeStoreId = storeId || (isOtherStore ? "" : pickedStoreId);
+  const isOtherStore = pickedStoreId === OTHER_PLACE;
+  /** At one of our storage locations instead of a store. */
+  const isStorage = pickedStoreId === STORAGE_PLACE;
+  /** Not at a store: no catalog for the store, issues are typed in words. */
+  const isStoreless = isOtherStore || isStorage;
+  const [storageLocationId, setStorageLocationId] = useState<number | null>(null);
+  /** The store the ticket is for: the one picked here, else the one given; none at storage or another place. */
+  const activeStoreId = isStoreless ? "" : pickedStoreId || storeId;
+  const storage = useStorageLocations(open && showPlace && canPickStorage);
 
   // Store picker popover state
   const [storePickerOpen, setStorePickerOpen] = useState(false);
   const [storeSearch, setStoreSearch] = useState("");
   const storeSearchRef = useRef<HTMLInputElement>(null);
+  /** The stores to pick from: the list given, or just the given store. */
+  const storeChoices: { id: string; name: string }[] = stores?.length
+    ? stores.map((s) => ({ id: s.storeId ?? s.id, name: s.name }))
+    : storeId
+      ? [{ id: storeId, name: "" }]
+      : [];
+  const storeLabel = (c: { id: string; name: string }) => (c.name ? `${c.name} (${c.id})` : c.id);
   const filteredStores = storeSearch.trim()
-    ? (stores ?? []).filter((s) => {
-        const id = s.storeId ?? s.id;
-        const label = s.name ? `${s.name} (${id})` : id;
-        return label.toLowerCase().includes(storeSearch.toLowerCase());
-      })
-    : (stores ?? []);
+    ? storeChoices.filter((c) => storeLabel(c).toLowerCase().includes(storeSearch.toLowerCase()))
+    : storeChoices;
 
   // Local catalog issues — seeded from prop, grows when user creates new ones in-session
   const [localCatalogIssues, setLocalCatalogIssues] = useState<CatalogIssue[]>(() =>
@@ -214,6 +236,7 @@ export function CreateTicketDialog({
       setPickedStoreId("");
       setTicketType("normal");
       setOtherStoreText("");
+      setStorageLocationId(null);
       setStoreSearch("");
       setStorePickerOpen(false);
       setLocalCatalogIssues(catalogIssues.filter((i) => !i.deletedAt));
@@ -230,13 +253,12 @@ export function CreateTicketDialog({
     }
   }, [storePickerOpen]);
 
-  // Fetch issues for the effective store — either the one passed via prop
-  // (single-store users with no in-dialog picker) or the one picked here in
-  // all-stores mode. This ensures issues load even when the user cannot pick a
-  // store. Skips only the free-text "Other" location, which has no catalog.
+  // Fetch issues for the effective store — the one picked here, else the one
+  // passed via prop. Skips storage and the free-text "Other" place, which have
+  // no catalog.
   useEffect(() => {
     if (!open) return;
-    const effectiveStore = storeId || (pickedStoreId !== "__other__" ? pickedStoreId : "");
+    const effectiveStore = activeStoreId;
     if (!effectiveStore) return;
     let cancelled = false;
     setCatalogLoading(true);
@@ -245,7 +267,7 @@ export function CreateTicketDialog({
       .catch(() => {})
       .finally(() => { if (!cancelled) setCatalogLoading(false); });
     return () => { cancelled = true; };
-  }, [open, storeId, pickedStoreId]);
+  }, [open, activeStoreId]);
 
   const comboItems = localCatalogIssues.map((i) => ({ id: i.id, label: i.title }));
 
@@ -255,7 +277,7 @@ export function CreateTicketDialog({
 
   /** How many troubleshooting guides the row's issue has (0 for "Other"). */
   function guideCount(row: IssueRow): number {
-    if (isOtherStore || !row.issueId) return 0;
+    if (isStoreless || !row.issueId) return 0;
     return localCatalogIssues.find((i) => i.id === row.issueId)?.troubleshootingGuidesCount ?? 0;
   }
 
@@ -314,7 +336,7 @@ export function CreateTicketDialog({
 
   /** Something was typed or picked: closing asks first (UX rule 5). */
   const dirty =
-    Boolean(pickedStoreId || otherStoreText.trim()) ||
+    Boolean((pickedStoreId && pickedStoreId !== storeId) || otherStoreText.trim() || storageLocationId) ||
     rows.some((r) => Boolean(r.issueId !== null || r.otherTitle.trim() || r.description.trim() || r.note.trim() || r.files.length > 0 || r.impact || r.troubleshooting));
   const guard = useDiscardGuard(dirty, handleClose);
 
@@ -362,7 +384,7 @@ export function CreateTicketDialog({
   async function handleSubmit() {
     setSubmitError(null);
 
-    if (needsStorePick && !pickedStoreId) {
+    if (showPlace && !isStoreless && !activeStoreId) {
       setSubmitError(tv("tickets.create.pickStoreFirst"));
       return;
     }
@@ -372,8 +394,13 @@ export function CreateTicketDialog({
       return;
     }
 
+    if (isStorage && !storageLocationId) {
+      setSubmitError(tv("tickets.create.storageRequired"));
+      return;
+    }
+
     for (const row of rows) {
-      if (isOtherStore ? !row.otherTitle.trim() : !row.issueId) {
+      if (isStoreless ? !row.otherTitle.trim() : !row.issueId) {
         setSubmitError(t("createDialog.validationSelectIssue"));
         return;
       }
@@ -391,7 +418,7 @@ export function CreateTicketDialog({
     try {
       const payload = {
         issues: rows.map((row) => ({
-          ...(isOtherStore
+          ...(isStoreless
             ? { other_title: row.otherTitle.trim() }
             : { issue_id: row.issueId! }),
           priority: row.priority,
@@ -410,8 +437,10 @@ export function CreateTicketDialog({
         type: ticketType,
       };
 
-      if (isOtherStore) {
-        await maintenanceTicketsService.createTicketOther(otherStoreText.trim(), payload);
+      if (isStorage && storageLocationId) {
+        await maintenanceTicketsService.createTicketOther({ storageLocationId }, payload);
+      } else if (isOtherStore) {
+        await maintenanceTicketsService.createTicketOther({ otherStore: otherStoreText.trim() }, payload);
       } else {
         await maintenanceTicketsService.createTicket(activeStoreId, payload);
       }
@@ -472,8 +501,8 @@ export function CreateTicketDialog({
         )}
 
         <div className={cn("space-y-4", troubleshootingRow && "hidden")}>
-          {/* Store selector — shown only when opened in all-stores mode */}
-          {needsStorePick && (
+          {/* Where the problem is: in all-stores mode, and always for the MOS */}
+          {showPlace && (
             <div className="space-y-1.5 rounded-lg border bg-muted/30 p-3">
               <Label className="flex items-center gap-1.5 text-sm font-medium">
                 <Store className="h-4 w-4 text-muted-foreground" />
@@ -485,21 +514,18 @@ export function CreateTicketDialog({
                   <PopoverTrigger asChild>
                     <button
                       type="button"
-                      disabled={isOtherStore}
+                      disabled={isStoreless}
                       className={cn(
                         "flex h-9 flex-1 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm shadow-sm transition-colors",
                         "hover:bg-accent hover:text-accent-foreground",
                         "focus:outline-none focus:ring-1 focus:ring-ring",
                         "disabled:cursor-not-allowed disabled:opacity-50",
-                        !isOtherStore && pickedStoreId && "border-primary/40 bg-primary/5"
+                        activeStoreId && "border-primary/40 bg-primary/5"
                       )}
                     >
-                      <span className={cn("flex-1 truncate text-start", (!pickedStoreId || isOtherStore) && "text-muted-foreground")}>
-                        {!isOtherStore && pickedStoreId
-                          ? (() => {
-                              const s = stores!.find((s) => (s.storeId ?? s.id) === pickedStoreId);
-                              return s ? (s.name ? `${s.name} (${pickedStoreId})` : pickedStoreId) : pickedStoreId;
-                            })()
+                      <span className={cn("flex-1 truncate text-start", !activeStoreId && "text-muted-foreground")}>
+                        {activeStoreId
+                          ? storeLabel(storeChoices.find((c) => c.id === activeStoreId) ?? { id: activeStoreId, name: "" })
                           : tv("tickets.create.selectStore")}
                       </span>
                       <ChevronDown className={cn("ms-auto h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-150", storePickerOpen && "rotate-180")} />
@@ -522,9 +548,9 @@ export function CreateTicketDialog({
                       {filteredStores.length === 0 ? (
                         <p className="py-4 text-center text-xs text-muted-foreground">{tv("tickets.create.noResults")}</p>
                       ) : (
-                        filteredStores.map((s) => {
-                          const id = s.storeId ?? s.id;
-                          const label = s.name ? `${s.name} (${id})` : id;
+                        filteredStores.map((c) => {
+                          const id = c.id;
+                          const label = storeLabel(c);
                           return (
                             <button
                               key={id}
@@ -532,10 +558,10 @@ export function CreateTicketDialog({
                               onClick={() => { setPickedStoreId(id); setStorePickerOpen(false); }}
                               className={cn(
                                 "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
-                                id === pickedStoreId && "bg-accent/60 font-medium"
+                                id === activeStoreId && "bg-accent/60 font-medium"
                               )}
                             >
-                              <Check className={cn("h-3.5 w-3.5 shrink-0", id === pickedStoreId ? "opacity-100" : "opacity-0")} />
+                              <Check className={cn("h-3.5 w-3.5 shrink-0", id === activeStoreId ? "opacity-100" : "opacity-0")} />
                               {label}
                             </button>
                           );
@@ -545,17 +571,47 @@ export function CreateTicketDialog({
                   </PopoverContent>
                 </Popover>
 
+                {/* Storage: one of our storage locations, instead of a store */}
+                {canPickStorage ? (
+                  <Button
+                    type="button"
+                    variant={isStorage ? "default" : "outline"}
+                    size="sm"
+                    className="h-9 shrink-0"
+                    onClick={() => setPickedStoreId(isStorage ? "" : STORAGE_PLACE)}
+                  >
+                    {tv("tickets.create.storagePlace")}
+                  </Button>
+                ) : null}
+
                 {/* Other button */}
                 <Button
                   type="button"
                   variant={isOtherStore ? "default" : "outline"}
                   size="sm"
                   className="h-9 shrink-0"
-                  onClick={() => setPickedStoreId(isOtherStore ? "" : "__other__")}
+                  onClick={() => setPickedStoreId(isOtherStore ? "" : OTHER_PLACE)}
                 >
                   {tv("tickets.create.otherPlace")}
                 </Button>
               </div>
+              {isStorage && (
+                <Select
+                  value={storageLocationId ? String(storageLocationId) : ""}
+                  onValueChange={(v) => setStorageLocationId(Number(v))}
+                >
+                  <SelectTrigger className="mt-1 w-full text-sm">
+                    <SelectValue placeholder={storage.isLoading ? tv("common.loading") : tv("tickets.create.storagePick")} />
+                  </SelectTrigger>
+                  <SelectContent position="popper" style={{ maxHeight: STORAGE_LIST_MAX_PX, overflowY: "auto" }}>
+                    {storage.locations.map((l) => (
+                      <SelectItem key={l.id} value={String(l.id)}>
+                        {l.code ? `${l.name} (${l.code})` : l.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               {isOtherStore && (
                 <Input
                   className="mt-1 text-sm"
@@ -587,7 +643,7 @@ export function CreateTicketDialog({
             )}
           </div>
 
-          <div className={cn("space-y-3", needsStorePick && !pickedStoreId && "pointer-events-none opacity-40")}>
+          <div className={cn("space-y-3", showPlace && !isStoreless && !activeStoreId && "pointer-events-none opacity-40")}>
           {rows.map((row, idx) => (
             <div key={row.id} className="rounded-lg border p-4 space-y-3">
               {/* Row header */}
@@ -613,7 +669,7 @@ export function CreateTicketDialog({
                 <Label className="text-sm">
                   {t("createDialog.issueLabel")} <span className="text-destructive">*</span>
                 </Label>
-                {isOtherStore ? (
+                {isStoreless ? (
                   <Input
                     className="text-sm"
                     placeholder={tv("tickets.create.otherIssuePlaceholder")}

@@ -119,7 +119,8 @@ function NewTripForm({
         instructions: instructions.trim() || null,
         stops: stops.map((s) => ({
           storeId: s.storeId ?? undefined,
-          otherStore: s.storeId == null ? s.otherStore ?? undefined : undefined,
+          storageLocationId: s.storeId == null ? s.storageLocation?.id : undefined,
+          otherStore: s.storeId == null && !s.storageLocation ? s.otherStore ?? undefined : undefined,
           ticketIssueIds: s.issueIds,
           purpose: s.purpose,
         })),
@@ -316,7 +317,7 @@ function StopsPicker({
                   {index + 1}
                 </span>
                 <span className="text-sm font-medium">
-                  {stop.storeNumber ? t("trips.storeN", { number: stop.storeNumber }) : stop.otherStore}
+                  {stop.storeNumber ? t("trips.storeN", { number: stop.storeNumber }) : stop.storageLocation?.name ?? stop.otherStore}
                 </span>
                 <Segmented<SchedulePurpose>
                   className="ms-auto"

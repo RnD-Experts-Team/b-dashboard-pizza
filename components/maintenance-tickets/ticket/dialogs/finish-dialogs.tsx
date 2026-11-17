@@ -305,7 +305,7 @@ export function CancelDialog({
     const ok = await form.submit(
       () =>
         whole
-          ? maintenanceTicketsService.cancelTicket(storeNumber ?? "", ticketId, { reason: reason.trim() })
+          ? maintenanceTicketsService.cancelTicket(storeNumber, ticketId, { reason: reason.trim() })
           : run((key) => maintenanceWorkflowService.cancel(key, { reason: reason.trim() })),
       t("tickets.dialogs.cancel.done"),
     );

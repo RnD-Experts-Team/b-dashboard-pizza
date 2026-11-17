@@ -58,7 +58,7 @@ export function TechnicianTripsList({ locale, technicianId }: { locale: string; 
     <div className="space-y-2">
       <ul className="divide-y rounded-lg border">
         {trips.map((trip) => {
-          const stores = (trip.stops ?? []).map((s) => s.store?.storeNumber ?? s.otherStore).filter(Boolean);
+          const stores = (trip.stops ?? []).map((s) => s.store?.storeNumber ?? s.storageLocation?.name ?? s.otherStore).filter(Boolean);
           const status = trip.onClock ? t("vocab.tripState.on_clock.label") : vocabText(t, vocabEntry(TRIP_STATUSES, trip.status));
           return (
             <li key={trip.id}>

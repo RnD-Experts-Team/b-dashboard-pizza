@@ -10,6 +10,7 @@ import { formatMinutes, formatMoney, formatQuantity } from "@/lib/maintenance/mo
 import { INSPECTION_STATUSES, VISIT_TASK_STATUSES, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
 import type { IssueSchedule, IssueVisit, TicketIssueDetail } from "@/types/maintenance-system";
 import { AttachmentGallery } from "../attachment-gallery";
+import { ReadMoreText } from "../read-more-text";
 import { LocalTimestamp } from "../local-timestamp";
 import { formatDay, formatDayTime } from "./format";
 
@@ -121,19 +122,19 @@ export function WorkTab({
             {i.findings ? (
               <div>
                 <p className="text-xs text-muted-foreground">{t("tickets.work.findings")}</p>
-                <p className="whitespace-pre-wrap text-sm">{i.findings}</p>
+                <ReadMoreText text={i.findings} title={t("tickets.work.findings")} attachments={i.attachments} className="text-sm" />
               </div>
             ) : null}
             {i.recommendedRepair ? (
               <div>
                 <p className="text-xs text-muted-foreground">{t("tickets.work.recommendedRepair")}</p>
-                <p className="whitespace-pre-wrap text-sm">{i.recommendedRepair}</p>
+                <ReadMoreText text={i.recommendedRepair} title={t("tickets.work.recommendedRepair")} className="text-sm" />
               </div>
             ) : null}
             {i.partsNeeded ? (
               <div>
                 <p className="text-xs text-muted-foreground">{t("tickets.work.partsNeeded")}</p>
-                <p className="whitespace-pre-wrap text-sm">{i.partsNeeded}</p>
+                <ReadMoreText text={i.partsNeeded} title={t("tickets.work.partsNeeded")} className="text-sm" />
               </div>
             ) : null}
             <AttachmentGallery attachments={i.attachments} />
