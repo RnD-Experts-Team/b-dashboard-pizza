@@ -49,15 +49,36 @@ export interface PaidTo {
 
 /* ── List ────────────────────────────────────────────────────────────────── */
 
+/** payment: money we paid. refund: money that came back for a payment (negative total). */
+export type PaymentKind = "payment" | "refund";
+
+/** On a refund: the payment it gives money back for. */
+export interface RefundOf {
+  id: number;
+  paidAt: IsoDate;
+  total: Money;
+}
+
 export interface PaymentListRow {
   id: number;
+  kind: PaymentKind;
+  /** Refunds only. */
+  refundOf: RefundOf | null;
+  /** Refunds only: why the money came back. */
+  refundReason: string | null;
+  /** For a refund: when the money came back. */
   paidAt: IsoDate;
   paidTo: PaidTo;
   /** How we paid, from the editable list. */
   paymentMethod: { id: number; name: string } | null;
   reference: string | null;
   invoiceNumber: string | null;
+  /** Negative on a refund. */
   total: Money;
+  /** Payments: what live refunds gave back ("0.00" when none). Null on a refund. */
+  refundedTotal: Money | null;
+  /** What it cost in the end: total minus refundedTotal (a refund: its own total). */
+  netTotal: Money;
   lineCount: number;
   /** Store numbers. */
   stores: string[];
@@ -86,6 +107,8 @@ export interface PaymentFilters {
   /** Matches invoice number, reference, names. */
   search?: string;
   includeMistaken?: boolean;
+  /** Only payments or only refunds; both by default (the totals net refunds). */
+  kind?: PaymentKind;
   page?: number;
   perPage?: number;
 }
@@ -105,6 +128,11 @@ export interface PaymentLinePlace extends PlaceAddressLine {
 
 export interface PaymentLine {
   id: number;
+  /** On a refund line: the line of the payment it gives money back for. */
+  refundOfLineId: number | null;
+  /** On a payment line: what live refunds gave back for it, and what can still be refunded (null on refund lines). */
+  refunded: Money | null;
+  refundable: Money | null;
   type: PaymentLineType;
   typeLabel?: string;
   store: StoreRef | null;
@@ -144,8 +172,28 @@ export interface PaymentRevision {
   createdAt: IsoDateTime;
 }
 
+/** One refund as the page of the payment it refunds lists it. */
+export interface PaymentRefund {
+  /** The refund itself is a payment (kind "refund"): open it with this id. */
+  id: number;
+  refundedAt: IsoDate;
+  /** What came back, positive. */
+  amount: Money;
+  paymentMethod: { id: number; name: string } | null;
+  reference: string | null;
+  reason: string | null;
+  mistaken: boolean;
+  mistakenReason: string | null;
+  lines: { id: number; refundOfLineId: number; amount: Money }[];
+  createdBy?: IdName | string | null;
+  createdAt: IsoDateTime;
+}
+
 export interface Payment {
   id: number;
+  kind: PaymentKind;
+  refundOf: RefundOf | null;
+  refundReason: string | null;
   paidAt: IsoDate;
   paidTo: PaidTo;
   /** How we paid, from the editable list. */
@@ -154,15 +202,30 @@ export interface Payment {
   invoiceNumber: string | null;
   note: string | null;
   total: Money;
+  refundedTotal: Money | null;
+  netTotal: Money;
   mistaken: boolean;
   mistakenReason?: string | null;
   lines: PaymentLine[];
+  /** The refunds of a payment, mistaken ones included; [] on a refund. */
+  refunds: PaymentRefund[];
   notes: TicketNote[];
   attachments: TicketAttachment[];
   revisions: PaymentRevision[];
   createdAt: IsoDateTime;
   /** Sent back as expectedUpdatedAt on edit (409 when stale). */
   updatedAt: IsoDateTime;
+}
+
+/* ── Refund ──────────────────────────────────────────────────────────────── */
+
+/** POST /payments/{id}/refunds: amounts are what came back, positive, at most each line's `refundable`. */
+export interface RefundInput {
+  refundedAt: IsoDate;
+  paymentMethodId?: number | null;
+  reference?: string | null;
+  reason: string;
+  lines: { lineId: number; amount: string }[];
 }
 
 /* ── Create / edit ───────────────────────────────────────────────────────── */
