@@ -8,6 +8,7 @@
  *   - Hiring GET /v1/reports/labor            → app/api/reports/labor
  *   - Hooks GET /reports/wbr/bulk             → app/api/reports/wbr-bulk
  *   - Maintenance GET /maintenance-analytics/summary → app/api/maintenance-tickets/analytics/summary
+ *   - Maintenance GET /maintenance-analytics/finances → app/api/maintenance-tickets/analytics/finances
  *   - Operations GET /v1/skills/overview → app/api/scheduling/skills/overview
  *
  * Shapes mirror the upstream JSON (snake_case). Stores are store numbers
@@ -15,6 +16,7 @@
  */
 
 import type { AnalyticsSummary } from "@/types/maintenance-analytics.types";
+import type { MaintenanceFinances } from "@/types/maintenance-system";
 import type { StoreSkillsOverview } from "@/types/skills.types";
 import type { SalesHistory } from "@/types/dashboard-report.types";
 
@@ -814,6 +816,8 @@ export interface BusinessReportsData {
   feedback: WbrBulkResponse;
   /** Maintenance analytics summary over the range (recurring issues, statuses, per store). */
   tickets: AnalyticsSummary;
+  /** Maintenance costs and payments over the range (spend by type, store, technician, issue; unpaid work). */
+  maintenanceCosts: MaintenanceFinances;
   /** Operations: every active employee of the stores against every skill (a snapshot, not ranged). */
   skills: StoreSkillsOverview;
   /** V1's Sales History for the loaded stores together: every week since the first data (not the picked range). */
