@@ -168,6 +168,8 @@ export interface Ticket {
   id: number;
   storeId: string | null;
   otherStore: string | null;
+  /** The storage location it is at, for a ticket at no store. */
+  storageLocation: StorageLocationRef | null;
   type: EnumField | null;
   status: EnumField;
   /** All ticket notes (closing notes have a non-null `type`; generic notes are null). */
@@ -522,6 +524,7 @@ export interface ApiTicket {
   id: number;
   store_id: number | string | null;
   other_store: string | null;
+  storage_location?: StorageLocationRef | null;
   type: ApiEnumField | null;
   store?: {
     id: number | string;

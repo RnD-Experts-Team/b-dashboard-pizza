@@ -93,7 +93,8 @@ function AddStopForm({
     try {
       await onAdd({
         storeId: stop.storeId ?? undefined,
-        otherStore: stop.storeId == null ? stop.otherStore ?? undefined : undefined,
+        storageLocationId: stop.storeId == null ? stop.storageLocation?.id : undefined,
+        otherStore: stop.storeId == null && !stop.storageLocation ? stop.otherStore ?? undefined : undefined,
         ticketIssueIds: stop.issueIds,
         purpose: stop.purpose,
       });
@@ -126,7 +127,7 @@ function AddStopForm({
         <div className="space-y-2 rounded-md border bg-card p-2.5">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">
-              {stop.storeNumber ? t("trips.storeN", { number: stop.storeNumber }) : stop.otherStore}
+              {stop.storeNumber ? t("trips.storeN", { number: stop.storeNumber }) : stop.storageLocation?.name ?? stop.otherStore}
             </span>
             <Segmented<SchedulePurpose>
               className="ms-auto"

@@ -11,6 +11,7 @@ import { actionMeta, issuePhase, phaseStatus, splitNextActions, stepDots, whoseT
 import type { TicketIssueDetail, WorkflowNextAction } from "@/types/maintenance-system";
 import { AttachmentGallery } from "../attachment-gallery";
 import { LocalTimestamp } from "../local-timestamp";
+import { ReadMoreText } from "../read-more-text";
 import { ChecklistView } from "./dialogs/finish-dialogs";
 import { InlineAnswer, InlineConfirmation, openInfoRequest } from "./dialogs/review-store-dialogs";
 import type { RunStep } from "./dialogs/types";
@@ -135,7 +136,7 @@ function StepFacts({ issue, isMos, canAnswer, canConfirm, run }: { issue: Ticket
           {t("tickets.overview.openQuestion")}
           {request.askedBy?.name ? ` · ${request.askedBy.name}` : ""}
         </p>
-        <p className="whitespace-pre-wrap">{request.question}</p>
+        <ReadMoreText text={request.question} title={t("tickets.overview.openQuestion")} attachments={request.attachments ?? []} />
         <AttachmentGallery attachments={request.attachments ?? []} />
       </Fact>,
     );
@@ -153,8 +154,8 @@ function StepFacts({ issue, isMos, canAnswer, canConfirm, run }: { issue: Ticket
             </>
           ) : null}
         </p>
-        <p className="text-xs text-muted-foreground">{answered.question}</p>
-        <p className="whitespace-pre-wrap">{answered.answer}</p>
+        <ReadMoreText text={answered.question} title={t("tickets.overview.openQuestion")} size="short" className="text-xs text-muted-foreground" />
+        <ReadMoreText text={answered.answer ?? ""} title={answered.answeredByName ? t("tickets.overview.answeredByName", { name: answered.answeredByName }) : t("tickets.overview.answeredByStore")} attachments={answered.attachments ?? []} />
         <AttachmentGallery attachments={answered.attachments ?? []} />
       </Fact>,
     );

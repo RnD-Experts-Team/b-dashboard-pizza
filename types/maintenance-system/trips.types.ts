@@ -72,6 +72,8 @@ export interface TripStopIssue {
 export interface TripStop {
   id: number;
   store: StoreRef | null;
+  /** A stop at one of our storage locations (a storage ticket's visit). */
+  storageLocation?: { id: number; name: string } | null;
   otherStore: string | null;
   status: TripStopStatus;
   arrivedAt: IsoDateTime | null;
@@ -176,6 +178,7 @@ export interface TripFilters {
  */
 export interface TripStopInput {
   storeId?: string | number;
+  storageLocationId?: number;
   otherStore?: string;
   ticketIssueIds: number[];
   purpose?: SchedulePurpose;

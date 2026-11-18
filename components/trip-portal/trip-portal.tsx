@@ -412,7 +412,7 @@ const BUTTONS: Record<TripState, { primary: TripButton; secondary: TripButton[] 
 };
 
 function stopName(stop: TripStop, t: (key: string, values?: Record<string, string>) => string): string {
-  return stop.store ? t("trips.storeN", { number: stop.store.storeNumber }) : stop.otherStore ?? t("common.otherStore");
+  return stop.store ? t("trips.storeN", { number: stop.store.storeNumber }) : stop.storageLocation?.name ?? stop.otherStore ?? t("common.otherStore");
 }
 
 /* ── One stop ────────────────────────────────────────────────────────────── */

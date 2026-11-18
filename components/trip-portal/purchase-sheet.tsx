@@ -80,7 +80,7 @@ function PurchaseForm({ trip, token, run, onDone }: { trip: PublicTrip; token: s
 
   const jobs = trip.stops
     .filter((s) => !s.mistaken)
-    .flatMap((s) => s.issues.map((i) => ({ id: i.ticketIssueId, title: i.title, store: s.store?.storeNumber ?? s.otherStore })));
+    .flatMap((s) => s.issues.map((i) => ({ id: i.ticketIssueId, title: i.title, store: s.store?.storeNumber ?? s.storageLocation?.name ?? s.otherStore })));
 
   function searchSuppliers(text: string): void {
     setSupplierText(text);

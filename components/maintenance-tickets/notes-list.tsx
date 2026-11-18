@@ -11,6 +11,7 @@ import {
 } from "@/lib/api/services/maintenance-tickets.service";
 import type { TicketNote } from "@/types/maintenance-tickets.types";
 import { AttachmentGallery } from "./attachment-gallery";
+import { ReadMoreText } from "./read-more-text";
 
 /**
  * Who may lock notes, and where. Only ticket-side notes can be private, so this
@@ -19,7 +20,8 @@ import { AttachmentGallery } from "./attachment-gallery";
 export interface NotePrivacy {
   /** Holds the private-notes permission at this ticket's store. */
   canLock: boolean;
-  storeNumber: string;
+  /** Null for a ticket at no store (storage, a place written in words). */
+  storeNumber: string | null;
   ticketId: number;
   /** Reload after a lock or unlock, so every list shows the change. */
   onChanged: () => void;
@@ -36,6 +38,7 @@ export function NotesList({
   className?: string;
 }) {
   const t = useTranslations("maintenanceSystem.tickets.notes");
+  const tCommon = useTranslations("maintenanceSystem.common");
   if (!notes || notes.length === 0) return null;
   return (
     <div className={cn("space-y-1.5", className)}>
@@ -71,7 +74,15 @@ export function NotesList({
             <span>{formatTimestamp(note.createdAt)}</span>
             {privacy?.canLock && <LockToggle note={note} privacy={privacy} />}
           </div>
-          {note.body && <p className="text-xs text-foreground whitespace-pre-wrap break-words">{note.body}</p>}
+          {note.body && (
+            <ReadMoreText
+              text={note.body}
+              title={note.typeLabel ?? tCommon("note")}
+              meta={[note.creator?.name, formatTimestamp(note.createdAt)].filter(Boolean).join(" · ")}
+              attachments={note.attachments}
+              className="text-xs text-foreground"
+            />
+          )}
           <AttachmentGallery attachments={note.attachments} />
         </div>
       ))}
