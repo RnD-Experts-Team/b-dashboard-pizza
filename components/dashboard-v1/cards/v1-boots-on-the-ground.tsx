@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { MonitorSmartphone } from "lucide-react";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useBootsOnTheGround } from "@/lib/hooks/use-screen-usage";
-import { daysToInstants } from "@/lib/maintenance-tickets/local-range";
+import { daysToInstants, localDay } from "@/lib/maintenance-tickets/local-range";
 import { openSeconds, storeOpenHours } from "@/lib/screen-usage/open-hours";
 import { formatDuration, percent } from "@/lib/screen-usage/format";
 import { businessWeekStart } from "@/lib/utils/business-week";
@@ -12,6 +12,7 @@ import type { BootsManager, BootsOnTheGround, BootsTimes } from "@/lib/screen-us
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { Period } from "../category";
 import { V1Card, type V1Span } from "../v1-card";
 import { V1Empty, V1Metric, V1MetricGrid, V1Progress, V1SubLabel, V1Toggle } from "../v1-ui";
 
@@ -28,10 +29,13 @@ const ALL = "all";
 const ZERO: BootsTimes = { connected: 0, present: 0, talking: 0 };
 const SKELETON_ROWS = 4;
 
-type DayOrWeek = "D" | "W";
+/** T = today on this device's clock, D = the day picked on the dashboard, W = week to date of that day. */
+type DayOrWeek = "T" | "D" | "W";
+
+const PERIOD_OF: Record<DayOrWeek, Period> = { T: "D", D: "D", W: "W" };
 
 type RangeProps =
-  /** DSPR V1: the selected day, with a Day / Week-to-date toggle (Tue–Mon business week). */
+  /** DSPR V1: Today (device date, the default) / the selected day / Week-to-date toggle (Tue–Mon business week). */
   | { day: string; startDate?: never; endDate?: never }
   /** Business Reports: a fixed inclusive range. */
   | { day?: never; startDate: string; endDate: string };
@@ -104,10 +108,13 @@ function TileSub({ label, share }: { label: string; share: string }) {
 }
 
 export function V1BootsOnTheGroundCard({ stores, day, startDate, endDate, span = 1, className }: Props) {
-  const [mode, setMode] = useState<DayOrWeek>("D");
+  const [mode, setMode] = useState<DayOrWeek>("T");
+  // Today is the device's own calendar day, not the dashboard's selected date.
+  const today = localDay(new Date());
   // The union guarantees one of the two; "" (no range) loads nothing.
-  const from = (day ? { D: day, W: businessWeekStart(day) }[mode] : startDate) ?? "";
-  const to = day ?? endDate ?? "";
+  const dayRange = day ? { T: [today, today], D: [day, day], W: [businessWeekStart(day), day] }[mode] : null;
+  const from = dayRange?.[0] ?? startDate ?? "";
+  const to = dayRange?.[1] ?? endDate ?? "";
   const params = useMemo(() => {
     const range = daysToInstants(from, to);
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -121,6 +128,7 @@ export function V1BootsOnTheGroundCard({ stores, day, startDate, endDate, span =
       value={mode}
       onChange={setMode}
       options={[
+        { value: "T", label: "Today" },
         { value: "D", label: "Day" },
         { value: "W", label: "WTD" },
       ]}
@@ -131,7 +139,7 @@ export function V1BootsOnTheGroundCard({ stores, day, startDate, endDate, span =
     <V1Card
       title="Boots on the Ground"
       category="sales"
-      period={day ? mode : "R"}
+      period={day ? PERIOD_OF[mode] : "R"}
       showPeriodBadge={!day}
       headerControl={headerControl}
       span={span}
