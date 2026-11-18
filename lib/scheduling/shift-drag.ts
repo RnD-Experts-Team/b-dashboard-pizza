@@ -1,11 +1,14 @@
 /**
- * Copying a shift by dragging it onto another cell of the planned grid.
+ * Moving or copying a shift by dragging it onto another cell of the planned grid.
  *
- * Only the TIME and the LABEL travel. `type` goes with the label (every draft
- * must carry one, and a copied "Evening" that arrived as "custom" would be
- * saved differently from the shift it was copied from). The note and the
- * recurring flag stay behind on purpose: a note is usually about one person on
- * one day.
+ * A plain drag MOVES the shift; Ctrl (or ⌘) held at the drop COPIES it.
+ *
+ * Only the TIME and the LABEL travel to the new place. `type` goes with the
+ * label (every draft must carry one, and a moved "Evening" that arrived as
+ * "custom" would be saved differently from the shift it came from). The note and
+ * the recurring flag stay behind on purpose: a note is usually about one person
+ * on one day. (A draft that is merely moved keeps its own note — nothing about it
+ * is recreated.)
  *
  * Pure and dependency-light, so the grid (which draws the warning on the card),
  * the manager (which creates the draft and toasts) and any preview all use the
@@ -21,8 +24,19 @@ import type {
 import type { DraftShift } from "./draft.store";
 import { hasTimeOff, isBlockedByAvailability } from "./utils";
 
+/** What is being dragged: a shift already saved on the server, or an unsaved draft. */
+export type ShiftOrigin =
+  | {
+      kind: "saved";
+      /** The assignment id — what the card carries. */
+      id: string;
+      /** The SHIFT id — what the delete endpoint addresses. */
+      shiftId: string;
+    }
+  | { kind: "draft"; draftId: string };
+
 /** What is picked up: the shift's time and label, and the cell it came from. */
-export interface ShiftCopySource {
+export interface ShiftDragSource {
   startTime: string;
   endTime: string;
   label: string;
@@ -30,18 +44,22 @@ export interface ShiftCopySource {
   /** The cell it was picked up from, so dropping it back there does nothing. */
   fromEmployeeId: string;
   fromDayIndex: number;
+  origin: ShiftOrigin;
 }
 
 /** Where it is put down. */
-export interface ShiftCopyTarget {
+export interface ShiftDropTarget {
   employeeId: string;
   dayIndex: number;
 }
 
-/** The unsaved shift a copy becomes. Time and label only; no note, not recurring. */
-export function draftFromCopy(
-  source: ShiftCopySource,
-  target: ShiftCopyTarget,
+/**
+ * The unsaved shift that stands in for a copy, or for a moved SAVED shift.
+ * Time and label only; no note, not recurring.
+ */
+export function draftFromSource(
+  source: ShiftDragSource,
+  target: ShiftDropTarget,
 ): Omit<DraftShift, "draftId"> {
   return {
     employeeId: target.employeeId,
@@ -53,8 +71,11 @@ export function draftFromCopy(
   };
 }
 
-/** Dropping a shift back on the cell it came from would only make a duplicate. */
-export function isSameCell(source: ShiftCopySource, target: ShiftCopyTarget): boolean {
+/** Dropping a shift back on the cell it came from would change nothing. */
+export function isSameCell(
+  source: ShiftDragSource,
+  target: ShiftDropTarget,
+): boolean {
   return (
     source.fromEmployeeId === target.employeeId &&
     source.fromDayIndex === target.dayIndex
@@ -62,26 +83,26 @@ export function isSameCell(source: ShiftCopySource, target: ShiftCopyTarget): bo
 }
 
 /**
- * Whether a copy can land on a person's day, and what to say if it is dubious.
+ * Whether a shift can land on a person's day, and what to say if it is dubious.
  *
- * `blocked` is a warning only — the copy is still made, the same way adding a
- * shift over a block is allowed. `unsynced` is the one hard no: the person
- * can't be scheduled yet (the grid's own "+" button is disabled for them), and
- * a draft for them would only fail when saved.
+ * `blocked` is a warning only — the move or copy still happens, the same way
+ * adding a shift over a block is allowed. `unsynced` is the one hard no: the
+ * person can't be scheduled yet (the grid's own "+" button is disabled for
+ * them), and a draft for them would only fail when saved.
  */
-export type CopyTargetCheck =
+export type DropTargetCheck =
   | { status: "ok" }
   | { status: "blocked"; reason: string }
   | { status: "unsynced"; reason: string };
 
-export function checkCopyTarget(
+export function checkDropTarget(
   employee: Pick<ScheduleEmployee, "id" | "name" | "synced">,
   dayIndex: number,
   startTime: string,
   endTime: string,
   availability: AvailabilityRule[],
   timeOff: TimeOffEntry[],
-): CopyTargetCheck {
+): DropTargetCheck {
   if (!employee.synced) {
     return {
       status: "unsynced",

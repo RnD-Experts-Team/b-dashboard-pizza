@@ -138,7 +138,7 @@ export function DraftShiftCard({
           Overlaps and overtime are checked when it is saved.
         </p>
         <p className="mt-0.5 opacity-75">
-          Drag it onto another cell to copy it.
+          Drag it to another cell to move it, or hold Ctrl and drag to copy it.
         </p>
         {blockedReason && (
           <p className={cn("mt-0.5 font-medium", SHIFT_ACCENT.attention.text)}>

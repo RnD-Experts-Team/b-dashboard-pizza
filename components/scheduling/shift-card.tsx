@@ -227,7 +227,9 @@ export function ShiftCard({ shift, hasConflict, blockedReason, isPending, onEdit
         </ShiftTooltipBody>
 
         {blockedReason && <ShiftTooltipHint>{blockedReason}</ShiftTooltipHint>}
-        <ShiftTooltipHint>Drag it onto another cell to copy it.</ShiftTooltipHint>
+        <ShiftTooltipHint>
+          Drag it to another cell to move it, or hold Ctrl and drag to copy it.
+        </ShiftTooltipHint>
       </TooltipContent>
     </Tooltip>
   );
