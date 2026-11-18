@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ArrowRight, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { dayKey } from "@/lib/calendar/dates";
@@ -11,11 +11,30 @@ import { groupStats, needsAction } from "@/lib/calendar/grouping";
 import { isPast } from "@/lib/calendar/layout";
 import type { CalendarEvent } from "@/lib/calendar/types";
 import { useCalendarClock } from "./calendar-clock";
-import { CalendarEmpty, EVENT_FOCUS, EventDot } from "./event-parts";
+import { EmptyState } from "./calendar-empty-state";
+import { EVENT_FOCUS, EventDot } from "./event-parts";
 import { usePeek } from "./event-peek";
 import { EventSigns } from "./event-signs";
-import { RowStatus } from "./peek-cards";
+import { RowStatus, useCountsLine } from "./peek-cards";
 import { useCalendarFormat } from "./use-calendar-format";
+
+/**
+ * How a row opens its event: inside the dialog it sits in (`onSelect`, the Month
+ * day dialog), or as its own peek card beside the row (the phone list under the
+ * month grid).
+ */
+type OnSelect = ((ev: CalendarEvent) => void) | undefined;
+
+function useRowOpen(ev: CalendarEvent, onSelect: OnSelect) {
+  const { peekProps } = usePeek();
+  return onSelect ? { onClick: () => onSelect(ev) } : peekProps({ type: "event", id: ev.id }, { side: "inline" });
+}
+
+function RowChevron() {
+  return (
+    <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/60 transition-colors duration-150 group-hover/row:text-foreground rtl:rotate-180" />
+  );
+}
 
 /** The "needs attention" count: just a red number — the one colour on this panel. */
 function ActionCount({ n }: { n: number }) {
@@ -31,26 +50,31 @@ function ActionCount({ n }: { n: number }) {
 /**
  * One event: its name, then the time and store under it. Only what needs a look
  * gets a mark on the right (`RowStatus`). The category is the section's, so the row
- * doesn't repeat it.
+ * doesn't repeat it. `detailed` (the Month day popup) adds everything else the
+ * event carries — its numbers, people and notes — and lets the title wrap.
  */
-function PanelRow({ ev }: { ev: CalendarEvent }) {
+function PanelRow({ ev, day, onSelect, detailed }: { ev: CalendarEvent; day: Date; onSelect: OnSelect; detailed?: boolean }) {
   const f = useCalendarFormat();
   const now = useCalendarClock();
-  const { peekProps } = usePeek();
+  const open = useRowOpen(ev, onSelect);
+  const countsLine = useCountsLine(ev);
   const past = !ev.allDay && isPast(ev, now);
-  const sub = [ev.allDay ? null : `${f.time(ev.start)} – ${f.time(ev.end)}`, ev.store.name].filter(Boolean).join(" · ");
+  const place = ev.companyWide ? null : ev.store.name || ev.store.code;
+  const sub = detailed
+    ? [f.when(ev, day), place].filter(Boolean).join(" · ")
+    : [ev.allDay ? null : f.timeRange(ev.start, ev.end), ev.store.name].filter(Boolean).join(" · ");
   return (
     <button
       type="button"
-      {...peekProps({ type: "event", id: ev.id }, { side: "inline" })}
+      {...open}
       className={cn(
-        "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start transition-colors duration-150 hover:bg-muted/70",
+        "group/row flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-start transition-colors duration-150 hover:bg-muted/70",
         EVENT_FOCUS,
         past && "opacity-70",
       )}
     >
       <span className="min-w-0 flex-1">
-        <span dir="auto" className="block truncate text-start text-sm font-medium leading-snug">
+        <span dir="auto" className={cn("block text-start text-sm font-medium leading-snug", detailed ? "line-clamp-2" : "truncate")}>
           {f.title(ev)}
         </span>
         {sub && (
@@ -58,10 +82,57 @@ function PanelRow({ ev }: { ev: CalendarEvent }) {
             {sub}
           </span>
         )}
+        {detailed && countsLine && <span className="block truncate text-xs tabular-nums text-muted-foreground">{countsLine}</span>}
+        {detailed && ev.people.length > 0 && (
+          <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+            <Users className="size-3 shrink-0" aria-hidden />
+            <span dir="auto" className="truncate text-start">
+              {ev.people.join(", ")}
+            </span>
+          </span>
+        )}
+        {detailed && ev.notes && (
+          <span dir="auto" className="mt-0.5 line-clamp-2 block text-start text-xs text-muted-foreground">
+            {ev.notes}
+          </span>
+        )}
       </span>
-      <EventSigns ev={ev} />
-      <RowStatus status={ev.status} />
+      <span className="flex shrink-0 items-center gap-1.5 self-center">
+        <EventSigns ev={ev} />
+        <RowStatus status={ev.status} />
+        {onSelect && <RowChevron />}
+      </span>
     </button>
+  );
+}
+
+/** One store inside an opened roll-up. */
+function MemberRow({ ev, onSelect }: { ev: CalendarEvent; onSelect: OnSelect }) {
+  const f = useCalendarFormat();
+  const open = useRowOpen(ev, onSelect);
+  return (
+    <li>
+      <button
+        type="button"
+        {...open}
+        className={cn(
+          "group/row flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start transition-colors duration-150 hover:bg-muted/70",
+          EVENT_FOCUS,
+        )}
+      >
+        <span className="min-w-0 flex-1">
+          <span dir="auto" className="block truncate text-start text-xs font-medium">
+            {ev.store.name || ev.store.code}
+          </span>
+          <span dir="auto" className="block truncate text-start text-[11px] tabular-nums text-muted-foreground">
+            {f.title(ev)}
+          </span>
+        </span>
+        <EventSigns ev={ev} />
+        <RowStatus status={ev.status} />
+        {onSelect && <RowChevron />}
+      </button>
+    </li>
   );
 }
 
@@ -70,10 +141,8 @@ function PanelRow({ ev }: { ev: CalendarEvent }) {
  * opening to the stores — needs-attention ones first. A store's row opens that
  * event's own card.
  */
-function GroupItem({ ev }: { ev: CalendarEvent }) {
+function GroupItem({ ev, onSelect }: { ev: CalendarEvent; onSelect: OnSelect }) {
   const t = useTranslations("calendar");
-  const f = useCalendarFormat();
-  const { peekProps } = usePeek();
   const [open, setOpen] = useState(false);
   const listId = useId();
   const members = useMemo(
@@ -115,27 +184,7 @@ function GroupItem({ ev }: { ev: CalendarEvent }) {
       {open && (
         <ul id={listId} aria-label={t("group.listLabel")} className="ms-4 border-s ps-1.5">
           {members.map((m) => (
-            <li key={m.id}>
-              <button
-                type="button"
-                {...peekProps({ type: "event", id: m.id }, { side: "inline" })}
-                className={cn(
-                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start transition-colors duration-150 hover:bg-muted/70",
-                  EVENT_FOCUS,
-                )}
-              >
-                <span className="min-w-0 flex-1">
-                  <span dir="auto" className="block truncate text-start text-xs font-medium">
-                    {m.store.name || m.store.code}
-                  </span>
-                  <span dir="auto" className="block truncate text-start text-[11px] tabular-nums text-muted-foreground">
-                    {f.title(m)}
-                  </span>
-                </span>
-                <EventSigns ev={m} />
-                <RowStatus status={m.status} />
-              </button>
-            </li>
+            <MemberRow key={m.id} ev={m} onSelect={onSelect} />
           ))}
         </ul>
       )}
@@ -144,7 +193,7 @@ function GroupItem({ ev }: { ev: CalendarEvent }) {
 }
 
 /** One category: a header with its counts, and its items. Collapsible. */
-function Section({ section }: { section: AgendaSection }) {
+function Section({ section, day, onSelect, detailed }: { section: AgendaSection; day: Date; onSelect: OnSelect; detailed?: boolean }) {
   const t = useTranslations("calendar");
   const [open, setOpen] = useState(true);
   const bodyId = useId();
@@ -173,7 +222,13 @@ function Section({ section }: { section: AgendaSection }) {
       </button>
       {open && (
         <div id={bodyId} className="space-y-0.5 pt-0.5">
-          {section.items.map((ev) => (ev.members ? <GroupItem key={ev.id} ev={ev} /> : <PanelRow key={ev.id} ev={ev} />))}
+          {section.items.map((ev) =>
+            ev.members ? (
+              <GroupItem key={ev.id} ev={ev} onSelect={onSelect} />
+            ) : (
+              <PanelRow key={ev.id} ev={ev} day={day} onSelect={onSelect} detailed={detailed} />
+            ),
+          )}
         </div>
       )}
     </section>
@@ -181,30 +236,52 @@ function Section({ section }: { section: AgendaSection }) {
 }
 
 /**
- * Every event of one day, for views whose cells can't hold them (Month): grouped
- * by category, the same kind of event across stores rolled up into one row, what
- * needs attention first. `scroll` — once the Month card is wide enough for a side
- * column (64rem, a container query) the list scrolls inside it; elsewhere it just
- * flows with the page.
+ * A day's events grouped by category, the same kind of event across stores
+ * rolled up into one row, what needs attention first (`agendaSections`).
+ * Renders nothing for an empty list — the caller says what that means.
+ */
+export function DayAgendaList({
+  day,
+  events,
+  onSelect,
+  detailed,
+}: {
+  day: Date;
+  events: readonly CalendarEvent[];
+  /** Open a picked event inside the caller (the Month day popup) instead of its own peek. */
+  onSelect?: (ev: CalendarEvent) => void;
+  detailed?: boolean;
+}) {
+  const sections = useMemo(() => agendaSections(events), [events]);
+  return (
+    <>
+      {sections.map((s) => (
+        <Section key={s.category} section={s} day={day} onSelect={onSelect} detailed={detailed} />
+      ))}
+    </>
+  );
+}
+
+/**
+ * Every event of one day, listed under the phone-size Month grid (on wider
+ * screens a day's list opens in a centered dialog instead — `DayDetailsDialog`). It flows
+ * with the page: no inner scroll.
  */
 export function DayAgenda({
   day,
   events,
   onOpenDay,
-  scroll = true,
 }: {
   day: Date;
   events: readonly CalendarEvent[];
   onOpenDay?: (key: string) => void;
-  scroll?: boolean;
 }) {
   const t = useTranslations("calendar");
   const f = useCalendarFormat();
-  const sections = useMemo(() => agendaSections(events), [events]);
   const action = useMemo(() => actionCount(events), [events]);
 
   return (
-    <div className={cn("flex flex-col", scroll && "@[64rem]:h-full @[64rem]:min-h-0")}>
+    <div className="flex flex-col">
       <div className="flex shrink-0 items-start justify-between gap-2 border-b px-4 py-3">
         <div className="min-w-0">
           <h3 className="font-heading text-sm font-semibold">{f.shortDate(day)}</h3>
@@ -226,13 +303,9 @@ export function DayAgenda({
         )}
       </div>
       {/* `relative`: the screen-reader-only spans in the rows are absolutely positioned — without a
-          positioned parent they escape this scroller and stretch the page's scroll area. */}
-      <div className={cn("relative p-2", scroll && "@[64rem]:min-h-0 @[64rem]:flex-1 @[64rem]:overflow-y-auto @[64rem]:overscroll-contain")}>
-        {sections.length ? (
-          sections.map((s) => <Section key={s.category} section={s} />)
-        ) : (
-          <CalendarEmpty title={t("noEvents")} hint={t("noEventsHint")} compact />
-        )}
+          positioned parent they escape and stretch the page's scroll area. */}
+      <div className="relative p-2">
+        {events.length ? <DayAgendaList day={day} events={events} /> : <EmptyState compact title={t("empty.dayTitle")} hint={t("empty.dayHint")} />}
       </div>
     </div>
   );

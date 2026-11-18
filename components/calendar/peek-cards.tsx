@@ -52,7 +52,7 @@ function Row({ icon: Icon, children }: { icon: typeof Clock; children: React.Rea
 }
 
 /** A summary event's numbers: "15 Done · 2 Pending · 2 Overdue" (zeros left out). */
-function useCountsLine(ev: CalendarEvent): string | null {
+export function useCountsLine(ev: CalendarEvent): string | null {
   const t = useTranslations("calendar");
   const c = ev.counts;
   if (!c) return null;
@@ -86,6 +86,7 @@ export function EventPeekCard({
   onDone,
   reminders,
   onBack,
+  showOpenDay = true,
 }: {
   ev: CalendarEvent;
   onOpenDay: (key: string) => void;
@@ -98,6 +99,8 @@ export function EventPeekCard({
   reminders?: readonly CalendarEvent[];
   /** Opened from a group's list: a way back to it. */
   onBack?: () => void;
+  /** `false` where "Open day" is already on screen (the day dialog's header). */
+  showOpenDay?: boolean;
 }) {
   const t = useTranslations("calendar");
   const f = useCalendarFormat();
@@ -197,38 +200,42 @@ export function EventPeekCard({
 
       <EventActions ev={ev} onDone={onDone} reminders={reminders} />
 
-      <div className="-mx-1 -mb-1 flex items-center gap-1 border-t pt-2">
-        {editable && onEdit && (
-          <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={() => onEdit(ev)}>
-            <Pencil className="size-3" />
-            {t("editor.edit")}
-          </Button>
-        )}
-        {editable && onDelete && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t("editor.delete")}
-            title={t("editor.delete")}
-            className="size-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => onDelete(ev)}
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        )}
-        {href && (
-          <Button asChild variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs">
-            <Link href={href}>
-              {t("feed.open")}
-              <ArrowUpRight className="size-3 rtl:-scale-x-100" />
-            </Link>
-          </Button>
-        )}
-        <Button variant="ghost" size="sm" className="ms-auto h-7 gap-1 px-2 text-xs" onClick={() => onOpenDay(target)}>
-          {t("pop.openDay")}
-          <ArrowRight className="size-3 rtl:rotate-180" />
-        </Button>
-      </div>
+      {(showOpenDay || href || editable) && (
+        <div className="-mx-1 -mb-1 flex items-center gap-1 border-t pt-2">
+          {editable && onEdit && (
+            <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={() => onEdit(ev)}>
+              <Pencil className="size-3" />
+              {t("editor.edit")}
+            </Button>
+          )}
+          {editable && onDelete && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t("editor.delete")}
+              title={t("editor.delete")}
+              className="size-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => onDelete(ev)}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          )}
+          {href && (
+            <Button asChild variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs">
+              <Link href={href}>
+                {t("feed.open")}
+                <ArrowUpRight className="size-3 rtl:-scale-x-100" />
+              </Link>
+            </Button>
+          )}
+          {showOpenDay && (
+            <Button variant="ghost" size="sm" className="ms-auto h-7 gap-1 px-2 text-xs" onClick={() => onOpenDay(target)}>
+              {t("pop.openDay")}
+              <ArrowRight className="size-3 rtl:rotate-180" />
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -476,8 +483,14 @@ export function DayCountsPeekCard({
         </div>
       )}
 
+      {/* The overdue / missed numbers are the day BEFORE's (`shiftAttentionToNextDay`): their own line says so. */}
+      {day.attentionFrom && attentionCount(day) > 0 && (
+        <p className="text-xs font-medium tabular-nums text-destructive">
+          {t("year.leftFrom", { n: attentionCount(day), date: f.shortDate(fromKey(day.attentionFrom)) })}
+        </p>
+      )}
       <p className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs tabular-nums">
-        {COUNT_STATUSES.filter((s) => day.byStatus[s]).map((s) => (
+        {COUNT_STATUSES.filter((s) => day.byStatus[s] && !(day.attentionFrom && needsAction(s))).map((s) => (
           <span key={s} className={cn(needsAction(s) ? "font-medium text-destructive" : "text-muted-foreground")}>
             {day.byStatus[s]} {t(`status.${s}`)}
           </span>

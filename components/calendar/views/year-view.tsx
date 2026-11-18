@@ -14,8 +14,10 @@ import { useCalendarFormat } from "../use-calendar-format";
 const LEVELS: readonly HeatLevel[] = [1, 2, 3, 4];
 
 /**
- * Year view: 12 mini months, with one colour in it. A day is tinted only when it
- * has something overdue or missed, in four steps by how much it stood out against
+ * Year view: 12 mini months, with one colour in it. A day is tinted only when the
+ * day BEFORE it left something overdue or missed (`counts` comes through
+ * `shiftAttentionToNextDay`: the day it is found out, and a day still running is
+ * never red for its own work), in four steps by how much it stood out against
  * the rest of the year (`heatLevels`); everything else stays plain, and today is
  * the one filled circle. Hovering a day shows its numbers and the stores that need
  * attention; clicking a day (or a month's name) opens the Month view on it, where

@@ -10,7 +10,8 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { dayKey, fromKey, isDayKey, rangeContains, sameRange, step, suggestedStart, viewRange } from "@/lib/calendar/dates";
+import { addDays, dayKey, fromKey, isDayKey, rangeContains, sameRange, step, suggestedStart, viewRange } from "@/lib/calendar/dates";
+import { shiftAttentionToNextDay } from "@/lib/calendar/day-counts";
 import { isHeavyMonth } from "@/lib/calendar/feed-plan";
 import { parseGroupPeekId } from "@/lib/calendar/grouping";
 import { byDay, countByCategory } from "@/lib/calendar/layout";
@@ -25,8 +26,11 @@ import {
   useReminderTargets,
 } from "@/lib/hooks/use-calendar-events";
 import { CalendarClockProvider } from "./calendar-clock";
+import { RangeEmptyState, type EmptyReason } from "./calendar-empty-state";
+import { CalendarRail } from "./calendar-rail";
 import { CategoryTabs, FilterPopover } from "./calendar-filters";
 import { CalendarToolbar } from "./calendar-toolbar";
+import { DayDetailsDialog } from "./day-details-dialog";
 import { DeleteEventDialog } from "./delete-event-dialog";
 import { EventDialog, type EditorTarget } from "./event-dialog";
 import { FeedNotice, ManyStoresNote } from "./feed-notice";
@@ -44,8 +48,8 @@ import { WeekView } from "./views/week-view";
 import { YearView } from "./views/year-view";
 import type { GridScroll } from "./views/time-grid";
 
-/** What opens when the URL has no `?view=`: today, not the month. */
-const DEFAULT_VIEW: CalendarView = "day";
+/** What opens when the URL has no `?view=`: the month around today. */
+const DEFAULT_VIEW: CalendarView = "month";
 type Anim = "fade" | "next" | "prev" | "none";
 
 /** Search: title, store, people and category name, case-insensitive. */
@@ -102,7 +106,7 @@ function CalendarError({ onRetry }: { onRetry: () => void }) {
  * maintenance and meetings in Day / Week / Month / Year views.
  *
  * `?view=` and `?date=` live in the URL (defaults dropped: no `?view=` is the
- * Day view, no `?date=` is today), so the topbar's
+ * Month view, no `?date=` is today), so the topbar's
  * Today panel deep-links straight to a day and Back returns from a drill-down.
  * Category filters + store scope persist in `useCalendarStore`; search is
  * page-local. Data comes through `useCalendarEvents` → `calendarService`.
@@ -193,14 +197,27 @@ function CalendarPageInner({ now }: { now: number }) {
     [navigate],
   );
   const selectDay = useCallback((key: string) => moveTo(key, "keep"), [moveTo]);
+  /** A day picked in the date picker or the mini calendar. */
+  const pickDay = selectDay;
 
   /* ── Data ── */
   const range = useMemo(() => viewRange(view, cursor), [view, cursor]);
   const { events, loading, showSkeleton, error, retry, failed, truncated } = useCalendarEvents(range);
   // The Year view reads daily counts (`group=day`) instead of events.
   const isYear = view === "year";
-  const year = useCalendarYear(range, { enabled: isYear });
+  // A day is shaded by what the day BEFORE left overdue or missed (`shiftAttentionToNextDay`), so the
+  // counts start one day early: Jan 1 needs Dec 31. 366/367 days, inside the server's 371-day limit.
+  const yearRange = useMemo(() => ({ from: addDays(range.from, -1), to: range.to }), [range]);
+  const year = useCalendarYear(yearRange, { enabled: isYear });
+  const yearDays = useMemo(() => {
+    const first = dayKey(range.from);
+    const end = dayKey(range.to);
+    return shiftAttentionToNextDay(year.days, (k) => k >= first && k < end);
+  }, [year.days, range]);
   const filters = useCalendarStore((s) => s.filters);
+  const showAllTypes = useCalendarStore((s) => s.showAll);
+  const railOpen = useCalendarStore((s) => s.railOpen);
+  const toggleRail = useCalendarStore((s) => s.toggleRail);
   // Several stores on screen: chips lead with their store name (store-label.tsx).
   const shownStores = useCalendarStores();
   const storeCount = shownStores.length;
@@ -301,7 +318,7 @@ function CalendarPageInner({ now }: { now: number }) {
         ) : null;
       }
       if (target.type === "counts") {
-        const day = year.days.get(target.id);
+        const day = yearDays.get(target.id);
         return day ? (
           <DayCountsPeekCard date={fromKey(target.id)} day={day} storeNames={storeNames} showStores={storeCount > 1} onOpenDay={go} />
         ) : null;
@@ -309,7 +326,46 @@ function CalendarPageInner({ now }: { now: number }) {
       const list = grouped.get(target.id) ?? [];
       return list.length ? <DayPeekCard date={fromKey(target.id)} events={list} onOpenDay={go} /> : null;
     },
-    [index, grouped, openDay, remindersByTarget, year.days, storeNames, storeCount],
+    [index, grouped, openDay, remindersByTarget, yearDays, storeNames, storeCount],
+  );
+
+  /* ── Month: a day's full list in a centered dialog ── */
+  // `eventId`: opened from one of the day's lines, so it starts on that event's card.
+  const [shownDay, setShownDay] = useState<{ key: string; eventId?: string } | null>(null);
+  // What had focus when the dialog opened (the day's number, for a keyboard user): it gets it back on close.
+  const dayOpener = useRef<HTMLElement | null>(null);
+  const showDay = useCallback((key: string, eventId?: string) => {
+    dayOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setShownDay({ key, eventId });
+  }, []);
+  const openDayFromDialog = useCallback(
+    (key: string) => {
+      setShownDay(null);
+      openDay(key);
+    },
+    [openDay],
+  );
+  /** A picked event inside the dialog: its card, and after acting on it, back to the day's list. */
+  const renderDialogEvent = useCallback(
+    (ev: CalendarEvent, back: () => void) => (
+      <EventPeekCard
+        ev={ev}
+        onOpenDay={openDayFromDialog}
+        onDone={back}
+        onBack={back}
+        showOpenDay={false}
+        reminders={remindersByTarget.get(ev.id)}
+        onEdit={(e) => {
+          setShownDay(null);
+          setEditor({ kind: "edit", event: e });
+        }}
+        onDelete={(e) => {
+          setShownDay(null);
+          setPendingDelete(e);
+        }}
+      />
+    ),
+    [openDayFromDialog, remindersByTarget],
   );
 
   /* ── Keyboard: D W M Y · T · ← → · / ── */
@@ -365,7 +421,7 @@ function CalendarPageInner({ now }: { now: number }) {
     body = compact ? (
       <CompactMonthView cursor={cursor} events={viewEvents} onSelectDay={selectDay} onOpenDay={openDay} />
     ) : (
-      <MonthView cursor={cursor} events={viewEvents} onOpenDay={openDay} onSelectDay={selectDay} />
+      <MonthView cursor={cursor} events={viewEvents} onShowDay={showDay} />
     );
   else if (view === "week")
     body = (
@@ -390,15 +446,18 @@ function CalendarPageInner({ now }: { now: number }) {
         scrollMemory={scrollMemory}
       />
     );
-  else body = <YearView cursor={cursor} events={viewEvents} counts={year.days} onOpenMonth={openMonth} />;
+  else body = <YearView cursor={cursor} events={viewEvents} counts={yearDays} onOpenMonth={openMonth} />;
 
-  // The Year view draws counts, not events: an empty event list says nothing there.
-  const emptyNote =
-    !loading && !error && !viewEvents.length && !isYear
-      ? query
-        ? t("search.noMatches", { q: search.trim() })
-        : t("emptyRange")
-      : null;
+  // Why the range shows nothing (each reason has its own way out). The Year view draws
+  // counts, not events: an empty event list says nothing there.
+  const emptyReason: EmptyReason | null =
+    loading || error || isYear || viewEvents.length
+      ? null
+      : query && !viewAll.length
+        ? "search" // the search matches nothing
+        : viewAll.length
+          ? "filtered" // events exist, but the event-type filters hide them all
+          : "empty";
 
   return (
     <ShowStoreProvider value={showStore}>
@@ -407,7 +466,7 @@ function CalendarPageInner({ now }: { now: number }) {
       <PeekAutoClose signal={`${rangeSignal}|${cursorKey}`} />
       {/* sm+: exactly the height the shell leaves (see useFitHeight) — the page
           never scrolls, only the calendar body does. Phones flow naturally. */}
-      <div ref={pageRef} className="flex flex-col gap-5 pb-4 sm:pb-0">
+      <div ref={pageRef} className="cal-scroll @container/calpage flex flex-col gap-5 pb-4 sm:pb-0">
         <PageHeader title={t("title")} description={t("description")}>
           <Button size="sm" onClick={() => openCreate()} title={`${t("newEvent")} (N)`}>
             <Plus className="size-4" />
@@ -466,48 +525,85 @@ function CalendarPageInner({ now }: { now: number }) {
           </div>
         </div>
 
-        {/* The calendar card takes the full width and the remaining height. */}
-        <section
-          data-slot="card"
-          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm"
-        >
-          <CalendarToolbar
-            view={view}
-            cursor={cursor}
-            filter={categoryFilter}
-            onStep={goStep}
-            onToday={goToday}
-            onView={setView}
-            onPick={(k) => moveTo(k, "keep")}
-          />
-          {!viewError && (
-            <FeedNotice
-              failed={isYear ? year.failed : failed}
-              truncated={isYear ? year.truncated : truncated}
-              note={isYear ? t("year.note") : undefined}
-              onRetry={viewRetry}
-            />
+        {/* The mini calendar (once the PAGE is 60rem wide — the sidebar decides that, not the
+            screen) and the calendar card, which takes the rest of the width and the remaining height. */}
+        <div className="flex min-h-0 flex-1 gap-4">
+          {railOpen && (
+            <CalendarRail view={view} cursor={cursor} onPick={pickDay} className="hidden @[60rem]/calpage:flex" />
           )}
-          {!error && isHeavyMonth(view, storeCount) && <ManyStoresNote count={storeCount} onWeek={() => setView("week")} />}
-          <div className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-            <motion.div
-              key={bodyKey}
-              initial={initial}
-              animate={{ opacity: 1, x: 0, y: 0 }}
-              transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
-              className={cn(!compact && "h-full")}
-            >
-              {body}
-            </motion.div>
-            {emptyNote && (
-              <div className="pointer-events-none absolute inset-x-0 top-16 z-30 flex justify-center px-4">
-                <p className="rounded-full border bg-popover px-3 py-1.5 text-xs text-muted-foreground shadow-sm">{emptyNote}</p>
-              </div>
+          <section
+            data-slot="card"
+            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm"
+          >
+            <CalendarToolbar
+              view={view}
+              cursor={cursor}
+              filter={categoryFilter}
+              onStep={goStep}
+              onToday={goToday}
+              onView={setView}
+              onPick={pickDay}
+              railOpen={railOpen}
+              onToggleRail={toggleRail}
+            />
+            {!viewError && (
+              <FeedNotice
+                failed={isYear ? year.failed : failed}
+                truncated={isYear ? year.truncated : truncated}
+                note={isYear ? t("year.note") : undefined}
+                onRetry={viewRetry}
+              />
             )}
-          </div>
-        </section>
+            {!error && isHeavyMonth(view, storeCount) && <ManyStoresNote count={storeCount} onWeek={() => setView("week")} />}
+            <div className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+              <motion.div
+                key={bodyKey}
+                initial={initial}
+                animate={{ opacity: 1, x: 0, y: 0 }}
+                transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
+                className={cn(!compact && "h-full")}
+              >
+                {body}
+              </motion.div>
+              {/* Over the (empty) grid, which stays usable around the card. */}
+              {emptyReason && !isYear && (
+                <div
+                  className={cn(
+                    "pointer-events-none absolute inset-0 z-30 flex justify-center p-4 [&>*]:pointer-events-auto",
+                    compact ? "items-start pt-20" : "items-center",
+                  )}
+                >
+                  <RangeEmptyState
+                    key={`${emptyReason}|${rangeSignal}`}
+                    reason={emptyReason}
+                    view={view}
+                    cursor={cursor}
+                    query={search.trim()}
+                    hidden={viewAll.length}
+                    onCreate={openCreate}
+                    onShowAll={showAllTypes}
+                    onClearSearch={() => {
+                      setSearch("");
+                      searchRef.current?.focus();
+                    }}
+                    onView={setView}
+                  />
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
         <span className="sr-only">{t("shortcuts")}</span>
       </div>
+      <DayDetailsDialog
+        dayKey={shownDay?.key ?? null}
+        eventId={shownDay?.eventId}
+        grouped={grouped}
+        onOpenChange={(open) => !open && setShownDay(null)}
+        onOpenDay={openDayFromDialog}
+        renderEvent={renderDialogEvent}
+        returnFocusTo={dayOpener}
+      />
       <EventDialog
         target={editor}
         onOpenChange={(open) => !open && setEditor(null)}

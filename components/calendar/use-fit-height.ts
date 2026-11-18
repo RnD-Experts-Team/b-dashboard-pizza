@@ -19,9 +19,21 @@ function scrollParent(el: HTMLElement): HTMLElement | null {
  * Measured rather than a `calc(100dvh - Xrem)` guess, because the shell's
  * four layout variants (classic / inset / floating / top-nav) each pad the
  * page differently. Below `minPx` (very short windows) it stops shrinking
- * and the page scrolls as a fallback.
+ * and the page scrolls as a fallback — kept low (360px), because a calendar
+ * that scrolls inside itself beats a page-level scroll that leaves the rail
+ * column half empty.
+ *
+ * It keeps checking, because a single measurement at mount is not enough:
+ * - the scroller is looked up on EVERY fit — on the first pass `<main>` may not
+ *   scroll yet (in dev its stylesheet can land after this effect runs), and the
+ *   old "no scroller → give up" left the page unfitted, so the whole shell
+ *   scrolled and the calendar's own body never did;
+ * - it watches the page's parent and the scroller's content as well as the
+ *   scroller, so anything around the page changing height re-fits it;
+ * - after sizing, whatever still overflows the scroller (something below the
+ *   page in the same scroller) is taken off the page's height.
  */
-export function useFitHeight(ref: RefObject<HTMLElement | null>, enabled: boolean, minPx = 480) {
+export function useFitHeight(ref: RefObject<HTMLElement | null>, enabled: boolean, minPx = 360) {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -29,10 +41,29 @@ export function useFitHeight(ref: RefObject<HTMLElement | null>, enabled: boolea
       el.style.height = "";
       return;
     }
-    const sc = scrollParent(el);
-    if (!sc) return;
 
-    const fit = () => {
+    let sc: HTMLElement | null = null;
+    const watched = new Set<Element>();
+    const ro = new ResizeObserver(() => fit());
+    const watch = (node: Element | null | undefined) => {
+      if (node && !watched.has(node)) {
+        watched.add(node);
+        ro.observe(node);
+      }
+    };
+    const setHeight = (px: number) => {
+      if (Math.abs(px - el.getBoundingClientRect().height) > 0.5) el.style.height = `${px}px`;
+    };
+
+    function fit() {
+      if (!el) return;
+      const found = scrollParent(el);
+      if (found !== sc) {
+        sc = found;
+        watch(sc);
+        watch(sc?.firstElementChild);
+      }
+      if (!sc) return; // not scrolling yet: the observers / resize / load bring us back
       const scRect = sc.getBoundingClientRect();
       const elRect = el.getBoundingClientRect();
       // Where the element starts inside the scroller's content…
@@ -48,16 +79,23 @@ export function useFitHeight(ref: RefObject<HTMLElement | null>, enabled: boolea
         if (p === sc) break;
       }
       const next = Math.max(minPx, Math.floor(sc.clientHeight - top - after));
-      if (Math.abs(next - elRect.height) > 0.5) el.style.height = `${next}px`;
-    };
+      setHeight(next);
+      // Anything still overflowing the scroller (content below the page) comes off the page.
+      const over = sc.scrollHeight - sc.clientHeight;
+      if (over > 1 && next > minPx) setHeight(Math.max(minPx, next - over));
+    }
 
+    watch(el.parentElement);
     fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(sc);
+    const raf = requestAnimationFrame(fit);
     window.addEventListener("resize", fit);
+    window.addEventListener("load", fit);
+    document.fonts?.ready.then(fit).catch(() => {});
     return () => {
+      cancelAnimationFrame(raf);
       ro.disconnect();
       window.removeEventListener("resize", fit);
+      window.removeEventListener("load", fit);
       el.style.height = "";
     };
   }, [ref, enabled, minPx]);

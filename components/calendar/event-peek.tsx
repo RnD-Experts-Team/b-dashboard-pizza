@@ -253,7 +253,7 @@ export function CalendarPeekProvider({
           collisionPadding={8}
           hideWhenDetached
           // Never taller than the room left on screen: a long card scrolls instead of running off the top or bottom.
-          className="max-h-(--radix-popover-content-available-height) w-auto max-w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain p-0 data-[state=closed]:duration-100"
+          className="cal-scroll max-h-(--radix-popover-content-available-height) w-auto max-w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain p-0 data-[state=closed]:duration-100"
           onPointerEnter={() => clearTimeout(closeTimer.current)}
           onPointerLeave={(e) => {
             if (e.pointerType === "mouse" && !stateRef.current?.pinned) scheduleClose();

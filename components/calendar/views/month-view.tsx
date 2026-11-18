@@ -3,9 +3,10 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
-import { dayKey, isSameDay, isSameMonth, isWeekend, monthGrid } from "@/lib/calendar/dates";
+import { dayKey, isSameDay, isSameMonth, monthGrid } from "@/lib/calendar/dates";
 import { eventHeatLevels, type HeatLevel } from "@/lib/calendar/day-counts";
-import { groupAllDay, isRoutineRollUp } from "@/lib/calendar/grouping";
+import { fiscalWeekOf } from "@/lib/calendar/fiscal";
+import { groupAllDay } from "@/lib/calendar/grouping";
 import { byDay, eventPriority, lanes } from "@/lib/calendar/layout";
 import type { CalendarEvent } from "@/lib/calendar/types";
 import { useCalendarClock } from "../calendar-clock";
@@ -20,7 +21,7 @@ const WEEKDAY_ROW = 33; // px for the weekday header
 /**
  * Fewest lanes a week row keeps. With one, a busy day's only lane turned into
  * "+7 more" and no event showed at all; with three, a day shows two lines and the
- * "+N more" that selects the day. Below this the month scrolls.
+ * "+N more" that opens the day. Below this the month scrolls.
  */
 const MIN_LANES = 3;
 const MIN_ROW = HEAD + MIN_LANES * LANE + 8;
@@ -31,16 +32,35 @@ function lanesFor(hostHeight: number, weeks: number): number {
   return Math.max(MIN_LANES, Math.min(8, Math.floor((rowH - HEAD - 6) / LANE)));
 }
 
-function WeekdayHeader({ style }: { style: "short" | "narrow" }) {
+/**
+ * Days of the previous / next month: a slightly sunken surface (muted in light
+ * themes, the page background — darker than the card — in dark ones), so where
+ * the month ends reads at a glance without a loud colour. Their dates and lines
+ * are quieter too, and every 1st carries its month ("Dec 1").
+ */
+const OUTSIDE_CELL = "bg-muted/70 hover:bg-muted dark:bg-background/70 dark:hover:bg-background";
+const INSIDE_CELL = "hover:bg-muted/40";
+/** Lines in another month's days step back until hovered or focused. */
+const OUTSIDE_LINE = "opacity-55 transition-opacity duration-150 hover:opacity-100 focus-within:opacity-100";
+
+/** The week-number column on the start side of the Month grid (wide layout only). */
+const WEEK_GUTTER = "2.25rem";
+const COLS_WITH_GUTTER = `${WEEK_GUTTER} repeat(7, minmax(0, 1fr))`;
+
+function WeekdayHeader({ style, gutter = false }: { style: "short" | "narrow"; gutter?: boolean }) {
   const f = useCalendarFormat();
   return (
-    <div className="sticky top-0 z-20 grid shrink-0 grid-cols-7 border-b bg-card">
+    <div
+      className={cn("sticky top-0 z-20 grid shrink-0 border-b bg-card", !gutter && "grid-cols-7")}
+      style={gutter ? { gridTemplateColumns: COLS_WITH_GUTTER } : undefined}
+    >
+      {gutter && <div aria-hidden />}
       {f.weekdayNames(style).map((n, i) => (
         <div
           key={i}
           className={cn(
             "px-2 py-2 text-center text-[11px] font-medium text-muted-foreground sm:px-3 sm:text-start",
-            i > 0 && "sm:border-s",
+            (i > 0 || gutter) && "sm:border-s",
           )}
         >
           {n}
@@ -50,73 +70,106 @@ function WeekdayHeader({ style }: { style: "short" | "narrow" }) {
   );
 }
 
+/**
+ * A row's Little Caesars week: "W47", and "P12" on the week a period starts —
+ * like the printed period sheet. A Tuesday–Monday row is exactly one fiscal week.
+ */
+function WeekNumber({ start, current }: { start: Date; current: boolean }) {
+  const f = useCalendarFormat();
+  const t = useTranslations("calendar");
+  const w = fiscalWeekOf(start);
+  return (
+    <div
+      title={f.fiscalLabel(start)}
+      className="flex flex-col items-center gap-1 pt-2 text-[10px] font-medium leading-none tabular-nums"
+      style={{ gridColumn: 1, gridRow: "1 / -1" }}
+    >
+      <span className={cn(current ? "font-semibold text-foreground" : "text-muted-foreground/80")}>
+        <span aria-hidden>{f.fiscalWeekShort(start)}</span>
+        <span className="sr-only">{f.fiscalLabel(start)}</span>
+      </span>
+      {w.weekInPeriod === 1 && (
+        <span aria-hidden className="rounded-sm bg-muted px-1 py-0.5 text-[9px] font-semibold text-muted-foreground">
+          {t("fiscal.periodShort", { period: w.period })}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function WeekRow({
   days,
   events,
+  grouped,
   levels,
   maxLanes,
   cursor,
   last,
-  onSelectDay,
+  onShowDay,
 }: {
   days: Date[];
   events: CalendarEvent[];
+  /** Each day's events, for the day number's label. */
+  grouped: ReadonlyMap<string, CalendarEvent[]>;
   /** The tint level of each day that stood out for overdue or missed work. */
   levels: ReadonlyMap<string, HeatLevel>;
   maxLanes: number;
-  /** The selected day (and so the month shown). */
+  /** A day in the month shown (days of other months are drawn quieter). */
   cursor: Date;
   last: boolean;
-  onSelectDay: (key: string) => void;
+  /** Open the day's dialog with every event (`eventId`: straight on that event's card). */
+  onShowDay: (key: string, eventId?: string) => void;
 }) {
   const f = useCalendarFormat();
   const now = new Date(useCalendarClock());
-  // Lanes draw only what is worth a line: the all-day kinds rolled up across stores (grouping.ts)
-  // minus the daily routine that every store repeats every day, the most important first (my
-  // reminders, what people made in Toolbox, what needs action). The day panel holds the rest.
+  // Lanes draw the all-day kinds rolled up across stores (grouping.ts) and the timed events, the
+  // most important first (my reminders, what people made in Toolbox, what needs action); the daily
+  // routine every store repeats sorts last, so it is the first to fold into "+N more". The day's
+  // dialog (`DayDetailsDialog`) holds everything.
   const laneEvents = useMemo(
     () =>
-      [...groupAllDay(events.filter((e) => e.allDay)).filter((e) => !isRoutineRollUp(e)), ...events.filter((e) => !e.allDay)].sort(
+      [...groupAllDay(events.filter((e) => e.allDay)), ...events.filter((e) => !e.allDay)].sort(
         (a, b) => eventPriority(b) - eventPriority(a),
       ),
     [events],
   );
   const lay = useMemo(() => lanes(days, laneEvents, maxLanes, true), [days, laneEvents, maxLanes]);
+  const thisWeek = days.some((d) => isSameDay(d, now));
 
   return (
     <div
-      className={cn("relative grid min-h-0 grid-cols-7", !last && "border-b")}
-      style={{ gridTemplateRows: `${HEAD}px repeat(${maxLanes}, ${LANE}px) minmax(0, 1fr)` }}
+      className={cn("relative grid min-h-0", !last && "border-b")}
+      style={{ gridTemplateColumns: COLS_WITH_GUTTER, gridTemplateRows: `${HEAD}px repeat(${maxLanes}, ${LANE}px) minmax(0, 1fr)` }}
     >
+      <WeekNumber start={days[0]} current={thisWeek} />
       {days.map((d, i) => {
         const k = dayKey(d);
         const outside = !isSameMonth(d, cursor);
         const today = isSameDay(d, now);
-        const selected = isSameDay(d, cursor);
         const level = outside ? undefined : levels.get(k);
         return (
-          // The whole cell selects its day (the number is the keyboard stop); the lines and
-          // "+N more" are siblings above it, so they never trigger this click.
+          // A click anywhere in the cell opens the day's dialog (the number is the keyboard
+          // stop); the lines and "+N more" are siblings above it with their own actions.
           <div
             key={k}
-            onClick={() => onSelectDay(k)}
+            onClick={() => onShowDay(k)}
             className={cn(
-              "group/cell flex min-w-0 cursor-pointer flex-col transition-colors duration-150 hover:bg-muted/40",
-              i > 0 && "border-s",
-              isWeekend(d) && "bg-muted/20",
-              outside && "bg-muted/30",
-              selected && "bg-accent/50 ring-1 ring-inset ring-foreground/25",
+              "group/cell flex min-w-0 cursor-pointer flex-col border-s transition-colors duration-150",
+              outside ? OUTSIDE_CELL : INSIDE_CELL,
             )}
-            style={{ gridColumn: i + 1, gridRow: "1 / -1" }}
+            style={{ gridColumn: i + 2, gridRow: "1 / -1" }}
           >
             <div className="flex h-[30px] items-center px-1.5">
               {/* One quiet cue per day: its number is tinted when the day stood out for overdue
-                  or missed work (the Year view's shading); the panel has the numbers. */}
+                  or missed work (the Year view's shading); the dialog has the numbers. */}
               <button
                 type="button"
-                onClick={() => onSelectDay(k)}
-                aria-label={f.longDate(d)}
-                aria-pressed={selected}
+                aria-haspopup="dialog"
+                onClick={(e) => {
+                  e.stopPropagation(); // the cell's own click would open it a second time
+                  onShowDay(k);
+                }}
+                aria-label={`${f.longDate(d)}, ${f.countLabel(grouped.get(k)?.length ?? 0)}`}
                 className={cn(
                   "grid h-6 min-w-6 place-items-center rounded-full px-1 text-xs tabular-nums outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring/50",
                   today
@@ -124,24 +177,40 @@ function WeekRow({
                     : level
                       ? cn(HEAT_CLASS[level], "font-medium")
                       : "font-medium hover:bg-accent",
-                  outside && !today && !level && "text-muted-foreground/60",
+                  outside && !today && !level && "font-normal text-muted-foreground/70",
+                  d.getDate() === 1 && "px-2",
                 )}
               >
-                {d.getDate()}
+                {/* The 1st says its month, so the change of month is named, not just shaded. */}
+                {d.getDate() === 1 ? f.format(d, { month: "short", day: "numeric" }) : d.getDate()}
               </button>
             </div>
           </div>
         );
       })}
       {lay.items.map((it) => (
-        <LaneCell key={`${it.ev.id}-${it.col}`} col={it.col + 1} span={it.span} lane={it.lane + 2}>
-          <EventBar item={it} plain />
+        <LaneCell
+          key={`${it.ev.id}-${it.col}`}
+          col={it.col + 2}
+          span={it.span}
+          lane={it.lane + 2}
+          className={cn(days.slice(it.col, it.col + it.span).every((d) => !isSameMonth(d, cursor)) && OUTSIDE_LINE)}
+        >
+          {/* No hover card in the Month: a click opens the day's dialog on this event (a
+              roll-up, on the day's list), on the first day of the line in this row. */}
+          <EventBar item={it} plain onOpen={() => onShowDay(dayKey(days[it.col]), it.ev.members ? undefined : it.ev.id)} />
         </LaneCell>
       ))}
       {lay.more.map((m) => (
-        <LaneCell key={`more-${m.key}`} col={m.col + 1} span={1} lane={m.lane + 2}>
-          {/* "+N more" selects the day: the panel lists all of it. */}
-          <MoreButton more={m} onExpand={() => onSelectDay(m.key)} />
+        <LaneCell
+          key={`more-${m.key}`}
+          col={m.col + 2}
+          span={1}
+          lane={m.lane + 2}
+          className={cn(!isSameMonth(days[m.col], cursor) && OUTSIDE_LINE)}
+        >
+          {/* "+N more" opens the day's dialog with everything. */}
+          <MoreButton more={m} onExpand={() => onShowDay(m.key)} />
         </LaneCell>
       ))}
     </div>
@@ -149,32 +218,27 @@ function WeekRow({
 }
 
 /**
- * Month view (sm+): the month as a grid, and the selected day's FULL list beside
- * it (below it while the card is narrower than 64rem). A cell can't hold a busy day — 150+ events across 39
- * stores — so the grid is a calm overview: plain lines (no fills) for what is notable
- * (a task sent to every store, a maintenance visit), the daily routine left out, and
- * one faint tint on the date when the day stood out for overdue or missed work. "+N
- * more" selects the day. The panel (`DayAgenda`) holds everything: by category, the
- * same kind across stores rolled up, what needs attention first. The selected day is
- * the page's cursor, as in the compact view.
+ * Month view (sm+): the month as a grid over the card's full width. A cell can't
+ * hold a busy day — 150+ events across 39 stores — so the grid is a calm overview:
+ * plain lines (no fills), the most important first, and one faint tint on the date
+ * when the day stood out for overdue or missed work. Clicking a day (its cell, its
+ * number or "+N more") calls `onShowDay`, and the page opens a centered dialog with
+ * EVERY event of that day and its details (`DayDetailsDialog`): by category, the
+ * same kind across stores rolled up, what needs attention first.
  */
 export function MonthView({
   cursor,
   events,
-  onOpenDay,
-  onSelectDay,
+  onShowDay,
 }: {
   cursor: Date;
   events: CalendarEvent[];
-  onOpenDay: (key: string) => void;
-  onSelectDay: (key: string) => void;
+  onShowDay: (key: string, eventId?: string) => void;
 }) {
-  const t = useTranslations("calendar");
   const hostRef = useRef<HTMLDivElement>(null);
   const [maxLanes, setMaxLanes] = useState(MIN_LANES);
   const grouped = useMemo(() => byDay(events), [events]);
   const levels = useMemo(() => eventHeatLevels(grouped), [grouped]);
-  const dayEvents = grouped.get(dayKey(cursor)) ?? [];
   const weeks = useMemo(() => {
     const grid = monthGrid(cursor);
     const out: Date[][] = [];
@@ -192,47 +256,25 @@ export function MonthView({
     return () => ro.disconnect();
   }, [weeks.length]);
 
-  // Below the grid the day can sit out of sight: bring it into view when a day is picked.
-  const asideRef = useRef<HTMLElement>(null);
-  const select = (key: string) => {
-    onSelectDay(key);
-    requestAnimationFrame(() => {
-      const aside = asideRef.current;
-      const host = hostRef.current;
-      if (aside && host && aside.offsetTop > host.offsetTop) aside.scrollIntoView({ block: "start", behavior: "smooth" });
-    });
-  };
-
   return (
-    // The card's WIDTH decides (it depends on the sidebar, not the screen): from 64rem the two
-    // columns scroll on their own; narrower, the grid keeps the full width and the day sits under it.
-    <div className="@container h-full">
-      <div className="grid @[64rem]:h-full @[64rem]:grid-cols-[minmax(0,1fr)_21rem] @[64rem]:grid-rows-[minmax(0,1fr)]">
-        <div ref={hostRef} className="relative flex min-w-0 flex-col @[64rem]:min-h-0 @[64rem]:overflow-y-auto @[64rem]:overscroll-contain">
-          <WeekdayHeader style="short" />
-          <div className="grid flex-1" style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(${MIN_ROW}px, 1fr))` }}>
-            {weeks.map((days, wi) => (
-              <WeekRow
-                key={dayKey(days[0])}
-                days={days}
-                events={events}
-                levels={levels}
-                maxLanes={maxLanes}
-                cursor={cursor}
-                last={wi === weeks.length - 1}
-                onSelectDay={select}
-              />
-            ))}
-          </div>
-        </div>
-        <aside
-          ref={asideRef}
-          aria-label={t("agenda.label")}
-          className="min-w-0 scroll-mt-2 border-t @[64rem]:min-h-0 @[64rem]:border-s @[64rem]:border-t-0"
-        >
-          {/* Keyed by day: its open/closed groups start fresh for each day. */}
-          <DayAgenda key={dayKey(cursor)} day={cursor} events={dayEvents} onOpenDay={onOpenDay} />
-        </aside>
+    // `relative`: the rows' screen-reader-only spans are absolutely positioned — without a
+    // positioned parent inside this scroller they escape it and make the page body scroll.
+    <div ref={hostRef} className="relative flex h-full min-w-0 flex-col overflow-y-auto overscroll-contain">
+      <WeekdayHeader style="short" gutter />
+      <div className="grid flex-1" style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(${MIN_ROW}px, 1fr))` }}>
+        {weeks.map((days, wi) => (
+          <WeekRow
+            key={dayKey(days[0])}
+            days={days}
+            events={events}
+            grouped={grouped}
+            levels={levels}
+            maxLanes={maxLanes}
+            cursor={cursor}
+            last={wi === weeks.length - 1}
+            onShowDay={onShowDay}
+          />
+        ))}
       </div>
     </div>
   );
@@ -274,29 +316,28 @@ export function CompactMonthView({
               aria-label={f.longDate(d)}
               className={cn(
                 "flex min-h-14 flex-col items-center gap-1 border-b border-e pt-1.5 outline-none transition-colors duration-150 [&:nth-child(7n)]:border-e-0",
-                selected ? "bg-muted/70" : "active:bg-muted/50",
-                outside && "bg-muted/25",
+                selected ? "bg-accent/60" : outside ? "bg-muted/70 dark:bg-background/70" : "active:bg-muted/50",
               )}
             >
               <span
                 className={cn(
                   "grid size-7 place-items-center rounded-full text-xs tabular-nums transition-colors duration-150",
                   today ? "bg-primary font-semibold text-primary-foreground" : selected && "bg-accent font-semibold",
-                  outside && !today && "text-muted-foreground/60",
+                  outside && !today && "text-muted-foreground/70",
                 )}
               >
                 {d.getDate()}
               </span>
-              <span className="flex h-1.5 items-center gap-0.5">
+              <span className={cn("flex h-1.5 items-center gap-0.5", outside && "opacity-50")}>
                 <DayDots events={grouped.get(k) ?? []} />
               </span>
             </button>
           );
         })}
       </div>
-      {/* The same grouped list as the wide layout (no inner scroll: the page scrolls). */}
+      {/* Phones list the picked day under the grid (no room for a popup); the page scrolls. */}
       <div className="border-t">
-        <DayAgenda key={dayKey(cursor)} day={cursor} events={dayEvents} onOpenDay={onOpenDay} scroll={false} />
+        <DayAgenda key={dayKey(cursor)} day={cursor} events={dayEvents} onOpenDay={onOpenDay} />
       </div>
     </div>
   );

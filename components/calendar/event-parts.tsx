@@ -2,7 +2,7 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { Ban, CalendarX2, Check, ChevronLeft, ChevronRight, CircleDashed, Lock, TriangleAlert, X } from "lucide-react";
+import { Ban, Check, ChevronLeft, ChevronRight, CircleDashed, Lock, TriangleAlert, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { categoryOf } from "@/lib/calendar/categories";
@@ -10,7 +10,7 @@ import { groupPeekId, groupStats } from "@/lib/calendar/grouping";
 import { dotCategories, eventPriority, isMultiDay, isPast, type LaneItem, type LaneMore } from "@/lib/calendar/layout";
 import type { CalendarEvent, CategoryKey, EventStatus } from "@/lib/calendar/types";
 import { useCalendarClock } from "./calendar-clock";
-import { usePeek, type PeekSide } from "./event-peek";
+import { usePeek, type PeekSide, type PeekTarget } from "./event-peek";
 import { EventSigns } from "./event-signs";
 import { StoreLabel } from "./store-label";
 import { useCalendarFormat } from "./use-calendar-format";
@@ -129,33 +129,6 @@ export function AvatarStack({
   );
 }
 
-/** Empty state: dashed border, muted icon, instructional copy (dashboard convention). */
-export function CalendarEmpty({
-  title,
-  hint,
-  compact,
-  className,
-}: {
-  title: string;
-  hint: string;
-  compact?: boolean;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 text-center",
-        compact ? "py-8" : "py-16",
-        className,
-      )}
-    >
-      <CalendarX2 className="size-6 text-muted-foreground/60" />
-      <p className="text-sm font-medium">{title}</p>
-      <p className="max-w-60 text-xs text-muted-foreground">{hint}</p>
-    </div>
-  );
-}
-
 /* ── Lane items (month rows, all-day rows) ── */
 
 /** Places one lane item in a row grid; also the @container that reveals pill times. */
@@ -163,19 +136,31 @@ export function LaneCell({
   col,
   span,
   lane,
+  className,
   children,
 }: {
   col: number;
   span: number;
   lane: number;
+  className?: string;
   children: ReactNode;
 }) {
   const style: CSSProperties = { gridColumn: `${col} / span ${span}`, gridRow: lane };
   return (
-    <div className="@container z-[1] min-w-0 px-1" style={style}>
+    <div className={cn("@container z-[1] min-w-0 px-1", className)} style={style}>
       {children}
     </div>
   );
+}
+
+/**
+ * How a lane item opens. With `onOpen` (the Month view) a click runs it — the
+ * day's dialog, on that event — and nothing pops up on hover; otherwise the item
+ * peeks (hover or click) through the page's one peek card.
+ */
+function useItemOpen(target: PeekTarget, onOpen?: () => void) {
+  const { peekProps } = usePeek();
+  return onOpen ? { onClick: onOpen, "aria-haspopup": "dialog" as const } : peekProps(target);
 }
 
 /**
@@ -183,16 +168,16 @@ export function LaneCell({
  * `plain` (Month) leaves the store badge out — it only steals the room the title
  * needs ("Birthday: S…"); the store is in the peek card and the day panel.
  */
-export function EventPill({ ev, plain }: { ev: CalendarEvent; plain?: boolean }) {
+export function EventPill({ ev, plain, onOpen }: { ev: CalendarEvent; plain?: boolean; onOpen?: () => void }) {
   const f = useCalendarFormat();
   const now = useCalendarClock();
-  const { peekProps } = usePeek();
+  const open = useItemOpen({ type: "event", id: ev.id }, onOpen);
   // Month: everyday information (a birthday, a shift) steps back; what matters keeps full weight.
   const calm = !!plain && eventPriority(ev) < 2;
   return (
     <button
       type="button"
-      {...peekProps({ type: "event", id: ev.id })}
+      {...open}
       className={cn(
         "flex h-5 w-full min-w-0 items-center gap-1.5 rounded-sm px-1.5 text-start text-[11px] leading-none transition-colors duration-150 hover:bg-accent/60",
         EVENT_FOCUS,
@@ -219,21 +204,22 @@ export function EventPill({ ev, plain }: { ev: CalendarEvent; plain?: boolean })
  * `day` — show "Day i/n" on multi-day bars (single-column rows).
  * `plain` (the Month view, where a day holds dozens) — a one-day item is a line of
  * text with no fill; one that spans days is a LIGHT band whose flat ends say it
- * continues (no chevrons, no store badge).
+ * continues (no chevrons, no store badge). `onOpen` replaces the peek card with
+ * that click (the Month view opens the day's dialog).
  */
-export function EventBar({ item, day, plain }: { item: LaneItem; day?: Date; plain?: boolean }) {
+export function EventBar({ item, day, plain, onOpen }: { item: LaneItem; day?: Date; plain?: boolean; onOpen?: () => void }) {
   const f = useCalendarFormat();
-  const { peekProps } = usePeek();
   const { ev, before, after } = item;
-  if (ev.members) return <GroupBar item={item} plain={plain} />;
-  if (!ev.allDay) return <EventPill ev={ev} plain={plain} />;
+  const open = useItemOpen({ type: "event", id: ev.id }, onOpen);
+  if (ev.members) return <GroupBar item={item} plain={plain} onOpen={onOpen} />;
+  if (!ev.allDay) return <EventPill ev={ev} plain={plain} onOpen={onOpen} />;
   const flat = plain && !isMultiDay(ev);
   const calm = flat && eventPriority(ev) < 2;
   const radius = before && after ? "" : before ? "rounded-e-sm" : after ? "rounded-s-sm" : "rounded-sm";
   return (
     <button
       type="button"
-      {...peekProps({ type: "event", id: ev.id })}
+      {...open}
       className={cn(
         "flex h-5 w-full min-w-0 items-center gap-1.5 px-1.5 text-start text-[11px] leading-none transition-colors duration-150",
         calm ? "font-normal text-muted-foreground" : "font-medium text-foreground",
@@ -269,11 +255,11 @@ export function EventBar({ item, day, plain }: { item: LaneItem; day?: Date; pla
  * "Cleaning · 39 stores", with a red count when some of them need attention.
  * Clicking it lists the stores in a peek card.
  */
-function GroupBar({ item, plain }: { item: LaneItem; plain?: boolean }) {
+function GroupBar({ item, plain, onOpen }: { item: LaneItem; plain?: boolean; onOpen?: () => void }) {
   const t = useTranslations("calendar");
-  const { peekProps } = usePeek();
   const { ev, before, after } = item;
   const members = ev.members ?? [];
+  const open = useItemOpen({ type: "group", id: groupPeekId(members) }, onOpen);
   const { stores, action: needing } = groupStats(members);
   // Plain (Month): no fill and no red badge — what needs attention is the date's tint and the day panel.
   const flat = plain && !isMultiDay(ev);
@@ -284,7 +270,7 @@ function GroupBar({ item, plain }: { item: LaneItem; plain?: boolean }) {
   return (
     <button
       type="button"
-      {...peekProps({ type: "group", id: groupPeekId(members) })}
+      {...open}
       className={cn(
         "flex h-5 w-full min-w-0 items-center gap-1.5 px-1.5 text-start text-[11px] leading-none transition-colors duration-150",
         calm ? "font-normal text-muted-foreground" : "font-medium text-foreground",
@@ -326,8 +312,9 @@ function GroupBar({ item, plain }: { item: LaneItem; plain?: boolean }) {
 }
 
 /**
- * "+N more". By default it peeks at the day's full list; with `onExpand` it
- * opens the row it sits in instead (the all-day row grows to show everything).
+ * "+N more". By default it peeks at the day's list; with `onExpand` it runs that
+ * instead (the all-day row grows to show everything; the Month view opens the
+ * day's dialog).
  */
 export function MoreButton({ more, onExpand }: { more: LaneMore; onExpand?: () => void }) {
   const t = useTranslations("calendar");

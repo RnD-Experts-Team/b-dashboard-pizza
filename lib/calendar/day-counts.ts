@@ -22,6 +22,11 @@ export interface DayTally {
 export interface DayCount extends DayTally {
   /** store number → that store's numbers for the day. */
   stores: Map<string, DayTally>;
+  /**
+   * Set by `shiftAttentionToNextDay`: the day ("YYYY-MM-DD") this day's overdue and
+   * missed numbers come from — the day before it.
+   */
+  attentionFrom?: string;
 }
 
 const emptyTally = (): DayTally => ({ total: 0, byStatus: {} });
@@ -63,6 +68,64 @@ export function mergeDays(days: readonly FeedDay[]): Map<string, DayCount> {
 /** Items that are overdue or missed — the only thing the Year view colours. */
 export const attentionCount = (t: DayTally): number => (t.byStatus.overdue ?? 0) + (t.byStatus.missed ?? 0);
 
+/** A "YYYY-MM-DD" key moved by `delta` days (local calendar days, so no DST drift). */
+function shiftDayKey(key: string, delta: number): string {
+  const [y, m, d] = key.split("-").map(Number);
+  const n = new Date(y, m - 1, d + delta);
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+}
+
+/** A tally without its overdue / missed part (`total` keeps counting the day's own items). */
+function withoutAttention(t: DayTally): DayTally {
+  const { overdue: _o, missed: _m, ...rest } = t.byStatus;
+  return { total: t.total, byStatus: rest };
+}
+
+/** `into` + the overdue / missed part of `from`. */
+function withAttentionOf(into: DayTally, from: DayTally | undefined): DayTally {
+  if (!from) return into;
+  const byStatus = { ...into.byStatus };
+  if (from.byStatus.overdue) byStatus.overdue = from.byStatus.overdue;
+  if (from.byStatus.missed) byStatus.missed = from.byStatus.missed;
+  return { total: into.total, byStatus };
+}
+
+/**
+ * The Year view's reading of "overdue": what was left overdue or missed on a day
+ * shows on the NEXT day — the day it is found out (a day's data-entry keys and
+ * checks are only looked at the morning after) — so Nov 17 is tinted by what
+ * Nov 16 left undone, and a day still running is never red for its own work.
+ * Every other number stays on its own day (`total` is the day's own items). The
+ * per-store split moves the same way. `keep` drops the days outside the range
+ * shown (the request starts one day early so the first day has a day before it).
+ */
+export function shiftAttentionToNextDay(
+  days: ReadonlyMap<string, DayCount>,
+  keep: (key: string) => boolean = () => true,
+): Map<string, DayCount> {
+  const out = new Map<string, DayCount>();
+  // Every day with numbers of its own, and every day after one (it receives that day's overdue).
+  const keys = new Set<string>(days.keys());
+  for (const key of days.keys()) keys.add(shiftDayKey(key, 1));
+  for (const key of keys) {
+    if (!keep(key)) continue;
+    const own = days.get(key);
+    const prevKey = shiftDayKey(key, -1);
+    const prev = days.get(prevKey);
+    const ownBase = own ? withoutAttention(own) : { total: 0, byStatus: {} };
+    const tally = withAttentionOf(ownBase, prev);
+    const stores = new Map<string, DayTally>();
+    for (const [code, t] of own?.stores ?? []) stores.set(code, withoutAttention(t));
+    for (const [code, t] of prev?.stores ?? []) {
+      if (!attentionCount(t)) continue;
+      stores.set(code, withAttentionOf(stores.get(code) ?? { total: 0, byStatus: {} }, t));
+    }
+    if (tally.total === 0 && attentionCount(tally) === 0) continue;
+    out.set(key, { ...tally, stores, attentionFrom: prev && attentionCount(prev) ? prevKey : undefined });
+  }
+  return out;
+}
+
 /** 1 = a little more than nothing … 4 = among the worst days of the range. */
 export type HeatLevel = 1 | 2 | 3 | 4;
 
@@ -83,7 +146,8 @@ export function heatLevels(days: ReadonlyMap<string, DayCount>): Map<string, Hea
   const rows: HeatRow[] = [];
   for (const [key, day] of days) {
     const n = attentionCount(day);
-    if (day.total > 0 && n > 0) rows.push({ key, n, share: n / day.total });
+    // `max`: a shifted day's overdue are the day before's, so they can outnumber its own items.
+    if (n > 0) rows.push({ key, n, share: n / Math.max(day.total, n) });
   }
   return rankLevels(rows);
 }

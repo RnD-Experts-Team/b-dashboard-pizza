@@ -8,8 +8,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { CALENDAR_CATEGORIES } from "@/lib/calendar/categories";
-import { CATEGORY_KEYS, type CategoryKey } from "@/lib/calendar/types";
+import { FILTER_CATEGORIES } from "@/lib/calendar/categories";
+import { FILTER_CATEGORY_KEYS, allFiltersOn, type CategoryKey } from "@/lib/calendar/types";
 import { useCalendarStore } from "@/lib/store/calendar.store";
 import { EventDot } from "./event-parts";
 
@@ -83,22 +83,24 @@ export function CategoryTabs({
   const filters = useCalendarStore((s) => s.filters);
   const showAll = useCalendarStore((s) => s.showAll);
   const onlyCategory = useCalendarStore((s) => s.onlyCategory);
-  const all = filters.length === CATEGORY_KEYS.length;
-  const single = filters.length === 1 ? filters[0] : null;
-  const custom = !all && !single && filters.length > 0;
+  // Only the offered types count ("other" isn't one — it rides along with All).
+  const offered = filters.filter((k) => FILTER_CATEGORY_KEYS.includes(k));
+  const all = allFiltersOn(filters);
+  const single = offered.length === 1 ? offered[0] : null;
+  const custom = !all && !single && offered.length > 0;
 
   const chips: Chip[] = useMemo(
     () => [
       { key: "all", label: t("tabs.all"), active: all, count: hideCounts ? undefined : total },
-      ...(custom ? [{ key: "custom" as const, label: t("tabs.custom", { n: filters.length }), active: true }] : []),
-      ...CALENDAR_CATEGORIES.map((c) => ({
+      ...(custom ? [{ key: "custom" as const, label: t("tabs.custom", { n: offered.length }), active: true }] : []),
+      ...FILTER_CATEGORIES.map((c) => ({
         key: c.key,
         label: tc(c.key),
         active: single === c.key,
         count: hideCounts ? undefined : counts[c.key],
       })),
     ],
-    [t, tc, all, custom, filters.length, single, total, counts, hideCounts],
+    [t, tc, all, custom, offered.length, single, total, counts, hideCounts],
   );
 
   /* ── Fit: which chips stay on the row; the rest go to "N more". `null` = not measured yet (all). ── */
@@ -222,7 +224,7 @@ export function CategoryTabs({
           </span>
         ))}
         <span data-more="" className={chipClass(false)}>
-          {t("tabs.more", { n: CATEGORY_KEYS.length })}
+          {t("tabs.more", { n: FILTER_CATEGORY_KEYS.length })}
           <ChevronDown className="size-3.5" />
         </span>
       </div>
@@ -236,7 +238,8 @@ export function FilterPopover({ counts, disabled = false }: { counts: Record<Cat
   const tc = useTranslations("calendar.categories");
   const scopeId = useId();
   const { filters, toggleCategory, onlyCategory, showAll, hideAll } = useCalendarStore();
-  const all = filters.length === CATEGORY_KEYS.length;
+  const all = allFiltersOn(filters);
+  const offeredOn = filters.filter((k) => FILTER_CATEGORY_KEYS.includes(k)).length;
 
   return (
     <Popover>
@@ -246,7 +249,7 @@ export function FilterPopover({ counts, disabled = false }: { counts: Record<Cat
           {t("button")}
           {!all && (
             <span className="grid h-4 min-w-4 place-items-center rounded-full bg-foreground px-1 text-[10px] font-semibold tabular-nums text-background">
-              {filters.length}
+              {offeredOn}
             </span>
           )}
         </Button>
@@ -263,7 +266,7 @@ export function FilterPopover({ counts, disabled = false }: { counts: Record<Cat
           </button>
         </div>
         <div className="space-y-px">
-          {CALENDAR_CATEGORIES.map((c) => {
+          {FILTER_CATEGORIES.map((c) => {
             const on = filters.includes(c.key);
             const id = `${scopeId}-${c.key}`;
             return (

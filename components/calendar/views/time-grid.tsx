@@ -4,7 +4,7 @@ import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Mu
 import { useTranslations } from "next-intl";
 import { ChevronDown, Layers, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { MINUTE, dayKey, isSameDay, isWeekend, minutesOfDay } from "@/lib/calendar/dates";
+import { MINUTE, WEEK_START, dayKey, isSameDay, minutesOfDay } from "@/lib/calendar/dates";
 import { commonCategory, groupAllDay, groupPeekId } from "@/lib/calendar/grouping";
 import {
   MIN_BLOCK_MINUTES,
@@ -339,7 +339,6 @@ function AllDayRow({
           key={dayKey(d)}
           className={cn(
             "-my-1 border-s",
-            !single && isWeekend(d) && "cal-hatch",
             !single && isSameDay(d, new Date(now)) && "bg-muted/50",
           )}
           style={{ gridColumn: i + 2, gridRow: "1 / -1" }}
@@ -478,7 +477,7 @@ export function TimeGrid({
                       today ? "text-foreground" : "text-muted-foreground",
                     )}
                   >
-                    {names[(d.getDay() + 6) % 7]}
+                    {names[(d.getDay() - WEEK_START + 7) % 7]}
                   </span>
                   <span
                     className={cn(
@@ -486,7 +485,8 @@ export function TimeGrid({
                       today && "grid h-6 min-w-6 place-items-center rounded-full bg-primary px-1.5 text-primary-foreground",
                     )}
                   >
-                    {d.getDate()}
+                    {/* A week that runs into the next month names it on the 1st ("Dec 1"). */}
+                    {d.getDate() === 1 && days.length > 1 ? f.format(d, { month: "short", day: "numeric" }) : d.getDate()}
                   </span>
                 </button>
               );
@@ -520,7 +520,6 @@ export function TimeGrid({
               key={dayKey(d)}
               className={cn(
                 "cal-hours relative border-s",
-                days.length > 1 && isWeekend(d) && "cal-hatch",
                 today && days.length > 1 && "bg-muted/30",
               )}
             >

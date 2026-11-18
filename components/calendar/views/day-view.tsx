@@ -5,9 +5,11 @@ import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { dayKey, isSameDay } from "@/lib/calendar/dates";
 import { byDay } from "@/lib/calendar/layout";
+import { useCalendarStore } from "@/lib/store/calendar.store";
 import type { CalendarEvent } from "@/lib/calendar/types";
 import { useCalendarClock } from "../calendar-clock";
-import { AgendaRow, CalendarEmpty } from "../event-parts";
+import { EmptyState } from "../calendar-empty-state";
+import { AgendaRow } from "../event-parts";
 import { useCalendarFormat } from "../use-calendar-format";
 import { TimeGrid, type GridScroll } from "./time-grid";
 
@@ -29,7 +31,7 @@ function Schedule({ day, events }: { day: Date; events: CalendarEvent[] }) {
   const t = useTranslations("calendar");
   const now = useCalendarClock();
   if (!events.length) {
-    return <CalendarEmpty title={t("noEvents")} hint={t("noEventsHint")} compact />;
+    return <EmptyState compact title={t("empty.dayTitle")} hint={t("empty.dayHint")} />;
   }
   const allDay = events.filter((e) => e.allDay);
   const timed = events.filter((e) => !e.allDay);
@@ -78,11 +80,13 @@ export function DayView({
 }) {
   const t = useTranslations("calendar");
   const f = useCalendarFormat();
+  // The Schedule panel opens and closes from the toolbar (lg+, where it shows).
+  const panelOpen = useCalendarStore((s) => s.dayPanelOpen);
   const dayEvents = useMemo(() => byDay(events).get(dayKey(cursor)) ?? [], [events, cursor]);
 
   return (
     <div
-      className={cn("grid lg:grid-cols-[minmax(0,1fr)_19rem]", !compact && "h-full")}
+      className={cn("grid", panelOpen && "lg:grid-cols-[minmax(0,1fr)_19rem]", !compact && "h-full")}
       style={compact ? undefined : { gridTemplateRows: "minmax(0, 1fr)" }}
     >
       <TimeGrid
@@ -98,7 +102,7 @@ export function DayView({
         scroll={scroll}
         scrollMemory={scrollMemory}
       />
-      <aside className="hidden min-h-0 flex-col border-s lg:flex">
+      <aside className={cn("hidden min-h-0 flex-col border-s", panelOpen && "lg:flex")}>
         <div className="flex shrink-0 items-baseline justify-between border-b px-4 py-3">
           <h3 className="font-heading text-sm font-semibold">{t("schedule")}</h3>
           <span className="text-xs tabular-nums text-muted-foreground">{f.countLabel(dayEvents.length)}</span>

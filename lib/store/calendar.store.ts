@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { CATEGORY_KEYS, type CategoryKey } from "@/lib/calendar/types";
+import { CATEGORY_KEYS, allFiltersOn, type CategoryKey } from "@/lib/calendar/types";
 import { isStoreCode } from "@/lib/calendar/feed-types";
 
 /**
@@ -23,6 +23,10 @@ interface CalendarPrefsState {
    * the user picks other stores; picking exactly the dashboard store clears it.
    */
   storeCodes: string[] | null;
+  /** The mini calendar beside the main view (wide screens). Shown by default. */
+  railOpen: boolean;
+  /** The Day view's Schedule panel beside the hour grid (lg+). Shown by default. */
+  dayPanelOpen: boolean;
   /**
    * Bumped after every create/update/delete so each open view (page, topbar)
    * refetches. Not persisted.
@@ -30,6 +34,8 @@ interface CalendarPrefsState {
   revision: number;
 
   toggleCategory: (key: CategoryKey) => void;
+  toggleRail: () => void;
+  toggleDayPanel: () => void;
   onlyCategory: (key: CategoryKey) => void;
   showAll: () => void;
   hideAll: () => void;
@@ -38,19 +44,32 @@ interface CalendarPrefsState {
   bumpRevision: () => void;
 }
 
+/**
+ * "other" isn't offered as a filter (`FILTER_CATEGORY_KEYS`): it is on whenever every
+ * offered type is on, so "All" still shows the old events that carry it, and nobody
+ * can be left with them hidden and no checkbox to bring them back.
+ */
+function withOther(filters: CategoryKey[]): CategoryKey[] {
+  return allFiltersOn(filters) && !filters.includes("other") ? CATEGORY_KEYS.filter((k) => k === "other" || filters.includes(k)) : filters;
+}
+
 export const useCalendarStore = create<CalendarPrefsState>()(
   persist(
     (set) => ({
       filters: [...CATEGORY_KEYS],
       seenDay: null,
       storeCodes: null,
+      railOpen: true,
+      dayPanelOpen: true,
       revision: 0,
 
       toggleCategory: (key) =>
         set((s) => ({
-          filters: s.filters.includes(key)
-            ? s.filters.filter((k) => k !== key)
-            : CATEGORY_KEYS.filter((k) => k === key || s.filters.includes(k)),
+          filters: withOther(
+            s.filters.includes(key)
+              ? s.filters.filter((k) => k !== key)
+              : CATEGORY_KEYS.filter((k) => k === key || s.filters.includes(k)),
+          ),
         })),
       onlyCategory: (key) => set({ filters: [key] }),
       showAll: () => set({ filters: [...CATEGORY_KEYS] }),
@@ -58,17 +77,21 @@ export const useCalendarStore = create<CalendarPrefsState>()(
       markSeen: (day) => set({ seenDay: day }),
       setStoreCodes: (codes) => set({ storeCodes: codes && codes.length ? [...codes] : null }),
       bumpRevision: () => set((s) => ({ revision: s.revision + 1 })),
+      toggleRail: () => set((s) => ({ railOpen: !s.railOpen })),
+      toggleDayPanel: () => set((s) => ({ dayPanelOpen: !s.dayPanelOpen })),
     }),
     {
       name: "calendar-prefs",
       storage: createJSONStorage(() => localStorage),
       // v1 added the "other" category; v2 added the feed categories (dough,
       // data, inventory, tasks, reminders, sales); v3 replaced the "only this
-      // store" switch (`scope`) with the store selection (`storeCodes`).
+      // store" switch (`scope`) with the store selection (`storeCodes`); v4
+      // added the mini calendar's `railOpen` and the Day view's `dayPanelOpen`
+      // (missing = shown, see `merge`).
       // Someone who had every type on (the default) should see new categories
       // too, not have them silently filtered out. An old `scope: "all"` is
       // dropped: it only ever meant "load everything", not a chosen set.
-      version: 3,
+      version: 4,
       migrate: (persisted, version) => {
         const p = (persisted ?? {}) as Partial<CalendarPrefsState> & { scope?: unknown };
         const v0: CategoryKey[] = ["birthday", "cleaning", "shift", "milestone", "maintenance", "meeting"];
@@ -82,7 +105,13 @@ export const useCalendarStore = create<CalendarPrefsState>()(
         delete p.scope;
         return p as CalendarPrefsState;
       },
-      partialize: (s) => ({ filters: s.filters, seenDay: s.seenDay, storeCodes: s.storeCodes }),
+      partialize: (s) => ({
+        filters: s.filters,
+        seenDay: s.seenDay,
+        storeCodes: s.storeCodes,
+        railOpen: s.railOpen,
+        dayPanelOpen: s.dayPanelOpen,
+      }),
       // Drop category keys that no longer exist after a taxonomy change, and
       // anything in the saved store list that isn't a store number.
       merge: (persisted, current) => {
@@ -90,9 +119,12 @@ export const useCalendarStore = create<CalendarPrefsState>()(
         const codes = Array.isArray(p.storeCodes) ? p.storeCodes.filter(isStoreCode) : [];
         return {
           ...current,
-          filters: Array.isArray(p.filters) ? CATEGORY_KEYS.filter((k) => p.filters!.includes(k)) : current.filters,
+          // `withOther`: a saved "everything but Other" (Other used to be a checkbox) is plain "All" now.
+          filters: Array.isArray(p.filters) ? withOther(CATEGORY_KEYS.filter((k) => p.filters!.includes(k))) : current.filters,
           seenDay: typeof p.seenDay === "string" ? p.seenDay : current.seenDay,
           storeCodes: codes.length ? codes : null,
+          railOpen: typeof p.railOpen === "boolean" ? p.railOpen : current.railOpen,
+          dayPanelOpen: typeof p.dayPanelOpen === "boolean" ? p.dayPanelOpen : current.dayPanelOpen,
         };
       },
     },

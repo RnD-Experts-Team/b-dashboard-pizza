@@ -14,7 +14,7 @@ import {
   Wrench,
   type LucideIcon,
 } from "lucide-react";
-import { CATEGORY_KEYS, type CategoryKey } from "./types";
+import { CATEGORY_KEYS, FILTER_CATEGORY_KEYS, type CategoryKey } from "./types";
 
 /**
  * The event-category taxonomy — same idea as `components/dashboard-v1/category.ts`:
@@ -54,8 +54,11 @@ const BY_KEY = new Map<CategoryKey, CalendarCategory>(
   ).map((c) => [c.key, c]),
 );
 
-/** In `CATEGORY_KEYS` order (tabs, filter list). */
+/** In `CATEGORY_KEYS` order (the legacy event editor's type picker). */
 export const CALENDAR_CATEGORIES: readonly CalendarCategory[] = CATEGORY_KEYS.map((k) => BY_KEY.get(k)!);
+
+/** The types offered as filters — the type chips and the Filter list (no "other", see `FILTER_CATEGORY_KEYS`). */
+export const FILTER_CATEGORIES: readonly CalendarCategory[] = FILTER_CATEGORY_KEYS.map((k) => BY_KEY.get(k)!);
 
 export function categoryOf(key: CategoryKey): CalendarCategory {
   return BY_KEY.get(key) ?? BY_KEY.get("other")!;

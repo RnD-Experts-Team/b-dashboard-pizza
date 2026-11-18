@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { addDays, startOfMonth, startOfWeek, weekDays } from "@/lib/calendar/dates";
+import { fiscalWeekOf } from "@/lib/calendar/fiscal";
 import { dayIndex, isMultiDay, spanDays } from "@/lib/calendar/layout";
 import type { CalendarEvent, CalendarView } from "@/lib/calendar/types";
 
@@ -61,12 +62,24 @@ export function useCalendarFormat() {
       duration,
       title,
       hourLabel: (h: number) => time(new Date(2000, 0, 1, h)),
-      /** Weekday names in display order (week starts Monday). */
+      /** Weekday names in display order (the week starts on Tuesday, `WEEK_START`). */
       weekdayNames: (style: "narrow" | "short" | "long" = "short") => {
         const base = startOfWeek(new Date(2024, 0, 10));
         return Array.from({ length: 7 }, (_, i) => format(addDays(base, i), { weekday: style }));
       },
       monthName: (d: Date, style: "long" | "short" = "long") => format(d, { month: style }),
+      /** Little Caesars fiscal week of a day, short: "W47". */
+      fiscalWeekShort: (d: Date) => t("fiscal.weekShort", { week: fiscalWeekOf(d).week }),
+      /** "Week 47 · P12". */
+      fiscalBadge: (d: Date) => {
+        const w = fiscalWeekOf(d);
+        return t("fiscal.badge", { week: w.week, period: w.period });
+      },
+      /** "Week 47 · Period 12, week 3" (tooltips, screen readers). */
+      fiscalLabel: (d: Date) => {
+        const w = fiscalWeekOf(d);
+        return t("fiscal.label", { week: w.week, period: w.period, weekInPeriod: w.weekInPeriod });
+      },
       longDate: (d: Date) => format(d, { weekday: "long", month: "long", day: "numeric", year: "numeric" }),
       shortDate: (d: Date) => format(d, { weekday: "short", month: "short", day: "numeric" }),
       countLabel: (n: number) => t("eventCount", { n }),

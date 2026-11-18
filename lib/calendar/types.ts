@@ -34,6 +34,19 @@ export const CATEGORY_KEYS = [
 ] as const;
 export type CategoryKey = (typeof CATEGORY_KEYS)[number];
 
+/**
+ * The types offered as filters (the type chips and the Filter list): every type
+ * but "other". No feed and no Toolbox write makes an "other" event — only the old
+ * events people created in this browser (`source: "user"`) can carry it — so as a
+ * chip it only ever said 0 (user-requested removal, 2026-11-18). Those events
+ * still show under "All": the store keeps "other" on whenever every offered type
+ * is on (`withOther` in `calendar.store.ts`).
+ */
+export const FILTER_CATEGORY_KEYS: readonly CategoryKey[] = CATEGORY_KEYS.filter((k) => k !== "other");
+
+/** Every offered type is on — what "All" means now that "other" isn't offered. */
+export const allFiltersOn = (filters: readonly CategoryKey[]): boolean => FILTER_CATEGORY_KEYS.every((k) => filters.includes(k));
+
 /** The feed's unified statuses (computed by each source, never here). */
 export const EVENT_STATUSES = [
   "scheduled",

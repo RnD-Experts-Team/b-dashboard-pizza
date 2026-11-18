@@ -3647,7 +3647,9 @@
       "next": "Next",
       "pickDate": "Pick a date",
       "prevMonth": "Previous month",
-      "nextMonth": "Next month"
+      "nextMonth": "Next month",
+      "showSchedule": "Show schedule",
+      "hideSchedule": "Hide schedule"
     },
     "tabs": {
       "label": "Event type",
@@ -3714,13 +3716,40 @@
       "backToList": "Back to list"
     },
     "eventCount": "{n, plural, =0 {No events} one {1 event} other {# events}}",
-    "noEvents": "No events",
-    "noEventsHint": "Nothing is scheduled for this day, or it is hidden by a filter.",
-    "emptyRange": "Nothing scheduled",
-    "emptyRangeHint": "No events in this range match your filters. Try another date or show more event types.",
+    "empty": {
+      "dayTitle": "Nothing on this day",
+      "dayHint": "Nothing is planned, or a filter hides it.",
+      "clearDay": "A clear day",
+      "clearDayHint": "Nothing is planned for {date}.",
+      "clearWeek": "A clear week",
+      "clearWeekHint": "Nothing is planned for Week {week}, {range}.",
+      "quietMonth": "A quiet month",
+      "quietMonthHint": "Nothing is planned in {month}.",
+      "hidden": "{n, plural, one {# event is hidden} other {# events are hidden}}",
+      "hiddenHint": "Your event-type filters hide everything in this range.",
+      "noMatches": "No matches for “{q}”",
+      "noMatchesHint": "Nothing in this range matches. Try another word.",
+      "showAll": "Show all types",
+      "clearSearch": "Clear search",
+      "seeWeek": "See the week",
+      "seeMonth": "See the month",
+      "tip": "Tip: press <kbd>N</kbd> to add an event."
+    },
     "schedule": "Schedule",
-    "agenda": {
-      "label": "Day details"
+    "rail": {
+      "label": "Mini calendar",
+      "show": "Show mini calendar",
+      "hide": "Hide mini calendar",
+      "period": "Period {period}",
+      "fiscalYear": "FY {year}",
+      "weekOf": "Week {n} of {total} in this period",
+      "goWeek": "Go to week {week}"
+    },
+    "fiscal": {
+      "weekShort": "W{week}",
+      "periodShort": "P{period}",
+      "badge": "Week {week} · P{period}",
+      "label": "Week {week} · Period {period}, week {weekInPeriod}"
     },
     "signs": {
       "reminder": "Reminder set",
@@ -3744,6 +3773,8 @@
     },
     "pop": {
       "openDay": "Open day",
+      "close": "Close",
+      "filterDay": "Filter this day",
       "turns": "Turns {n}",
       "years": "{n, plural, one {1 year with the team} other {# years with the team}}",
       "days": "{n} days"
@@ -4037,8 +4068,10 @@
       "moreStores": "{n, plural, one {+# more store} other {+# more stores}}",
       "note": "Filters and search apply in Day, Week and Month.",
       "overdueCount": "{n} overdue or missed",
+      "fromDay": "left from {date}",
+      "leftFrom": "{n} overdue or missed, left from {date}",
       "legend": {
-        "title": "Shaded by overdue or missed work, compared with the rest of the year",
+        "title": "Shaded by what the day before left overdue or missed, compared with the rest of the year",
         "none": "Nothing overdue or missed this year",
         "less": "Less",
         "more": "More"

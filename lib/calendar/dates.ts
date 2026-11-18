@@ -16,10 +16,12 @@ import type { CalendarView, DateRange } from "./types";
  * Pure calendar date math. No React, no Intl — formatting lives in
  * `components/calendar/use-calendar-format.ts` because it follows the locale.
  *
- * First day of the week: 1 = Monday. (The scheduling grid starts on Tuesday —
- * that is a payroll week, not a calendar week.)
+ * First day of the week: 2 = Tuesday. The stores run a Tuesday–Monday business
+ * week with no days off, so the calendar uses that week everywhere (the rows of
+ * the Month view, the Week view, the mini months), and no day is shaded as a
+ * weekend. Week numbers follow the Little Caesars fiscal calendar (`fiscal.ts`).
  */
-export const WEEK_START = 1 as const;
+export const WEEK_START = 2 as const;
 export const MINUTE = 60_000;
 export const DAY = 86_400_000;
 
@@ -48,11 +50,6 @@ export function isDayKey(value: string | null | undefined): value is string {
 
 export function isToday(d: Date): boolean {
   return isSameDay(d, new Date());
-}
-
-export function isWeekend(d: Date): boolean {
-  const day = d.getDay();
-  return day === 0 || day === 6;
 }
 
 export function minutesOfDay(d: Date): number {

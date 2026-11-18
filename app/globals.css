@@ -45,6 +45,25 @@
    so a Tailwind utility (layered) could never hide the bar. */
 .cal-no-scrollbar { scrollbar-width: none; }
 .cal-no-scrollbar::-webkit-scrollbar { display: none; }
+/* The calendar's scrollers get the hairline (3px) bars of the `*::-webkit-scrollbar`
+   rules below. The global `*` rule also sets the standard `scrollbar-width: thin`,
+   and once that is set Chromium ignores the ::-webkit-scrollbar rules and draws its
+   own, wider "thin" bar — so inside the calendar the standard properties go back to
+   `auto`. Firefox has no ::-webkit-scrollbar, so it gets `thin` back (its narrowest
+   bar) through a Firefox-only feature test. (`@supports selector(::-webkit-scrollbar)`
+   would read better, but the CSS build drops it.) Unlayered, like the global rule. */
+.cal-scroll,
+.cal-scroll * {
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+@supports (-moz-appearance: none) {
+  .cal-scroll,
+  .cal-scroll * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+}
 /* Generic twin of the above for non-calendar scrollers (e.g. the notification
    panel's filter chips). */
 .no-scrollbar { scrollbar-width: none; }

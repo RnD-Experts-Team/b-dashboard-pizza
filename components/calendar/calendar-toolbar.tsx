@@ -3,7 +3,17 @@
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowLeft, ArrowRight, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -12,6 +22,7 @@ import { addDays, addMonths, isSameDay, monthGrid42, rangeContains, startOfMonth
 import { byDay } from "@/lib/calendar/layout";
 import { CALENDAR_VIEWS, type CalendarEvent, type CalendarView } from "@/lib/calendar/types";
 import { useCalendarEvents } from "@/lib/hooks/use-calendar-events";
+import { useCalendarStore } from "@/lib/store/calendar.store";
 import { useCalendarClock } from "./calendar-clock";
 import { MiniMonth } from "./mini-month";
 import { useCalendarFormat } from "./use-calendar-format";
@@ -85,7 +96,7 @@ function DatePickerBody({
   const highlight = view === "day" || view === "week" ? (d: Date) => rangeContains(open, d) : undefined;
 
   return (
-    <div className="w-68 p-3">
+    <div className="w-74 p-3">
       <div className="mb-1 flex items-center justify-between ps-2">
         <h3 className="font-heading text-sm font-semibold">{f.format(month, { month: "long", year: "numeric" })}</h3>
         <div className="flex">
@@ -97,7 +108,7 @@ function DatePickerBody({
           </Button>
         </div>
       </div>
-      <MiniMonth month={month} grouped={grouped} onPick={onPick} highlight={highlight} />
+      <MiniMonth month={month} grouped={grouped} onPick={onPick} highlight={highlight} weekNumbers />
     </div>
   );
 }
@@ -111,6 +122,8 @@ export function CalendarToolbar({
   onToday,
   onView,
   onPick,
+  railOpen,
+  onToggleRail,
 }: {
   view: CalendarView;
   cursor: Date;
@@ -119,16 +132,40 @@ export function CalendarToolbar({
   onToday: () => void;
   onView: (v: CalendarView) => void;
   onPick: (key: string) => void;
+  /** The mini calendar beside the card (shown once the page is wide enough). */
+  railOpen: boolean;
+  onToggleRail: () => void;
 }) {
   const t = useTranslations("calendar.toolbar");
+  const tRail = useTranslations("calendar.rail");
   const f = useCalendarFormat();
   const now = useCalendarClock();
   const [pickerOpen, setPickerOpen] = useState(false);
   // Already on today → the button has nothing to do.
   const isOnToday = isSameDay(cursor, new Date(now));
+  const railLabel = railOpen ? tRail("hide") : tRail("show");
+  const dayPanelOpen = useCalendarStore((s) => s.dayPanelOpen);
+  const toggleDayPanel = useCalendarStore((s) => s.toggleDayPanel);
+  const schedLabel = dayPanelOpen ? t("hideSchedule") : t("showSchedule");
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-3 py-2.5 sm:px-4">
+      {/* Only where the mini calendar can show (the page's width, see calendar-page). */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={railLabel}
+            aria-pressed={railOpen}
+            onClick={onToggleRail}
+            className="-me-1.5 hidden text-muted-foreground @[60rem]/calpage:inline-flex"
+          >
+            {railOpen ? <PanelLeftClose className="size-4 rtl:-scale-x-100" /> : <PanelLeftOpen className="size-4 rtl:-scale-x-100" />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{railLabel}</TooltipContent>
+      </Tooltip>
       <div className="flex items-center gap-1">
         <Tooltip>
           <TooltipTrigger asChild>
@@ -150,6 +187,16 @@ export function CalendarToolbar({
       <h2 aria-live="polite" className="min-w-0 truncate font-heading text-lg font-semibold tracking-tight">
         {f.titleLabel(view, cursor)}
       </h2>
+      {/* Day and Week: which Little Caesars week this is (Month rows carry their own numbers). */}
+      {(view === "day" || view === "week") && (
+        <span
+          title={f.fiscalLabel(cursor)}
+          className="inline-flex h-6 shrink-0 items-center rounded-md border px-1.5 text-[11px] font-medium tabular-nums text-muted-foreground"
+        >
+          <span aria-hidden>{f.fiscalBadge(cursor)}</span>
+          <span className="sr-only">{f.fiscalLabel(cursor)}</span>
+        </span>
+      )}
       <Button variant="outline" size="sm" onClick={onToday} disabled={isOnToday}>
         {t("today")}
       </Button>
@@ -174,6 +221,24 @@ export function CalendarToolbar({
             />
           </PopoverContent>
         </Popover>
+        {/* Day view: open / close the Schedule panel beside the hour grid (lg+, where it shows). */}
+        {view === "day" && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={schedLabel}
+                aria-pressed={dayPanelOpen}
+                onClick={toggleDayPanel}
+                className="hidden text-muted-foreground lg:inline-flex"
+              >
+                {dayPanelOpen ? <PanelRightClose className="size-4 rtl:-scale-x-100" /> : <PanelRightOpen className="size-4 rtl:-scale-x-100" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{schedLabel}</TooltipContent>
+          </Tooltip>
+        )}
       </div>
     </div>
   );
