@@ -222,6 +222,24 @@ when present.
 Detail sheet: lines (each with its own files and notes), links, attachments,
 notes, revisions, Edit, Mark as mistake.
 
+**Refunds** (money that came back: a return, a cancelled order, an
+overcharge). The detail sheet's **Record a refund** (shown when the user may
+`POST /payments/*/refunds` and a line still has something to refund) opens a
+dialog: Came back on (date, not before the payment, not in the future) · How
+it came back (the payment methods list) · one amount per line, "up to X can
+come back", with **All of it** to fill every line · Why (required) · the total
+coming back. The refund is its own record, dated when the money came back,
+and every total nets it (the list's Total, supplier totals, analytics, ticket
+costs). In the list a refund is its own row with a negative total and a
+"Refund of #N" badge in words; a payment with refunds shows "$X came back"
+under its total. The payment's sheet shows Refunded and Cost in the end, a
+Refunds list (each opens the refund; undone ones dashed with the reason) and
+"$X came back" on each refunded line. While a payment has refunds, Edit and
+Mark as mistake are replaced by "undo them before editing it". A refund's
+sheet ("Refund #N") names the payment it refunds and offers only **Undo
+refund** (the mark-as-mistake dialog, worded for a refund); an undone refund
+is hidden from the list like a mistake.
+
 ## 6. Storage `/dashboard/storage`
 
 Every movement dialog (and "Use parts" on a ticket) has an optional **Who
