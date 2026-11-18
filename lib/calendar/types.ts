@@ -60,6 +60,14 @@ export const EVENT_STATUSES = [
 ] as const;
 export type EventStatus = (typeof EVENT_STATUSES)[number];
 
+/**
+ * Cancelled. Toolbox keeps a cancelled task in the feed on its day (status
+ * "cancelled"), so it would sit in every list; the Calendar page hides these
+ * unless "Show cancelled" is on (`showCancelled` in `calendar.store.ts`), and the
+ * topbar's Today panel always hides them (user-requested 2026-11-18).
+ */
+export const isCancelled = (ev: { status?: EventStatus }): boolean => ev.status === "cancelled";
+
 /** The three statuses the mock cleaning tasks use. */
 export type CleaningStatus = Extract<EventStatus, "pending" | "done" | "overdue">;
 

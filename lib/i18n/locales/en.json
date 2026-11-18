@@ -3670,7 +3670,8 @@
       "title": "Event types",
       "showAll": "Show all",
       "hideAll": "Hide all",
-      "only": "Only"
+      "only": "Only",
+      "showCancelled": "Show cancelled"
     },
     "categories": {
       "birthday": "Birthdays",

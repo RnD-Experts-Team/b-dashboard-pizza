@@ -3669,7 +3669,8 @@
       "title": "أنواع الأحداث",
       "showAll": "إظهار الكل",
       "hideAll": "إخفاء الكل",
-      "only": "فقط"
+      "only": "فقط",
+      "showCancelled": "إظهار الملغاة"
     },
     "categories": {
       "birthday": "أعياد الميلاد",

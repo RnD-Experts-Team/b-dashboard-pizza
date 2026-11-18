@@ -15,7 +15,7 @@ import { shiftAttentionToNextDay } from "@/lib/calendar/day-counts";
 import { isHeavyMonth } from "@/lib/calendar/feed-plan";
 import { parseGroupPeekId } from "@/lib/calendar/grouping";
 import { byDay, countByCategory } from "@/lib/calendar/layout";
-import { CALENDAR_VIEWS, type CalendarEvent, type CalendarView } from "@/lib/calendar/types";
+import { CALENDAR_VIEWS, isCancelled, type CalendarEvent, type CalendarView } from "@/lib/calendar/types";
 import { useCalendarStore } from "@/lib/store/calendar.store";
 import {
   useCalendarEvents,
@@ -216,6 +216,7 @@ function CalendarPageInner({ now }: { now: number }) {
   }, [year.days, range]);
   const filters = useCalendarStore((s) => s.filters);
   const showAllTypes = useCalendarStore((s) => s.showAll);
+  const showCancelled = useCalendarStore((s) => s.showCancelled);
   const railOpen = useCalendarStore((s) => s.railOpen);
   const toggleRail = useCalendarStore((s) => s.toggleRail);
   // Several stores on screen: chips lead with their store name (store-label.tsx).
@@ -233,7 +234,11 @@ function CalendarPageInner({ now }: { now: number }) {
 
   // viewAll: search applied, categories NOT (feeds the counts).
   // viewEvents: both applied (what the view draws).
-  const viewAll = useMemo(() => events.filter((e) => matches(e, query)), [events, matches, query]);
+  // Cancelled items are left out first (unless "Show cancelled" is on), so every view, the day
+  // dialog and the type counts agree; the Filter popover says how many are hidden.
+  const searched = useMemo(() => events.filter((e) => matches(e, query)), [events, matches, query]);
+  const cancelledCount = useMemo(() => searched.filter(isCancelled).length, [searched]);
+  const viewAll = useMemo(() => (showCancelled ? searched : searched.filter((e) => !isCancelled(e))), [searched, showCancelled]);
   const viewEvents = useMemo(() => viewAll.filter((e) => filters.includes(e.category)), [viewAll, filters]);
   const counts = useMemo(() => countByCategory(viewAll), [viewAll]);
   const categoryFilter = useCallback((list: CalendarEvent[]) => list.filter((e) => filters.includes(e.category)), [filters]);
@@ -521,7 +526,7 @@ function CalendarPageInner({ now }: { now: number }) {
               )}
             </label>
             <StorePicker />
-            <FilterPopover counts={counts} disabled={isYear} />
+            <FilterPopover counts={counts} cancelled={cancelledCount} disabled={isYear} />
           </div>
         </div>
 

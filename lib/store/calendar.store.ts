@@ -27,6 +27,8 @@ interface CalendarPrefsState {
   railOpen: boolean;
   /** The Day view's Schedule panel beside the hour grid (lg+). Shown by default. */
   dayPanelOpen: boolean;
+  /** Cancelled events and tasks are hidden unless this is on (the Filter popover's last row). */
+  showCancelled: boolean;
   /**
    * Bumped after every create/update/delete so each open view (page, topbar)
    * refetches. Not persisted.
@@ -36,6 +38,7 @@ interface CalendarPrefsState {
   toggleCategory: (key: CategoryKey) => void;
   toggleRail: () => void;
   toggleDayPanel: () => void;
+  toggleCancelled: () => void;
   onlyCategory: (key: CategoryKey) => void;
   showAll: () => void;
   hideAll: () => void;
@@ -61,6 +64,7 @@ export const useCalendarStore = create<CalendarPrefsState>()(
       storeCodes: null,
       railOpen: true,
       dayPanelOpen: true,
+      showCancelled: false,
       revision: 0,
 
       toggleCategory: (key) =>
@@ -79,6 +83,7 @@ export const useCalendarStore = create<CalendarPrefsState>()(
       bumpRevision: () => set((s) => ({ revision: s.revision + 1 })),
       toggleRail: () => set((s) => ({ railOpen: !s.railOpen })),
       toggleDayPanel: () => set((s) => ({ dayPanelOpen: !s.dayPanelOpen })),
+      toggleCancelled: () => set((s) => ({ showCancelled: !s.showCancelled })),
     }),
     {
       name: "calendar-prefs",
@@ -111,6 +116,7 @@ export const useCalendarStore = create<CalendarPrefsState>()(
         storeCodes: s.storeCodes,
         railOpen: s.railOpen,
         dayPanelOpen: s.dayPanelOpen,
+        showCancelled: s.showCancelled,
       }),
       // Drop category keys that no longer exist after a taxonomy change, and
       // anything in the saved store list that isn't a store number.
@@ -125,6 +131,7 @@ export const useCalendarStore = create<CalendarPrefsState>()(
           storeCodes: codes.length ? codes : null,
           railOpen: typeof p.railOpen === "boolean" ? p.railOpen : current.railOpen,
           dayPanelOpen: typeof p.dayPanelOpen === "boolean" ? p.dayPanelOpen : current.dayPanelOpen,
+          showCancelled: typeof p.showCancelled === "boolean" ? p.showCancelled : current.showCancelled,
         };
       },
     },

@@ -232,12 +232,24 @@ export function CategoryTabs({
   );
 }
 
-/** Filter popover: combine several event types, or pick "Only" one. (Stores: `StorePicker`.) */
-export function FilterPopover({ counts, disabled = false }: { counts: Record<CategoryKey, number>; disabled?: boolean }) {
+/**
+ * Filter popover: combine several event types, or pick "Only" one; its last row
+ * brings back the cancelled items the page hides by default. (Stores: `StorePicker`.)
+ */
+export function FilterPopover({
+  counts,
+  cancelled,
+  disabled = false,
+}: {
+  counts: Record<CategoryKey, number>;
+  /** Cancelled items in the visible range (search applied), hidden or not. */
+  cancelled: number;
+  disabled?: boolean;
+}) {
   const t = useTranslations("calendar.filter");
   const tc = useTranslations("calendar.categories");
   const scopeId = useId();
-  const { filters, toggleCategory, onlyCategory, showAll, hideAll } = useCalendarStore();
+  const { filters, toggleCategory, onlyCategory, showAll, hideAll, showCancelled, toggleCancelled } = useCalendarStore();
   const all = allFiltersOn(filters);
   const offeredOn = filters.filter((k) => FILTER_CATEGORY_KEYS.includes(k)).length;
 
@@ -296,6 +308,16 @@ export function FilterPopover({ counts, disabled = false }: { counts: Record<Cat
               </div>
             );
           })}
+        </div>
+        {/* Not a type: whether cancelled events and tasks (hidden by default) are listed at all. */}
+        <div className="mt-1 border-t pt-1">
+          <div className="flex items-center gap-3 rounded-md px-2 py-1.5 transition-colors duration-150 hover:bg-accent/50">
+            <Checkbox id={`${scopeId}-cancelled`} checked={showCancelled} onCheckedChange={toggleCancelled} className="rounded-sm" />
+            <label htmlFor={`${scopeId}-cancelled`} className="min-w-0 flex-1 cursor-pointer truncate text-sm">
+              {t("showCancelled")}
+            </label>
+            <span className="text-xs tabular-nums text-muted-foreground">{cancelled}</span>
+          </div>
         </div>
       </PopoverContent>
     </Popover>

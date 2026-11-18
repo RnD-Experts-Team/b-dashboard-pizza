@@ -9,7 +9,7 @@ import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { addDays, dayKey, startOfDay } from "@/lib/calendar/dates";
 import { isStoreCode, type FeedSource } from "@/lib/calendar/feed-types";
 import { mergeReminderTargets, reminderTargets, type ReminderRef } from "@/lib/calendar/toolbox-write";
-import type { CalendarEvent, CalendarEventInput, CalendarStoreRef, DateRange } from "@/lib/calendar/types";
+import { isCancelled, type CalendarEvent, type CalendarEventInput, type CalendarStoreRef, type DateRange } from "@/lib/calendar/types";
 
 /** Show the skeleton only when data is slower than this (no flash on fast loads). */
 const SKELETON_DELAY_MS = 150;
@@ -272,7 +272,9 @@ export function useTodayEvents(): { events: CalendarEvent[]; todayKey: string | 
   }, [todayKey]);
   // Nothing to ask until the clock is known (the placeholder range is 1970).
   const { events } = useCalendarEvents(range, { enabled: todayKey != null, source: "dashboard" });
-  return { events: todayKey ? events : [], todayKey, now };
+  // A cancelled task stays in the feed on its day; the Today panel never lists it.
+  const live = useMemo(() => events.filter((e) => !isCancelled(e)), [events]);
+  return { events: todayKey ? live : [], todayKey, now };
 }
 
 /**
