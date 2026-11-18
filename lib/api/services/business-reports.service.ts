@@ -1,8 +1,10 @@
 import axios from "axios";
+import { maintenanceAnalyticsService } from "@/lib/api/services/maintenance-analytics.service";
 import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
 import { schedulingService } from "@/lib/api/services/scheduling.service";
 import { daysToInstants } from "@/lib/maintenance-tickets/local-range";
 import type { AnalyticsSummary } from "@/types/maintenance-analytics.types";
+import type { MaintenanceFinances } from "@/types/maintenance-system";
 import type { StoreSkillsOverview } from "@/types/skills.types";
 import type { SalesHistory } from "@/types/dashboard-report.types";
 import type {
@@ -197,6 +199,13 @@ export const businessReportsService = {
     const range = daysToInstants(params.startDate, params.endDate);
     if (!range) throw new Error("Invalid date range.");
     return limited(() => maintenanceTicketsService.getAnalyticsSummary({ stores: params.stores, ...range }, signal));
+  },
+
+  /** Maintenance costs and payments for the range (business dates, both included). */
+  getMaintenanceCosts(params: BusinessReportsParams, signal?: AbortSignal): Promise<MaintenanceFinances> {
+    return limited(() =>
+      maintenanceAnalyticsService.getFinances({ from: params.startDate, to: params.endDate, stores: params.stores }, signal),
+    );
   },
 
   /** Skills and their coverage by employees (Operations) for every loaded store, in one call. */

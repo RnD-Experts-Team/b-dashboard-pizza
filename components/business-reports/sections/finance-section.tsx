@@ -7,18 +7,21 @@ import { useReport, useSection } from "@/components/business-reports/report-cont
 import { BrCashControlCard } from "@/components/business-reports/cards/finance/br-cash-control";
 import { BrTransfersCard } from "@/components/business-reports/cards/finance/br-transfers";
 import { BrMoneyOwedCard } from "@/components/business-reports/cards/finance/br-money-owed";
+import { BrMaintenanceCostsCard } from "@/components/business-reports/cards/finance/br-maintenance-costs";
 
 const HALF: V1Span = 2;
 const CASH_SPANS: V1Span[] = [1];
 const TRANSFER_SPANS: V1Span[] = [1];
 const MONEY_OWED_SPANS: V1Span[] = [HALF];
+const MAINTENANCE_SPANS: V1Span[] = [HALF];
 
-/** Finance & Cash over the range: cash control (sales), transfers (operations), money owed (hooks). */
+/** Finance & Cash over the range: cash control (sales), transfers (operations), money owed (hooks), maintenance costs. */
 export function FinanceSection() {
   const { rangeLabel } = useReport();
   const sales = useSection("sales");
   const operations = useSection("operations");
   const feedback = useSection("feedback");
+  const maintenanceCosts = useSection("maintenanceCosts");
 
   return (
     <V1Section category="finance" weekLabel={rangeLabel} gridClassName="gap-[7px]">
@@ -30,6 +33,9 @@ export function FinanceSection() {
       </SectionSlot>
       <SectionSlot state={feedback} spans={MONEY_OWED_SPANS} label="Money owed">
         {(data) => <BrMoneyOwedCard data={data} />}
+      </SectionSlot>
+      <SectionSlot state={maintenanceCosts} spans={MAINTENANCE_SPANS} label="Maintenance costs">
+        {(data) => <BrMaintenanceCostsCard data={data} />}
       </SectionSlot>
     </V1Section>
   );
