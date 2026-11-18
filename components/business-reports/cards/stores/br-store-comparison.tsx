@@ -22,13 +22,14 @@ import type { OperationsMetrics, SalesMetrics, SalesSection } from "@/types/busi
  *  Store Comparison — one row per loaded store with the range's headline
  *  figures side by side. Sales drives it; operations (Blue Line / Pepsi %
  *  of sales, portal / HnR) and the
- *  store score fill in when those sections land. Labor % is the final labor:
+ *  store score and maintenance costs fill in when those sections land. Labor % is the final labor:
  *  payroll ÷ royalty obligation over the store's weeks with payroll. A row
  *  focuses that store.
  * ────────────────────────────────────────────────────────────────────────── */
 
 const CARD_HEIGHT = 460;
 const PENDING = "…";
+const PERCENT = 100;
 
 interface Row {
   store: string;
@@ -38,6 +39,8 @@ interface Row {
   score: number | null;
   scoreLabel: string | null;
   labor: { value: number | null; isFinal: boolean };
+  /** Maintenance spent at the store over the range (payments, refunds netted). */
+  maintenance: number | null;
 }
 
 /** A sales figure, or null when the store had no sales rows in the range. */
@@ -55,9 +58,17 @@ export function BrStoreComparison({ data }: { data: SalesSection }) {
   const { params, storeName, focusStore } = useReport();
   const operations = useSection("operations");
   const storeScore = useSection("storeScore");
+  const maintenanceCosts = useSection("maintenanceCosts");
   const final = useFinalLabor();
   const opsByStore = operations.data?.by_store;
   const scoreByStore = storeScore.data?.by_store;
+  const maintenanceByStore = useMemo(() => {
+    const byStore = maintenanceCosts.data?.byStore;
+    if (!byStore) return null;
+    return new Map(
+      byStore.filter((s) => s.storeNumber).map((s) => [s.storeNumber as string, Number(s.amount) || 0]),
+    );
+  }, [maintenanceCosts.data]);
   const multiStore = params.stores.length > 1;
 
   const rows = useMemo<Row[]>(() => {
@@ -74,12 +85,19 @@ export function BrStoreComparison({ data }: { data: SalesSection }) {
       score: scoreByStore?.[store]?.average_score ?? null,
       scoreLabel: scoreByStore?.[store]?.average_label ?? null,
       labor: laborValue(final?.byStore.get(store)),
+      // A loaded store with no payments spent nothing.
+      maintenance: maintenanceByStore ? (maintenanceByStore.get(store) ?? 0) : null,
       };
     });
-  }, [params.stores, data.by_store, opsByStore, scoreByStore, final]);
+  }, [params.stores, data.by_store, opsByStore, scoreByStore, final, maintenanceByStore]);
 
   const columns = useMemo<PagedColumn<Row>[]>(() => {
     const opsPending = (r: Row) => (operations.loading && !r.ops ? PENDING : DASH);
+    const maintenancePending = maintenanceCosts.loading ? PENDING : DASH;
+    const maintenanceShare = (r: Row) => {
+      const sales = salesValue(r, (m) => m.sales);
+      return r.maintenance === null || !sales ? null : (r.maintenance / sales) * PERCENT;
+    };
     const show = (v: number | null, f: (n: number) => string, fallback: string = DASH) => (v === null ? fallback : f(v));
     const all: PagedColumn<Row>[] = [
       {
@@ -176,6 +194,20 @@ export function BrStoreComparison({ data }: { data: SalesSection }) {
         sortValue: (r) => salesValue(r, (m) => m.waste_normal + m.waste_alta),
       },
       {
+        key: "maintenance",
+        header: "Maintenance",
+        numeric: true,
+        render: (r) => show(r.maintenance, fmt$2, maintenancePending),
+        sortValue: (r) => r.maintenance,
+      },
+      {
+        key: "maintenance_pct",
+        header: "Maint. % Sales",
+        numeric: true,
+        render: (r) => show(maintenanceShare(r), fmtPct, maintenancePending),
+        sortValue: (r) => maintenanceShare(r),
+      },
+      {
         key: "score",
         header: "Score",
         numeric: true,
@@ -190,7 +222,7 @@ export function BrStoreComparison({ data }: { data: SalesSection }) {
     ];
     // The Score column only when store scores were loaded.
     return params.withStoreScore ? all : all.filter((c) => c.key !== "score");
-  }, [storeName, operations.loading, storeScore.loading, params.withStoreScore]);
+  }, [storeName, operations.loading, storeScore.loading, maintenanceCosts.loading, params.withStoreScore]);
 
   return (
     <V1Card
