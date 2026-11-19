@@ -2341,6 +2341,46 @@
       "statusSaved": "saved",
       "statusOpen": "open",
       "statusWaiting": "waiting"
+    },
+    "mine": {
+      "chipLabel": "Today",
+      "chipAria": "Your Screen Project time today. {status}. Present {present}, talking {talking}. Open details",
+      "title": "Your time today",
+      "since": "since {time}",
+      "live": "Live",
+      "now": {
+        "visible": "You're counted as present",
+        "no_face": "Not counted: no face in front of the camera",
+        "covered": "Not counted: your camera is covered",
+        "off": "Not counted: your camera is off",
+        "notConnected": "Not connected to a station: nothing is counted"
+      },
+      "nowShort": {
+        "visible": "Present",
+        "no_face": "No face",
+        "covered": "Covered",
+        "off": "Camera off"
+      },
+      "nowMic": {
+        "talking": "Talking",
+        "open": "Mic open",
+        "dead": "No sound",
+        "off": "Mic off"
+      },
+      "present": "Present",
+      "noFace": "No face",
+      "covered": "Covered",
+      "cameraOff": "Camera off",
+      "talking": "Talking",
+      "silent": "Silent",
+      "deadMic": "Dead mic",
+      "micOff": "Mic off",
+      "ofConnected": "of {connected} connected",
+      "savedAt": "Saved {time}",
+      "savedNotYet": "Not saved yet",
+      "nextSave": "next save in {in}",
+      "savedFailed": "Today's saved time couldn't be loaded, so this shows this visit only.",
+      "sameAsReport": "Counted the same way as the monitoring report."
     }
   },
   "cleaningChart": {

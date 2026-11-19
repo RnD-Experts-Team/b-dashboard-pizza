@@ -167,3 +167,21 @@ export interface BootsOnTheGround {
   /** Every standard station of the stores, watched or not. */
   stations: { station_id: number; name: string; store: string | null }[];
 }
+
+/* ── The signed-in person's own segments (GET /usage/mine) — the live "Today" view ── */
+
+export interface MyUsageSegment {
+  id: string;
+  kind: UsageKind;
+  state: UsageState;
+  surface: UsageSurface;
+  started_at: string;
+  ended_at: string;
+  talking_seconds: number;
+}
+
+export interface MyUsage {
+  /** Server clock in ms when the answer was built — lines this browser's unsent segments up with the saved ones. */
+  now: number;
+  segments: MyUsageSegment[];
+}

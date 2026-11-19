@@ -2340,6 +2340,46 @@
       "statusSaved": "محفوظ",
       "statusOpen": "مفتوح",
       "statusWaiting": "منتظر"
+    },
+    "mine": {
+      "chipLabel": "اليوم",
+      "chipAria": "وقتك في Screen Project اليوم. {status}. حاضر {present}، تحدث {talking}. افتح التفاصيل",
+      "title": "وقتك اليوم",
+      "since": "منذ {time}",
+      "live": "مباشر",
+      "now": {
+        "visible": "أنت محسوب حاضراً",
+        "no_face": "غير محسوب: لا يوجد وجه أمام الكاميرا",
+        "covered": "غير محسوب: الكاميرا مغطاة",
+        "off": "غير محسوب: الكاميرا مطفأة",
+        "notConnected": "غير متصل بأي شاشة: لا يُحسب شيء"
+      },
+      "nowShort": {
+        "visible": "حاضر",
+        "no_face": "لا وجه",
+        "covered": "مغطاة",
+        "off": "الكاميرا مطفأة"
+      },
+      "nowMic": {
+        "talking": "يتحدث",
+        "open": "الميكروفون مفتوح",
+        "dead": "لا صوت",
+        "off": "الميكروفون مغلق"
+      },
+      "present": "حاضر",
+      "noFace": "لا وجه",
+      "covered": "مغطاة",
+      "cameraOff": "الكاميرا مطفأة",
+      "talking": "تحدث",
+      "silent": "صامت",
+      "deadMic": "ميكروفون بلا صوت",
+      "micOff": "الميكروفون مغلق",
+      "ofConnected": "من {connected} اتصال",
+      "savedAt": "حُفظ {time}",
+      "savedNotYet": "لم يُحفظ بعد",
+      "nextSave": "الحفظ التالي بعد {in}",
+      "savedFailed": "تعذر تحميل الوقت المحفوظ لليوم، لذلك يظهر وقت هذه الزيارة فقط.",
+      "sameAsReport": "يُحسب بنفس طريقة تقرير المراقبة."
     }
   },
   "cleaningChart": {
