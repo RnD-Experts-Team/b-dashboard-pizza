@@ -18,10 +18,12 @@ const SECTIONS: Record<string, string[]> = {
   timeline: ["stores[]", "user_id", "from", "to"],
   // The store dashboards' slice (DSPR V1, Business Reports), under their report permission.
   "boots-on-the-ground": ["stores[]", "from", "to", "tz"],
+  // The signed-in person's own segments (the live "Today" view on the Screens page).
+  mine: ["from", "to"],
 };
 
 /**
- * GET /api/screen-project/usage/{report|timeline|boots-on-the-ground}?stores[]=…
+ * GET /api/screen-project/usage/{report|timeline|boots-on-the-ground|mine}?stores[]=…
  * Proxy → GET {SCREEN_PROJECT_BASE_URL}/usage/{section}
  * Screen Project monitoring across stores (store NUMBERS in stores[]).
  */
