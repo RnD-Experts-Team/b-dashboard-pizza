@@ -48,6 +48,34 @@ export function getReportNotificationHref(
   }
 }
 
+/** The day a Calendar notification is about ("YYYY-MM-DD"): a `date` / `due_date` field, else the first ISO date in its text. */
+function calendarNotificationDay(notification: Notification): string | null {
+  const data = notification.data ?? {};
+  for (const v of [data.date, data.due_date, data.due_on]) {
+    if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
+  }
+  // `calendar_assigned` says it in words: "… gave you a task, due 2026-11-19 17:00 UTC."
+  return /\b(\d{4}-\d{2}-\d{2})\b/.exec(notification.body ?? "")?.[1] ?? null;
+}
+
+/**
+ * Where a Calendar notification (`calendar_*`) takes you:
+ * - `calendar_reminder` made from an event's card carries that event's page as
+ *   `action_url` (`/dashboard/...`): followed, as long as it is an in-app
+ *   dashboard path — never a URL taken from the notification;
+ * - anything else — `calendar_assigned` ("New task: …" / "New event: …" for a
+ *   "Chosen people" item, FRONTEND_CALENDAR_CHANGES 2026-11-18, whose
+ *   `action_url` `/toolbox/calendar/{id}` is a Toolbox page, not ours), or a
+ *   reminder with no page — opens the Calendar, on the item's day when the
+ *   notification names one (the page ignores a `?date=` it can't read).
+ */
+export function getCalendarNotificationHref(locale: string, notification: Notification): string {
+  const url = notification.action_url ?? "";
+  if (/^\/dashboard(\/[\w%.~-]*)*(\?[^#\s]*)?$/.test(url)) return `/${locale}${url}`;
+  const day = calendarNotificationDay(notification);
+  return `/${locale}/dashboard/calendar${day ? `?date=${day}` : ""}`;
+}
+
 /**
  * Map a notification to the dashboard page segment it belongs to, e.g.
  * "hiring-request" for `/{locale}/dashboard/hiring-request`. Mirrors the
@@ -84,7 +112,8 @@ export function getNotificationPageSegment(notification: Notification): string |
   if (type.startsWith("ticket_")) return "tickets";
   // maintenance_ticket_created / _updated open the maintenance ticket.
   if (type.startsWith("maintenance_")) return "maintenance-tickets";
-  // calendar_reminder (a Calendar reminder coming due) belongs to the Calendar page.
+  // calendar_reminder (a Calendar reminder coming due) and calendar_assigned (a "Chosen
+  // people" task or event given to you) belong to the Calendar page.
   if (type.startsWith("calendar_")) return "calendar";
   // report_ready / _failed / _delivery_failed / _schedule_paused open the run
   // page (or the schedules tab) of the Report Builder.

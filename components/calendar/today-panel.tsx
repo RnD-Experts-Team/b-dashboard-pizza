@@ -11,6 +11,7 @@ import { needsAction } from "@/lib/calendar/grouping";
 import { eventPriority, isLive, isPast } from "@/lib/calendar/layout";
 import type { CalendarEvent } from "@/lib/calendar/types";
 import { useReminderTargets } from "@/lib/hooks/use-calendar-events";
+import { AssigneeLabel } from "./assignee-label";
 import { EventDot } from "./event-parts";
 import { EventSigns, ReminderTargetsProvider } from "./event-signs";
 import { useCalendarFormat } from "./use-calendar-format";
@@ -143,8 +144,12 @@ export function TodayPanel({
         </span>
         <EventDot category={ev.category} className="size-2" />
         <span className="min-w-0 flex-1">
-          <span dir="auto" className="block truncate text-start text-sm font-medium leading-tight">
-            {f.title(ev)}
+          <span className="flex min-w-0 items-center gap-1.5">
+            {/* A "Chosen people" copy: who it is for (hidden for that person themselves). */}
+            <AssigneeLabel ev={ev} />
+            <span dir="auto" className="block min-w-0 truncate text-start text-sm font-medium leading-tight">
+              {f.title(ev)}
+            </span>
           </span>
           {mixedStores && <span className="block truncate text-[11px] text-muted-foreground">{ev.store.name}</span>}
         </span>

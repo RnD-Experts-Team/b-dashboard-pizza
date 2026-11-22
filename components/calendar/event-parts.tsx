@@ -12,6 +12,7 @@ import type { CalendarEvent, CategoryKey, EventStatus } from "@/lib/calendar/typ
 import { useCalendarClock } from "./calendar-clock";
 import { usePeek, type PeekSide, type PeekTarget } from "./event-peek";
 import { EventSigns } from "./event-signs";
+import { AssigneeLabel } from "./assignee-label";
 import { StoreLabel } from "./store-label";
 import { useCalendarFormat } from "./use-calendar-format";
 
@@ -187,6 +188,7 @@ export function EventPill({ ev, plain, onOpen }: { ev: CalendarEvent; plain?: bo
       <EventDot category={ev.category} />
       {!plain && <StoreLabel ev={ev} />}
       <PrivateMark ev={ev} />
+      <AssigneeLabel ev={ev} />
       <span dir="auto" className={cn("min-w-0 flex-1 truncate text-start", calm ? "font-normal" : "font-medium", struck(ev))}>
         {f.title(ev)}
       </span>
@@ -236,6 +238,7 @@ export function EventBar({ item, day, plain, onOpen }: { item: LaneItem; day?: D
       )}
       {!plain && <StoreLabel ev={ev} />}
       <PrivateMark ev={ev} />
+      <AssigneeLabel ev={ev} />
       <span dir="auto" className={cn("min-w-0 truncate text-start", struck(ev))}>
         {f.title(ev)}
       </span>
@@ -380,6 +383,7 @@ export function AgendaRow({
         <span className="flex min-w-0 items-center gap-2">
           <EventDot category={ev.category} />
           <PrivateMark ev={ev} />
+          <AssigneeLabel ev={ev} />
           <span dir="auto" className={cn("truncate text-start text-sm font-medium leading-snug", struck(ev))}>
             {f.title(ev)}
           </span>

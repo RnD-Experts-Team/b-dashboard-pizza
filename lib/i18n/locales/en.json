@@ -3878,7 +3878,12 @@
       "onlyYou": "Only you",
       "private": "Private",
       "privateOnlyYou": "Private · only you",
-      "public": "Sent to every store"
+      "public": "Sent to every store",
+      "assignedToYou": "Assigned to you",
+      "forPerson": "For {name}",
+      "forPeople": "For {names}",
+      "forChosenPeople": "For chosen store managers",
+      "fromPerson": "From {name}"
     },
     "stores": {
       "title": "Stores",
@@ -3937,7 +3942,10 @@
         "requiresReview": "I approve it first",
         "requiresReviewHint": "Off: it counts as done as soon as the store submits it.",
         "remindIn": "Remind me",
-        "scope": "Who sees it"
+        "scope": "Who sees it",
+        "people": "Store managers",
+        "requiresReviewHintPeople": "Off: it counts as done as soon as the person submits it.",
+        "peopleStores": "Stores"
       },
       "priorities": {
         "low": "Low",
@@ -3964,7 +3972,10 @@
         "endTime": "The end must be after the start.",
         "taskPast": "A task can't be due in the past.",
         "remindPast": "Pick a time in the future.",
-        "remindFar": "Reminders can be at most a year ahead."
+        "remindFar": "Reminders can be at most a year ahead.",
+        "people": "Pick at least one store manager.",
+        "peopleMax": "Pick at most {n} people.",
+        "peopleStores": "Pick a store first, then its store managers."
       },
       "created": {
         "event": "Event created",
@@ -3978,7 +3989,7 @@
         "invalid": "Check the form and try again.",
         "network": "Couldn't reach the server. Try again.",
         "other": "Couldn't save. Try again.",
-        "forbiddenScope": "You need the calendar administrator permission to add something for all stores or only for yourself.",
+        "forbiddenScope": "You need the calendar administrator permission to add something for all stores, only for yourself or for chosen people.",
         "serverSaid": "Server says: {message}"
       },
       "submit": {
@@ -3989,11 +4000,13 @@
       "scope": {
         "custom": "Chosen stores",
         "public": "All stores",
-        "private": "Only me"
+        "private": "Only me",
+        "people": "Chosen people"
       },
       "scopeHint": {
         "public": "Goes to every store open today. Stores opened later won't get it.",
-        "private": "Only you will see it, with no store. No proof or approval."
+        "private": "Only you will see it, with no store. No proof or approval.",
+        "people": "Only the store managers you pick see it, each in their own calendar."
       }
     },
     "actions": {
@@ -4060,7 +4073,10 @@
         "network": "Couldn't reach the server. Try again.",
         "other": "Something went wrong. Try again."
       },
-      "reminderSetFor": "Reminder set for {when}"
+      "reminderSetFor": "Reminder set for {when}",
+      "cancelAskPerson": "Cancel it for {name} only, or for everyone it was given to?",
+      "cancelThisPerson": "Only {name}",
+      "cancelAllPeople": "Everyone"
     },
     "reminderLabel": "Reminder",
     "year": {
@@ -4077,6 +4093,36 @@
         "less": "Less",
         "more": "More"
       }
+    },
+    "people": {
+      "title": "Store managers",
+      "search": "Search by name",
+      "searchLabel": "Search store managers",
+      "pickSome": "Pick store managers",
+      "count": "{n, plural, one {# person} other {# people}}",
+      "selectedOf": "{n} of {max} picked",
+      "loading": "Loading store managers",
+      "none": "No store managers match your search.",
+      "retry": "Try again",
+      "allStores": "All stores",
+      "moreStores": "+{n}",
+      "max": "That is the most one item can go to ({n}).",
+      "pickedLabel": "Picked store managers",
+      "remove": "Remove {name}",
+      "errors": {
+        "notFound": "This server does not list store managers yet.",
+        "forbidden": "You cannot see the list of store managers.",
+        "other": "Could not load the store managers."
+      },
+      "pickStoreFirst": "Pick a store first",
+      "inStores": "{n, plural, =0 {No store managers} one {# store manager} other {# store managers}} in {stores, plural, one {# store} other {# stores}}",
+      "selectAll": "Select all",
+      "clearAll": "Clear all",
+      "sharedHeading": "Also on other stores",
+      "alsoStores": "{n, plural, one {+# other store} other {+# other stores}}",
+      "partial": "Some store managers could not be loaded.",
+      "removeAll": "Remove all",
+      "noManagers": "No store manager at the stores picked."
     }
   },
   "bottomNav": {

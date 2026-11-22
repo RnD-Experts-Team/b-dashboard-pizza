@@ -108,10 +108,13 @@ export function toCalendarEvent(ev: FeedEvent, origin: FeedSource, ctx: FeedMapC
   // of the generic category, like a user event's `typeLabel`.
   const kind = ev.type === "calendar_event" && typeof extra?.category === "string" ? extra.category : null;
 
-  // People that are dashboard users (not employees/technicians), keeping their ids.
+  // People that are dashboard users (not employees/technicians), keeping their ids and roles.
   const users = (ev.people ?? []).flatMap((p) =>
-    p?.kind === "user" && p.id != null && typeof p.name === "string" ? [{ id: String(p.id), name: p.name }] : [],
+    p?.kind === "user" && p.id != null && typeof p.name === "string"
+      ? [{ id: String(p.id), name: p.name, ...(typeof p.role === "string" && p.role ? { role: p.role } : {}) }]
+      : [],
   );
+  const scope = isScope(extra?.scope) ? extra.scope : undefined;
 
   return {
     id: ev.id,
@@ -130,8 +133,9 @@ export function toCalendarEvent(ev: FeedEvent, origin: FeedSource, ctx: FeedMapC
     // A summary stops being routine the moment it carries an overdue/missed item.
     routine: ev.type === "daily_sales" || status === "done" || (SUMMARY_TYPES.has(ev.type) && !needsAction) || undefined,
     typeLabel: kind ? humanize(kind) : undefined,
-    scope: isScope(extra?.scope) ? extra.scope : undefined,
+    scope,
     users: users.length ? users : undefined,
+    assignee: scope === "people" ? assigneeOf(ev.id, users) : undefined,
     source: "system",
     origin,
     feedType: ev.type,
@@ -140,6 +144,20 @@ export function toCalendarEvent(ev: FeedEvent, origin: FeedSource, ctx: FeedMapC
     counts: ev.counts ?? undefined,
     extra,
   };
+}
+
+/**
+ * Who a "Chosen people" copy is for: the person named with role "assignee", else the
+ * user in the id (`toolbox:task:19:user:900002`), named from the people list when it
+ * is there. A plain event for chosen people is ONE item with no assignee.
+ */
+function assigneeOf(id: string, users: readonly { id: string; name: string; role?: string }[]): { id: string; name: string } | undefined {
+  const named = users.find((u) => u.role === "assignee");
+  if (named) return { id: named.id, name: named.name };
+  const parts = id.split(":");
+  const userId = parts[3] === "user" ? parts[4] : undefined;
+  if (!userId) return undefined;
+  return { id: userId, name: users.find((u) => u.id === userId)?.name ?? "" };
 }
 
 export function isSummaryEvent(ev: CalendarEvent): boolean {

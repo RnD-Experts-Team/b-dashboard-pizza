@@ -9,8 +9,10 @@ import { dayKey } from "@/lib/calendar/dates";
 import { actionCount, agendaSections, itemAction, type AgendaSection } from "@/lib/calendar/day-agenda";
 import { groupStats, needsAction } from "@/lib/calendar/grouping";
 import { isPast } from "@/lib/calendar/layout";
+import { peopleByRole, viewerIsCreator } from "@/lib/calendar/toolbox-write";
 import type { CalendarEvent } from "@/lib/calendar/types";
 import { useCalendarClock } from "./calendar-clock";
+import { AssigneeLabel, useViewer } from "./assignee-label";
 import { EmptyState } from "./calendar-empty-state";
 import { EVENT_FOCUS, EventDot } from "./event-parts";
 import { usePeek } from "./event-peek";
@@ -54,10 +56,23 @@ function ActionCount({ n }: { n: number }) {
  * event carries — its numbers, people and notes — and lets the title wrap.
  */
 function PanelRow({ ev, day, onSelect, detailed }: { ev: CalendarEvent; day: Date; onSelect: OnSelect; detailed?: boolean }) {
+  const t = useTranslations("calendar");
   const f = useCalendarFormat();
   const now = useCalendarClock();
+  const viewer = useViewer();
   const open = useRowOpen(ev, onSelect);
   const countsLine = useCountsLine(ev);
+  // A "Chosen people" copy already leads with who it is for; its people line only says who
+  // gave it, and only to someone else. Everything else lists its people.
+  const creators = ev.scope === "people" ? peopleByRole(ev, "creator") : [];
+  const peopleLine =
+    ev.scope === "people"
+      ? creators.length && !viewerIsCreator(ev, viewer)
+        ? t("feed.fromPerson", { name: creators.map((p) => p.name).join(", ") })
+        : null
+      : ev.people.length
+        ? ev.people.join(", ")
+        : null;
   const past = !ev.allDay && isPast(ev, now);
   const place = ev.companyWide ? null : ev.store.name || ev.store.code;
   const sub = detailed
@@ -74,8 +89,12 @@ function PanelRow({ ev, day, onSelect, detailed }: { ev: CalendarEvent; day: Dat
       )}
     >
       <span className="min-w-0 flex-1">
-        <span dir="auto" className={cn("block text-start text-sm font-medium leading-snug", detailed ? "line-clamp-2" : "truncate")}>
-          {f.title(ev)}
+        <span className="flex min-w-0 items-start gap-1.5">
+          {/* A "Chosen people" copy: who it is for (hidden for that person themselves). */}
+          <AssigneeLabel ev={ev} className="mt-0.5" />
+          <span dir="auto" className={cn("block min-w-0 text-start text-sm font-medium leading-snug", detailed ? "line-clamp-2" : "truncate")}>
+            {f.title(ev)}
+          </span>
         </span>
         {sub && (
           <span dir="auto" className="block truncate text-start text-xs tabular-nums text-muted-foreground">
@@ -83,11 +102,11 @@ function PanelRow({ ev, day, onSelect, detailed }: { ev: CalendarEvent; day: Dat
           </span>
         )}
         {detailed && countsLine && <span className="block truncate text-xs tabular-nums text-muted-foreground">{countsLine}</span>}
-        {detailed && ev.people.length > 0 && (
+        {detailed && peopleLine && (
           <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
             <Users className="size-3 shrink-0" aria-hidden />
             <span dir="auto" className="truncate text-start">
-              {ev.people.join(", ")}
+              {peopleLine}
             </span>
           </span>
         )}

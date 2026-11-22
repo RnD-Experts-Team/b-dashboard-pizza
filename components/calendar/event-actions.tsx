@@ -18,6 +18,9 @@ import {
   isPrivate,
   PER_STORE_CANCEL,
   taskActionsFor,
+  taskTargetFor,
+  cancelTargetFor,
+  type WriteTarget,
   toolboxIdOf,
   type TaskAction,
 } from "@/lib/calendar/toolbox-write";
@@ -150,10 +153,14 @@ export function EventActions({
   // A store's copy of an event/task can be cancelled on its own once Toolbox supports it
   // (`PER_STORE_CANCEL`); until then Cancel is for every store and the dialog says so.
   // A private item has no store.
+  // A "Chosen people" copy can be cancelled for its one person (`?users=`), like a store's copy.
+  const copyTarget = PER_STORE_CANCEL ? cancelTargetFor(ev) : null;
+  const perPerson = !!copyTarget && "user" in copyTarget;
+  const personName = ev.assignee?.name || "";
   const perStore = PER_STORE_CANCEL && !isPrivate(ev) && !!storeCode;
   const cancelsAll = !PER_STORE_CANCEL && !isPrivate(ev) && !!storeCode;
-  const doCancel = (store: string | undefined) =>
-    void run(() => toolbox.cancel(id!, store), "cancelEvent", {
+  const doCancel = (target: WriteTarget | undefined) =>
+    void run(() => toolbox.cancel(id!, target ?? undefined), "cancelEvent", {
       forbidden: "forbiddenCancel",
       onForbidden: () => {
         if (cancelKey) denied.add(cancelKey);
@@ -161,7 +168,7 @@ export function EventActions({
       },
     });
   const doTask =(action: TaskAction, body: { note?: string; reason?: string } = {}) =>
-    run(() => toolbox.taskAction(id!, action, storeCode, body), action, {
+    run(() => toolbox.taskAction(id!, action, taskTargetFor(ev, action), body), action, {
       forbidden: action === "approve" || action === "return" ? "forbiddenReview" : "forbidden",
       onForbidden:
         action === "approve" || action === "return"
@@ -382,7 +389,13 @@ export function EventActions({
       {mode === "cancel" && (
         <div className="space-y-2">
           <p className="text-xs">
-            {perStore ? t("cancelAskStores", { store: storeName }) : cancelsAll ? t("cancelAskAll", { store: storeName }) : t("cancelAsk")}
+            {perPerson
+              ? t("cancelAskPerson", { name: personName })
+              : perStore
+                ? t("cancelAskStores", { store: storeName })
+                : cancelsAll
+                  ? t("cancelAskAll", { store: storeName })
+                  : t("cancelAsk")}
           </p>
           {/* A plain event cancelled for one store leaves it for good; a task stays there as "cancelled". */}
           {perStore && ev.feedType === "calendar_event" && (
@@ -395,13 +408,17 @@ export function EventActions({
               size="sm"
               className={BTN}
               disabled={busy}
-              onClick={() => doCancel(perStore ? storeCode : undefined)}
+              onClick={() => doCancel(perPerson || perStore ? (copyTarget ?? undefined) : undefined)}
             >
               {busy && <Loader2 className="size-3 animate-spin" />}
-              {perStore ? t("cancelThisStore", { store: storeName }) : t("cancelYes")}
+              {perPerson
+                ? t("cancelThisPerson", { name: personName })
+                : perStore
+                  ? t("cancelThisStore", { store: storeName })
+                  : t("cancelYes")}
             </Button>
-            {/* A multi-store item can also be cancelled everywhere (no `stores` in the request). */}
-            {perStore && (
+            {/* An item with copies can also be cancelled everywhere (no `stores` / `users` in the request). */}
+            {(perStore || perPerson) && (
               <Button
                 type="button"
                 variant="outline"
@@ -410,7 +427,7 @@ export function EventActions({
                 disabled={busy}
                 onClick={() => doCancel(undefined)}
               >
-                {t("cancelAllStores")}
+                {perPerson ? t("cancelAllPeople") : t("cancelAllStores")}
               </Button>
             )}
             <Button type="button" variant="ghost" size="sm" className={BTN} disabled={busy} onClick={() => go(null)}>

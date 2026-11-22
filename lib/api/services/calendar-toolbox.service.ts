@@ -1,12 +1,14 @@
 import axios from "axios";
 import {
-  isPrivateTaskAction,
+  parsePeopleList,
   parseReminderList,
   toCreatePayload,
+  type CalendarPerson,
   type CreateItemInput,
   type ReminderAction,
   type ReminderRef,
   type TaskAction,
+  type WriteTarget,
 } from "@/lib/calendar/toolbox-write";
 import { invalidateFeedSource } from "./calendar-feed.service";
 
@@ -23,6 +25,23 @@ import { invalidateFeedSource } from "./calendar-feed.service";
 
 const BASE = "/api/toolbox/calendar";
 const TIMEOUT_MS = 30_000;
+
+/** `GET /calendar/people` answers at most this many, with no paging and no store filter. */
+const PEOPLE_CAP = 100;
+/** The whole list of store managers is kept this long (it changes rarely). */
+const PEOPLE_TTL_MS = 5 * 60_000;
+/** Searches asked at once while gathering the whole list. */
+const PEOPLE_PARALLEL = 9;
+const LETTERS = "abcdefghijklmnopqrstuvwxyz".split("");
+
+/** Every store manager, as far as Toolbox let us gather them. */
+export interface PeopleDirectory {
+  people: CalendarPerson[];
+  /** false when some of the searches failed — a few managers may be missing. */
+  complete: boolean;
+}
+
+let peopleCache: { at: number; promise: Promise<PeopleDirectory> } | null = null;
 
 export type CalendarWriteErrorKind = "auth" | "forbidden" | "notFound" | "invalid" | "network" | "other";
 
@@ -77,6 +96,16 @@ function toError(err: unknown): CalendarWriteError {
   return new CalendarWriteError("other", text || `Request failed (${status}).`);
 }
 
+/**
+ * A target as query parameters: one store (`stores`), or one person — `user` on a
+ * task action (the creator's approve / return), `users` on a cancel (comma list).
+ */
+function targetParams(target: WriteTarget | undefined, call: "task" | "cancel"): Record<string, string> | undefined {
+  if (!target) return undefined;
+  if ("store" in target) return { stores: target.store };
+  return call === "task" ? { user: target.user } : { users: target.user };
+}
+
 async function post(path: string, body: unknown, params?: Record<string, string>): Promise<void> {
   try {
     await axios.post(`${BASE}${path}`, body ?? {}, { headers: headers(), timeout: TIMEOUT_MS, params });
@@ -95,23 +124,91 @@ export const calendarToolboxService = {
   },
 
   /**
-   * Creator only. Without `store` the whole item is cancelled in every store it was
-   * sent to. With `store` (`?stores=`; FRONTEND_CALENDAR_CHANGES.md) only that store's
-   * copy is: a plain event leaves that store for good, a task stays there as
-   * `cancelled`; cancelling the last store cancels the item everywhere. A 422
-   * ("not in every store sent", "Nothing to cancel there") carries its own message.
+   * Creator only. Without a target the whole item is cancelled everywhere. With one
+   * (`cancelTargetFor`; FRONTEND_CALENDAR_CHANGES.md) only that copy is — one store
+   * (`?stores=`) or one person (`?users=`): a plain event leaves their calendar for
+   * good, a task stays there as `cancelled`, an approved one stays done; cancelling
+   * the last copy cancels the item everywhere. A 422 ("not in every store sent",
+   * "Nothing to cancel there") carries its own message.
    */
-  cancelEvent(id: number, store?: string): Promise<void> {
-    return post(`/events/${id}/cancel`, {}, store ? { stores: store } : undefined);
+  cancelEvent(id: number, target?: WriteTarget): Promise<void> {
+    return post(`/events/${id}/cancel`, {}, targetParams(target, "cancel"));
   },
 
   /**
-   * `store` is the ONE store the task is worked in. `note` is required when the
-   * task asks for proof; `reason` when returning. A private task's `done` /
-   * `reopen` go without a store (guide §8.3.1).
+   * `target` from `taskTargetFor`: the ONE store a store task is worked in, the person
+   * a "Chosen people" task is approved / returned for, or nothing (a private task's
+   * done / reopen, a person's own start / submit). `note` is required when the task
+   * asks for proof; `reason` when returning.
    */
-  taskAction(id: number, action: TaskAction, store: string, body: { note?: string; reason?: string } = {}): Promise<void> {
-    return post(`/tasks/${id}/${action}`, body, isPrivateTaskAction(action) ? undefined : { stores: store });
+  taskAction(id: number, action: TaskAction, target: WriteTarget, body: { note?: string; reason?: string } = {}): Promise<void> {
+    return post(`/tasks/${id}/${action}`, body, targetParams(target, "task"));
+  },
+
+  /**
+   * The store managers a "Chosen people" item can be given to, searched by name
+   * (`q`; up to 100, by name). Throws a `CalendarWriteError` so the picker can say
+   * why it is empty (a 404 before Toolbox ships the feature, a 403, offline).
+   */
+  async listPeople(q: string, opts: { signal?: AbortSignal } = {}): Promise<CalendarPerson[]> {
+    try {
+      const { data } = await axios.get(`${BASE}/people`, {
+        headers: headers(),
+        timeout: TIMEOUT_MS,
+        params: q.trim() ? { q: q.trim() } : undefined,
+        signal: opts.signal,
+      });
+      return parsePeopleList(data);
+    } catch (err) {
+      throw toError(err);
+    }
+  },
+
+  /**
+   * EVERY store manager, so the picker can offer the managers of the stores picked.
+   * Toolbox answers at most 100 per call, with no paging and no store filter (checked
+   * 2026-11-22: `store`, `stores`, `page` are ignored; testing has ~157 managers). So
+   * when the plain list comes back full, the list is gathered from one search per letter
+   * (`q` matches anywhere in the name, so every name turns up under one of its letters)
+   * and merged by id. Kept 5 minutes and shared by every picker; a failure is not kept.
+   * Throws a `CalendarWriteError` when even the first call fails.
+   * TODO(backend): a `?store=` filter (or a higher cap) on /calendar/people would replace
+   * the letter searches with one call.
+   */
+  listAllPeople(opts: { fresh?: boolean } = {}): Promise<PeopleDirectory> {
+    if (!opts.fresh && peopleCache && Date.now() - peopleCache.at < PEOPLE_TTL_MS) return peopleCache.promise;
+    const promise = (async (): Promise<PeopleDirectory> => {
+      const first = await calendarToolboxService.listPeople("");
+      if (first.length < PEOPLE_CAP) return { people: first, complete: true };
+      const byId = new Map(first.map((p) => [p.id, p]));
+      let failed = 0;
+      const queue = [...LETTERS];
+      const worker = async () => {
+        for (let q = queue.shift(); q; q = queue.shift()) {
+          try {
+            for (const p of await calendarToolboxService.listPeople(q)) byId.set(p.id, p);
+          } catch {
+            failed++;
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: PEOPLE_PARALLEL }, worker));
+      return {
+        people: [...byId.values()].sort((a, b) => a.name.localeCompare(b.name)),
+        complete: failed === 0,
+      };
+    })();
+    peopleCache = { at: Date.now(), promise };
+    // A failed or partial load is not kept: the next opening asks again.
+    promise.then(
+      (d) => {
+        if (!d.complete && peopleCache?.promise === promise) peopleCache = null;
+      },
+      () => {
+        if (peopleCache?.promise === promise) peopleCache = null;
+      },
+    );
+    return promise;
   },
 
   /**

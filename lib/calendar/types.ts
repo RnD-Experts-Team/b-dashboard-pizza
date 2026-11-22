@@ -118,13 +118,21 @@ export interface CalendarEvent {
    * never stored and never reaches the feeds or the editor.
    */
   members?: readonly CalendarEvent[];
-  /** Toolbox events and tasks: who they are for (`extra.scope` — custom, public or private). */
-  scope?: "custom" | "public" | "private";
+  /** Toolbox events and tasks: who they are for (`extra.scope` — custom, public, private or people). */
+  scope?: "custom" | "public" | "private" | "people";
   /**
    * The feed's `people` of kind `user`, with their ids (`people` above keeps only
-   * the names). Toolbox lists the item's creator here; `canCancel` reads it.
+   * the names) and `role` when the feed gives one. Toolbox lists the item's
+   * creator here (role "creator"), and on a "Chosen people" item its assignee too
+   * (role "assignee"); `mayBeCreator` reads it.
    */
-  users?: readonly { id: string; name: string }[];
+  users?: readonly { id: string; name: string; role?: string }[];
+  /**
+   * A "Chosen people" item (`scope` people, FRONTEND_CALENDAR_CHANGES.md 2026-11-18):
+   * the one store manager this copy is for. A task comes as one copy per person
+   * (`toolbox:task:19:user:900002`); its creator sees every copy, the person only theirs.
+   */
+  assignee?: { id: string; name: string };
   notes?: string;
   meta?: { age?: number; years?: number; role?: string };
   /**

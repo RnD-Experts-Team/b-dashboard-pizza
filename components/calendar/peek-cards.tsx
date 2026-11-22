@@ -22,7 +22,9 @@ import {
   Trash2,
   TriangleAlert,
   User,
+  UserRound,
   Users,
+  UsersRound,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,7 +35,9 @@ import { feedHref } from "@/lib/calendar/feed-links";
 import { attentionCount, COUNT_STATUSES, storesNeedingAttention, type DayCount } from "@/lib/calendar/day-counts";
 import { commonCategory, groupStats, needsAction } from "@/lib/calendar/grouping";
 import { isMultiDay, lastDay, spanDays } from "@/lib/calendar/layout";
+import { peopleByRole, viewerIsAssignee, viewerIsCreator } from "@/lib/calendar/toolbox-write";
 import { EVENT_STATUSES, type CalendarEvent, type EventStatus } from "@/lib/calendar/types";
+import { useViewer } from "./assignee-label";
 import { useCalendarClock } from "./calendar-clock";
 import { EventActions } from "./event-actions";
 import { usePeek } from "./event-peek";
@@ -120,6 +124,21 @@ export function EventPeekCard({
   const target = dayKey(ongoing ? today : ev.start);
   const editable = ev.source === "user";
 
+  // A "Chosen people" item: who it is for and who gave it, in place of the generic people row.
+  const viewer = useViewer();
+  let forLine: string | null = null;
+  let fromLine: string | null = null;
+  if (ev.scope === "people") {
+    if (ev.assignee) {
+      forLine = viewerIsAssignee(ev, viewer) ? t("feed.assignedToYou") : t("feed.forPerson", { name: ev.assignee.name });
+    } else {
+      const names = peopleByRole(ev, "assignee").map((p) => p.name).join(", ");
+      forLine = names ? t("feed.forPeople", { names }) : t("feed.forChosenPeople");
+    }
+    const creators = peopleByRole(ev, "creator");
+    if (creators.length && !viewerIsCreator(ev, viewer)) fromLine = t("feed.fromPerson", { name: creators.map((p) => p.name).join(", ") });
+  }
+
   return (
     <div className="w-72 space-y-3 p-3" aria-label={f.title(ev)}>
       {onBack && (
@@ -166,6 +185,19 @@ export function EventPeekCard({
         {movedFrom && <Row icon={History}>{movedFrom}</Row>}
         {ev.scope === "private" ? (
           <Row icon={Lock}>{t("feed.privateOnlyYou")}</Row>
+        ) : forLine ? (
+          <>
+            <Row icon={UsersRound}>
+              <span dir="auto">{forLine}</span>
+            </Row>
+            {fromLine && (
+              <Row icon={UserRound}>
+                <span dir="auto" className="text-muted-foreground">
+                  {fromLine}
+                </span>
+              </Row>
+            )}
+          </>
         ) : ev.layer === "mine" ? (
           <Row icon={User}>{t("feed.onlyYou")}</Row>
         ) : ev.companyWide ? (
@@ -182,7 +214,7 @@ export function EventPeekCard({
             <span className="tabular-nums">{countsLine}</span>
           </Row>
         )}
-        {ev.people.length > 0 && (
+        {ev.people.length > 0 && !forLine && (
           <Row icon={Users}>
             <div className="flex items-center gap-2">
               <AvatarStack people={ev.people} />

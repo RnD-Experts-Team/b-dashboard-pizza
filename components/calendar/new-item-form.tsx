@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { ArrowRight, BellRing, CalendarPlus, Check, Globe, ListChecks, Loader2, Lock, Play, Send, type LucideIcon } from "lucide-react";
+import { ArrowRight, BellRing, CalendarPlus, Check, Globe, ListChecks, Loader2, Lock, Play, Send, UsersRound, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -15,10 +15,11 @@ import { TimePicker } from "@/components/ui/time-picker";
 import { cn } from "@/lib/utils";
 import { MINUTE, addDays, dayKey, fromKey, isDayKey } from "@/lib/calendar/dates";
 import { FEED_MAX_STORES } from "@/lib/calendar/feed-types";
-import { PRIORITIES, SCOPES, type CreateItemInput, type Priority, type Scope } from "@/lib/calendar/toolbox-write";
+import { PRIORITIES, SCOPES, type CalendarPerson, type CreateItemInput, type Priority, type Scope } from "@/lib/calendar/toolbox-write";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { CalendarWriteError } from "@/lib/api/services/calendar-toolbox.service";
 import { useCalendarStoreOptions, useCalendarStores, useCalendarToolbox } from "@/lib/hooks/use-calendar-events";
+import { PEOPLE_MAX, PeopleMultiSelect, runsAnyOf } from "./people-multi-select";
 import { StoreMultiSelect } from "./store-multi-select";
 import { useCalendarFormat } from "./use-calendar-format";
 
@@ -42,9 +43,16 @@ const CATEGORY_MAX = 40;
 interface FormState {
   kind: Kind;
   title: string;
-  /** Events and tasks: chosen stores (everyone), every store or only me (super admin). */
+  /** Events and tasks: chosen stores (everyone), every store, only me or chosen people (super admin). */
   scope: Scope;
   stores: string[];
+  /**
+   * "Chosen people": the stores whose managers are offered (picked first, in their own
+   * field). Only a filter for the manager field — never sent: a people item has no stores.
+   */
+  peopleStores: string[];
+  /** "Chosen people": the store managers picked (kept whole, so their names show whatever the search). */
+  people: CalendarPerson[];
   /** "YYYY-MM-DD" */
   date: string;
   /** Event: no times. */
@@ -65,7 +73,7 @@ interface FormState {
   remindTime: string;
 }
 
-type Errors = Partial<Record<"title" | "stores" | "date" | "end" | "remind", string>>;
+type Errors = Partial<Record<"title" | "stores" | "peopleStores" | "people" | "date" | "end" | "remind", string>>;
 
 const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 const atTime = (day: string, time: string) => {
@@ -83,6 +91,8 @@ function initialState(start: Date, allDay: boolean, stores: string[]): FormState
     title: "",
     scope: "custom",
     stores,
+    peopleStores: [],
+    people: [],
     date: dayKey(start),
     allDay,
     startTime: hhmm(start),
@@ -179,6 +189,8 @@ export function NewItemForm({
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  /** Toolbox's 422 per-field messages ("Not a store manager: 30."), shown under their field. */
+  const [serverFields, setServerFields] = useState<Partial<Record<"people" | "stores", string>>>({});
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((s) => ({ ...s, [k]: v }));
 
   const withStores = form.kind !== "reminder";
@@ -212,10 +224,15 @@ export function NewItemForm({
       return { input, landed, errors: e };
     }
 
-    // Only chosen stores need a pick; public goes to every store, private to none.
+    // Chosen stores and chosen people need a pick; public goes to every store, private to none.
     if (form.scope === "custom") {
       if (!form.stores.length) e.stores = t("errors.stores");
       else if (form.stores.length > FEED_MAX_STORES) e.stores = t("errors.storesMax", { n: FEED_MAX_STORES });
+    }
+    if (form.scope === "people") {
+      if (!form.peopleStores.length && !form.people.length) e.peopleStores = t("errors.peopleStores");
+      else if (!form.people.length) e.people = t("errors.people");
+      else if (form.people.length > PEOPLE_MAX) e.people = t("errors.peopleMax", { n: PEOPLE_MAX });
     }
     if (!isDayKey(form.date)) e.date = t("errors.date");
 
@@ -233,6 +250,7 @@ export function NewItemForm({
       title,
       scope: form.scope,
       stores: form.stores,
+      people: form.people.map((p) => p.id),
       date: form.date,
       description: form.notes,
       category: form.category,
@@ -266,6 +284,7 @@ export function NewItemForm({
     ev.preventDefault();
     setSubmitted(true);
     setServerError(null);
+    setServerFields({});
     if (!result.input || !result.landed) {
       if (result.errors.title) document.getElementById(`${ids}-title`)?.focus();
       return;
@@ -280,8 +299,10 @@ export function NewItemForm({
       onSaved({ start: result.landed });
     } catch (err) {
       const e = err instanceof CalendarWriteError ? err : null;
+      // A 422 about the picked people or stores also goes under that field.
+      if (e?.kind === "invalid") setServerFields({ people: e.fields.people?.[0], stores: e.fields.stores?.[0] });
       // Toolbox's own 422 text says what is wrong ("Unknown store: …"); the rest get a plain sentence.
-      // A 403 on "all stores" / "only me" means the right to make those is missing.
+      // A 403 on "all stores" / "only me" / "chosen people" means the right to make those is missing.
       const kind = e?.kind === "forbidden" && form.scope !== "custom" ? "forbiddenScope" : (e?.kind ?? "other");
       // On a 403 also show Toolbox's own words (the service falls back to "Not allowed." when it sent none),
       // so the exact missing permission is visible instead of only our summary.
@@ -305,6 +326,7 @@ export function NewItemForm({
     ) : null;
 
   const storeLine = options.length < 2 ? (shown[0]?.name ?? "") : null;
+  const storeNames = useMemo(() => new Map(options.map((o) => [o.code, o.name])), [options]);
 
   return (
     <form onSubmit={submit} noValidate>
@@ -360,7 +382,7 @@ export function NewItemForm({
             {fieldError(errors.title)}
           </div>
 
-          {/* "All stores" and "Only me" exist for super admins only (Toolbox answers 403 to anyone else). */}
+          {/* "All stores", "Only me" and "Chosen people" exist for super admins only (Toolbox answers 403 to anyone else). */}
           {withStores && isAdmin && (
             <Segmented
               label={t("fields.scope")}
@@ -372,9 +394,54 @@ export function NewItemForm({
 
           {withStores && form.scope !== "custom" && (
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              {form.scope === "private" ? <Lock className="size-3.5 shrink-0" /> : <Globe className="size-3.5 shrink-0" />}
+              {form.scope === "private" ? (
+                <Lock className="size-3.5 shrink-0" />
+              ) : form.scope === "people" ? (
+                <UsersRound className="size-3.5 shrink-0" />
+              ) : (
+                <Globe className="size-3.5 shrink-0" />
+              )}
               {t(`scopeHint.${form.scope}`)}
             </p>
+          )}
+
+          {/* Chosen people: store managers by name, instead of stores (FRONTEND_CALENDAR_CHANGES 2026-11-18).
+              Two separate fields (user-requested 2026-11-22): the stores first, then their managers. */}
+          {withStores && form.scope === "people" && (
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor={`${ids}-people-stores`}>{t("fields.peopleStores")}</Label>
+                <StoreMultiSelect
+                  id={`${ids}-people-stores`}
+                  options={options}
+                  value={form.peopleStores}
+                  onChange={(next) =>
+                    // A manager stays picked only while one of their stores still is.
+                    setForm((s) => {
+                      const keep = new Set(next);
+                      return { ...s, peopleStores: next, people: s.people.filter((p) => runsAnyOf(p, keep)) };
+                    })
+                  }
+                  invalid={!!errors.peopleStores}
+                />
+                {fieldError(errors.peopleStores)}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={`${ids}-people`}>{t("fields.people")}</Label>
+                <PeopleMultiSelect
+                  id={`${ids}-people`}
+                  value={form.people}
+                  onChange={(v) => {
+                    set("people", v);
+                    setServerFields((s) => ({ ...s, people: undefined }));
+                  }}
+                  stores={form.peopleStores}
+                  storeNames={storeNames}
+                  invalid={!!(errors.people ?? serverFields.people)}
+                />
+                {fieldError(errors.people ?? serverFields.people)}
+              </div>
+            </>
           )}
 
           {withStores && form.scope === "custom" && (
@@ -388,10 +455,10 @@ export function NewItemForm({
                   options={options}
                   value={form.stores}
                   onChange={(v) => set("stores", v)}
-                  invalid={!!errors.stores}
+                  invalid={!!(errors.stores ?? serverFields.stores)}
                 />
               )}
-              {fieldError(errors.stores)}
+              {fieldError(errors.stores ?? serverFields.stores)}
             </div>
           )}
 
@@ -539,7 +606,9 @@ export function NewItemForm({
               <label htmlFor={`${ids}-review`} className="flex cursor-pointer items-start justify-between gap-4">
                 <span className="space-y-0.5">
                   <span className="block text-sm font-medium leading-none">{t("fields.requiresReview")}</span>
-                  <span className="block text-xs text-muted-foreground">{t("fields.requiresReviewHint")}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {t(form.scope === "people" ? "fields.requiresReviewHintPeople" : "fields.requiresReviewHint")}
+                  </span>
                 </span>
                 <Switch id={`${ids}-review`} checked={form.requiresReview} onCheckedChange={(v) => set("requiresReview", v)} />
               </label>

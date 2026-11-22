@@ -19,6 +19,7 @@ import {
   UserMinus,
   SprayCan,
   CalendarClock,
+  CalendarPlus,
   Coffee,
   MessageSquareWarning,
   Wrench,
@@ -29,6 +30,7 @@ import { useHiringActionStore, type HiringActionTab } from "@/lib/store/hiring-a
 import { useCleaningActionStore } from "@/lib/store/cleaning-action.store";
 import type { PeriodType } from "@/types/cleaning.types";
 import {
+  getCalendarNotificationHref,
   getReportNotificationHref,
   isReportNotification,
 } from "@/lib/notifications/notification-routing";
@@ -177,21 +179,6 @@ function maintenanceTicketHref(locale: string, notification: Notification): stri
 }
 
 /**
- * A calendar reminder's `action_url` is the page of the event it reminds about
- * (`/dashboard/...`, set when the reminder was made from that event's card), or
- * nothing. Only an in-app dashboard path is followed, never a URL taken from the
- * notification. HIDDEN: while the Calendar is hidden it is not a fallback (it
- * used to be): with no in-app path, or one into the Calendar, the reminder is
- * not clickable.
- */
-function calendarReminderHref(locale: string, notification: Notification): string | null {
-  const url = notification.action_url ?? "";
-  if (url.startsWith("/dashboard/calendar")) return null;
-  if (/^\/dashboard(\/[\w%.~-]*)*(\?[^#\s]*)?$/.test(url)) return `/${locale}${url}`;
-  return null;
-}
-
-/**
  * Derive icon & color from the API notification type string.
  * Common types: "announcement.created", "announcement.updated", etc.
  */
@@ -216,6 +203,10 @@ function getTypeVisuals(type: string) {
   }
   if (type.startsWith("announcement")) {
     return { Icon: Megaphone, bg: "bg-purple-500/10 text-purple-600 dark:text-purple-400" };
+  }
+  // Something given to you in the Calendar ("Chosen people": a task or an event).
+  if (type === "calendar_assigned") {
+    return { Icon: CalendarPlus, bg: "bg-violet-500/10 text-violet-600 dark:text-violet-400" };
   }
   if (type.startsWith("calendar_")) {
     return { Icon: CalendarClock, bg: "bg-violet-500/10 text-violet-600 dark:text-violet-400" };
@@ -314,7 +305,7 @@ export function NotificationItem({
   const isTicketType = notification.type.startsWith("ticket_");
   const isMaintenanceType = notification.type.startsWith("maintenance_");
   const isCalendarType = notification.type.startsWith("calendar_");
-  const calendarHref = isCalendarType ? calendarReminderHref(locale, notification) : null;
+  const calendarHref = isCalendarType ? getCalendarNotificationHref(locale, notification) : null;
   const isReportType = isReportNotification(notification);
   // Only these explicitly-coded type families are clickable — an uncoded
   // type must never guess a navigation target, it just displays safely.
@@ -486,6 +477,8 @@ export function NotificationItem({
                   ? "Maintenance ticket"
                   : isReportType
                   ? "Report Builder"
+                  : isCalendarType
+                  ? "Calendar"
                   : "Cleaning Chart"}
               </span>
             </>

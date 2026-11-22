@@ -49,7 +49,10 @@ export function StoreMultiSelect({
   };
 
   return (
+    // `modal`: it opens inside the event dialog, whose scroll lock would otherwise stop the
+    // wheel from scrolling this (portaled) list.
     <Popover
+      modal
       open={open}
       onOpenChange={(next) => {
         if (next) setSearch("");

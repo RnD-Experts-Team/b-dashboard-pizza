@@ -9,12 +9,13 @@ export const PRIORITIES = ["low", "medium", "high", "urgent"] as const;
 export type Priority = (typeof PRIORITIES)[number];
 
 /**
- * Who an event or task is for (guide §8.1):
+ * Who an event or task is for (guide §8.1, plus FRONTEND_CALENDAR_CHANGES.md 2026-11-18):
  * - `custom`: the chosen stores (anyone can create);
  * - `public`: every store open now (super admin only);
- * - `private`: only its creator, no store (super admin only).
+ * - `private`: only its creator, no store (super admin only);
+ * - `people`: chosen store managers by user id, no store ("Chosen people").
  */
-export const SCOPES = ["custom", "public", "private"] as const;
+export const SCOPES = ["custom", "public", "private", "people"] as const;
 export type Scope = (typeof SCOPES)[number];
 
 export const isScope = (value: unknown): value is Scope => (SCOPES as readonly unknown[]).includes(value);
@@ -36,10 +37,12 @@ export interface ReminderTarget {
 
 interface Shared {
   title: string;
-  /** Default `custom`. Public and private take no stores. */
+  /** Default `custom`. Public, private and people take no stores. */
   scope: Scope;
   /** Store numbers (`03795-00001`), 1 to 50 — `custom` only. */
   stores: string[];
+  /** Store managers' user ids, 1 to 50, no repeats — `people` only (from `GET /calendar/people`). */
+  people?: number[];
   /** "YYYY-MM-DD". */
   date: string;
   description?: string;
@@ -96,8 +99,9 @@ export function toCreatePayload(input: CreateItemInput): Record<string, unknown>
     type: input.type,
     title: input.title,
     scope: input.scope,
-    // Stores only with `custom`: sent with public or private they are a 422.
+    // Stores only with `custom`, people only with `people`: sent with any other scope either is a 422.
     ...(input.scope === "custom" ? { stores: input.stores } : {}),
+    ...(input.scope === "people" ? { people: [...new Set(input.people ?? [])] } : {}),
     date: input.date,
     priority: input.priority,
     ...put("description", input.description?.trim()),
@@ -123,6 +127,39 @@ export const isPrivate = (ev: CalendarEvent): boolean => ev.scope === "private";
 /** A private task's two actions go without a store (`tasks/{id}/done|reopen`). */
 export const isPrivateTaskAction = (action: TaskAction): boolean => action === "done" || action === "reopen";
 
+/** A "Chosen people" event or task: store managers picked by name, no store (`extra.scope` people). */
+export const isPeopleScope = (ev: CalendarEvent): boolean => ev.scope === "people";
+
+/**
+ * Where a write goes beyond the item itself: ONE store's copy (`?stores=`), ONE
+ * person's copy (`?user=` on a task action, `?users=` on a cancel), or nothing.
+ */
+export type WriteTarget = { store: string } | { user: string } | null;
+
+/**
+ * Where a task action goes:
+ * - a private task's done / reopen: nowhere (no store, no person);
+ * - a people task: start / submit are the assignee's own part (no target), and the
+ *   creator's approve / return name the person (`?user=`, required);
+ * - a store task: the ONE store it is worked in (`?stores=`).
+ */
+export function taskTargetFor(ev: CalendarEvent, action: TaskAction): WriteTarget {
+  if (isPrivateTaskAction(action)) return null;
+  if (isPeopleScope(ev)) return (action === "approve" || action === "return") && ev.assignee ? { user: ev.assignee.id } : null;
+  return { store: ev.store.code };
+}
+
+/**
+ * The ONE copy a "cancel here" takes away: a person's (`?users=`) or a store's
+ * (`?stores=`). Null when the item has no copies (private, a plain people event,
+ * a reminder): then only cancelling the whole item is possible.
+ */
+export function cancelTargetFor(ev: CalendarEvent): WriteTarget {
+  if (isPrivate(ev)) return null;
+  if (isPeopleScope(ev)) return ev.assignee ? { user: ev.assignee.id } : null;
+  return ev.store.code ? { store: ev.store.code } : null;
+}
+
 const taskStatusOf = (ev: CalendarEvent): string | null =>
   typeof ev.extra?.task_status === "string" ? ev.extra.task_status : null;
 
@@ -143,26 +180,72 @@ const isViewer = (p: { id: string; name: string }, viewer: Viewer): boolean =>
  * cancel an event/task and approve or return a task (guide §8.2–8.3; anyone else gets
  * a 403) but the feed has no "can do" flag, so it is read from who the item names:
  * - a private item is only ever visible to its creator → yes;
- * - otherwise the `user` people on it are its creator (the create body names no
- *   other people) → yes only if the viewer is one of them;
- * - nobody named, or no signed-in user → unknown, so yes: show it, Toolbox decides.
+ * - when the people carry roles (a "Chosen people" item also names its assignee),
+ *   only the ones with role "creator" count; without roles every `user` named is the
+ *   creator (the store create body names no other people) → yes only if the viewer
+ *   is one of them;
+ * - nobody named as creator, or no signed-in user → unknown, so yes: show it,
+ *   Toolbox decides.
  */
 export function mayBeCreator(ev: CalendarEvent, viewer: Viewer | null): boolean {
   if (isPrivate(ev)) return true;
   if (!ev.users?.length || !viewer) return true;
-  return ev.users.some((u) => isViewer(u, viewer));
+  const withRoles = ev.users.some((u) => u.role);
+  const creators = withRoles ? ev.users.filter((u) => u.role === "creator") : ev.users;
+  if (!creators.length) return true;
+  return creators.some((u) => isViewer(u, viewer));
+}
+
+/**
+ * Whether the viewer is the person a "Chosen people" copy is for. Only they may start
+ * and submit it (anyone else gets 403 "This task is not assigned to you"). No
+ * assignee or no signed-in user → unknown, so yes: show it, Toolbox decides.
+ */
+export function isAssignee(ev: CalendarEvent, viewer: Viewer | null): boolean {
+  if (!ev.assignee || !viewer) return true;
+  return isViewer(ev.assignee, viewer);
+}
+
+/** Known for sure: the viewer IS this copy's assignee (so naming them on it would be noise). */
+export function viewerIsAssignee(ev: CalendarEvent, viewer: Viewer | null): boolean {
+  return !!ev.assignee && !!viewer && isViewer(ev.assignee, viewer);
+}
+
+/** Known for sure: the viewer created this item (a user with role "creator" is them). */
+export function viewerIsCreator(ev: CalendarEvent, viewer: Viewer | null): boolean {
+  return !!viewer && !!ev.users?.some((u) => u.role === "creator" && isViewer(u, viewer));
+}
+
+/** The people a "Chosen people" item names with a role: its creator(s) and assignee(s). */
+export function peopleByRole(ev: CalendarEvent, role: "creator" | "assignee"): { id: string; name: string }[] {
+  return (ev.users ?? []).filter((u) => u.role === role).map((u) => ({ id: u.id, name: u.name }));
 }
 
 /**
  * What the viewer can do next with a task (the lifecycle in guide §8.3). Start and
- * submit are the store's; approve and return are the creator's, so they are offered
- * on a submitted task only to someone who may be its creator.
+ * submit are the store's — on a "Chosen people" task, the assignee's only; approve
+ * and return are the creator's, so they are offered on a submitted task only to
+ * someone who may be its creator.
  */
 export function taskActionsFor(ev: CalendarEvent, viewer: Viewer | null = null): TaskAction[] {
   if (ev.feedType !== "task" || toolboxIdOf(ev) == null) return [];
   if (isPrivate(ev)) {
     if (ev.status === "cancelled") return [];
     return ev.status === "done" ? ["reopen"] : ["done"];
+  }
+  if (isPeopleScope(ev)) {
+    const mine = isAssignee(ev, viewer);
+    switch (taskStatusOf(ev)) {
+      case "open":
+      case "returned":
+        return mine ? ["start", "submit"] : [];
+      case "in_progress":
+        return mine ? ["submit"] : [];
+      case "submitted":
+        return mayBeCreator(ev, viewer) ? ["approve", "return"] : [];
+      default:
+        return [];
+    }
   }
   switch (taskStatusOf(ev)) {
     case "open":
@@ -329,6 +412,33 @@ export function isCancellable(ev: CalendarEvent): boolean {
  */
 export function canCancel(ev: CalendarEvent, viewer: Viewer | null): boolean {
   return isCancellable(ev) && mayBeCreator(ev, viewer);
+}
+
+/** A store manager who can be given a "Chosen people" item (`GET /calendar/people`). */
+export interface CalendarPerson {
+  id: number;
+  name: string;
+  /** Their store numbers, or "all" for every store. */
+  stores: string[] | "all";
+}
+
+/**
+ * Reads `GET /calendar/people` (`{ data: [{ id, name, stores }] }`, store managers
+ * only, by name, up to 100). Lenient: a row without a numeric id or a name is skipped.
+ */
+export function parsePeopleList(body: unknown): CalendarPerson[] {
+  const wrapped = body && typeof body === "object" ? (body as { data?: unknown }).data : undefined;
+  const rows: unknown[] = Array.isArray(wrapped) ? wrapped : Array.isArray(body) ? body : [];
+  const out: CalendarPerson[] = [];
+  for (const raw of rows) {
+    if (!raw || typeof raw !== "object") continue;
+    const row = raw as Record<string, unknown>;
+    const id = typeof row.id === "number" ? row.id : Number(row.id);
+    if (!Number.isInteger(id) || id <= 0 || typeof row.name !== "string" || !row.name.trim()) continue;
+    const stores = row.stores === "all" ? "all" : Array.isArray(row.stores) ? row.stores.filter((s): s is string => typeof s === "string") : [];
+    out.push({ id, name: row.name.trim(), stores });
+  }
+  return out;
 }
 
 /** "Remind me" is offered on any real event except a reminder itself (and a roll-up, which has no single target). */
