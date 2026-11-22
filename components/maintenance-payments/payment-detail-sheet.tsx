@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { format, isValid, parseISO } from "date-fns";
 import { toast } from "sonner";
-import { AlertCircle, History, Loader2, Pencil, Undo2 } from "lucide-react";
+import { AlertCircle, History, Loader2, Pencil, RotateCcw, Undo2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -26,9 +26,10 @@ import { AttachmentGallery } from "@/components/maintenance-tickets/attachment-g
 import { LocalTimestamp } from "@/components/maintenance-tickets/local-timestamp";
 import { NotesList } from "@/components/maintenance-tickets/notes-list";
 import { maintenancePaymentsService, usePayment } from "@/lib/hooks/use-maintenance-payments";
+import { useAuth } from "@/lib/auth/use-auth";
 import { useMaintenanceMutation } from "@/lib/hooks/use-maintenance-resource";
 import { formErrorsFrom } from "@/lib/maintenance-payments/field-errors";
-import { formatHours, formatMinutes, formatMoney, formatQuantity } from "@/lib/maintenance/money";
+import { decimalOr0, formatHours, formatMinutes, formatMoney, formatQuantity } from "@/lib/maintenance/money";
 import {
   PAID_TO_TYPES,
   PARTS_DESTINATIONS,
@@ -36,8 +37,10 @@ import {
   vocabEntry,
   vocabText,
 } from "@/lib/maintenance/vocabulary";
-import type { Payment, PaymentLine } from "@/types/maintenance-system";
+import type { Payment, PaymentLine, PaymentRefund } from "@/types/maintenance-system";
+import { paymentHref } from "@/components/maintenance-technicians/payments-list";
 import { LINE_TYPE_ICONS } from "./line-type-badges";
+import { RecordRefundDialog } from "./record-refund-dialog";
 
 export function formatPaidDate(iso: string): string {
   const d = parseISO(iso);
@@ -48,6 +51,11 @@ export function formatPaidDate(iso: string): string {
  * One payment: who, when, how; its lines with what each links to (tickets,
  * clocked time, stock, serials, purchases paid back); files, notes and
  * revisions. Edit and Mark as mistake (confirmed, with a reason).
+ *
+ * Refunds: a payment can record money that came back (Record a refund) and
+ * lists its refunds; a payment with live refunds is not edited or marked a
+ * mistake until they are undone. A refund opens here too: it names the
+ * payment it refunds and can only be undone (marked a mistake).
  */
 export function PaymentDetailSheet({
   paymentId,
@@ -64,13 +72,26 @@ export function PaymentDetailSheet({
   const t = useTranslations("maintenanceSystem");
   const { payment, isLoading, error, refresh } = usePayment(paymentId);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
+  const { canAccessRoute } = useAuth();
+  const canRefund = canAccessRoute({ service: "Maintenance", method: "POST", path: "/payments/*/refunds" });
+
+  const isRefund = payment?.kind === "refund";
+  const hasLiveRefunds = (payment?.refunds ?? []).some((r) => !r.mistaken);
+  const refundable = (payment?.lines ?? []).some((l) => decimalOr0(l.refundable) > 0);
+  const afterWrite = () => {
+    void refresh();
+    onChanged();
+  };
 
   return (
     <Sheet open={paymentId != null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
         <SheetHeader className="border-b px-5 py-4 text-start">
           <SheetTitle className="font-heading font-semibold">
-            {payment ? t("payments.detailTitle", { id: payment.id }) : t("pages.payments")}
+            {payment
+              ? t(isRefund ? "payments.refunds.detailTitle" : "payments.detailTitle", { id: payment.id })
+              : t("pages.payments")}
           </SheetTitle>
           <SheetDescription>
             {payment ? `${payment.paidTo.name} · ${formatPaidDate(payment.paidAt)}` : t("payments.detailDescription")}
@@ -98,32 +119,38 @@ export function PaymentDetailSheet({
         </div>
 
         {payment && !payment.mistaken && (
-          <div className="flex items-center justify-end gap-2 border-t px-5 py-3">
-            <Button
-              variant="outline"
-              className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
-              onClick={() => setConfirmOpen(true)}
-            >
-              <Undo2 className="size-4" />
-              {t("common.markAsMistake")}
-            </Button>
-            <Button onClick={() => onEdit(payment.id)}>
-              <Pencil className="size-4" />
-              {t("common.edit")}
-            </Button>
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t px-5 py-3">
+            {hasLiveRefunds && (
+              <p className="me-auto text-xs text-muted-foreground">{t("payments.refunds.lockedHint")}</p>
+            )}
+            {!isRefund && canRefund && refundable && (
+              <Button variant="outline" onClick={() => setRefundOpen(true)}>
+                <RotateCcw className="size-4" />
+                {t("payments.refunds.record")}
+              </Button>
+            )}
+            {!hasLiveRefunds && (
+              <Button
+                variant="outline"
+                className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => setConfirmOpen(true)}
+              >
+                <Undo2 className="size-4" />
+                {isRefund ? t("payments.refunds.undo") : t("common.markAsMistake")}
+              </Button>
+            )}
+            {!isRefund && !hasLiveRefunds && (
+              <Button onClick={() => onEdit(payment.id)}>
+                <Pencil className="size-4" />
+                {t("common.edit")}
+              </Button>
+            )}
           </div>
         )}
 
-        {payment && (
-          <MarkMistakeDialog
-            open={confirmOpen}
-            onOpenChange={setConfirmOpen}
-            payment={payment}
-            onDone={() => {
-              void refresh();
-              onChanged();
-            }}
-          />
+        {payment && <MarkMistakeDialog open={confirmOpen} onOpenChange={setConfirmOpen} payment={payment} onDone={afterWrite} />}
+        {payment && !isRefund && (
+          <RecordRefundDialog open={refundOpen} onOpenChange={setRefundOpen} payment={payment} onDone={afterWrite} />
         )}
       </SheetContent>
     </Sheet>
@@ -132,11 +159,16 @@ export function PaymentDetailSheet({
 
 function PaymentDetailBody({ payment }: { payment: Payment }) {
   const t = useTranslations("maintenanceSystem");
+  const locale = useLocale();
+  const isRefund = payment.kind === "refund";
+  const refunded = decimalOr0(payment.refundedTotal);
   // Reference and invoice # are no longer asked for: shown only when an older payment has them.
   const facts: { label: string; value: string }[] = [
     { label: t("payments.paidTo"), value: `${payment.paidTo.name} (${vocabText(t, vocabEntry(PAID_TO_TYPES, payment.paidTo.type))})` },
-    { label: t("common.date"), value: formatPaidDate(payment.paidAt) },
-    ...(payment.paymentMethod ? [{ label: t("payments.howWePaid"), value: payment.paymentMethod.name }] : []),
+    { label: isRefund ? t("payments.refunds.cameBackOn") : t("common.date"), value: formatPaidDate(payment.paidAt) },
+    ...(payment.paymentMethod
+      ? [{ label: isRefund ? t("payments.refunds.howItCameBack") : t("payments.howWePaid"), value: payment.paymentMethod.name }]
+      : []),
     ...(payment.reference ? [{ label: t("payments.reference"), value: payment.reference }] : []),
     ...(payment.invoiceNumber ? [{ label: t("payments.invoiceNumber"), value: payment.invoiceNumber }] : []),
   ];
@@ -145,8 +177,24 @@ function PaymentDetailBody({ payment }: { payment: Payment }) {
     <div className="space-y-5">
       {payment.mistaken && (
         <div role="status" className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          <p className="font-medium">{t("payments.mistakenBanner")}</p>
+          <p className="font-medium">{isRefund ? t("payments.refunds.undoneBanner") : t("payments.mistakenBanner")}</p>
           {payment.mistakenReason && <p className="text-xs">{payment.mistakenReason}</p>}
+        </div>
+      )}
+
+      {isRefund && payment.refundOf && (
+        <div className="rounded-md border border-sky-500/40 bg-sky-500/5 px-3 py-2 text-sm">
+          <p className="flex flex-wrap items-center gap-x-1.5 font-medium">
+            <RotateCcw className="size-4 text-sky-700 dark:text-sky-400" aria-hidden="true" />
+            {t("payments.refunds.refundOf")}
+            <Link href={paymentHref(locale, payment.refundOf.id)} className="text-primary hover:underline">
+              {t("payments.detailTitle", { id: payment.refundOf.id })}
+            </Link>
+            <span className="text-xs font-normal text-muted-foreground">
+              {t("payments.refunds.originalPaid", { date: formatPaidDate(payment.refundOf.paidAt), amount: formatMoney(payment.refundOf.total) })}
+            </span>
+          </p>
+          {payment.refundReason && <p className="mt-0.5 text-xs">{payment.refundReason}</p>}
         </div>
       )}
 
@@ -163,6 +211,18 @@ function PaymentDetailBody({ payment }: { payment: Payment }) {
             {formatMoney(payment.total)}
           </dd>
         </div>
+        {!isRefund && refunded > 0 && (
+          <>
+            <div className="min-w-0">
+              <dt className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{t("payments.refunds.refunded")}</dt>
+              <dd className="text-sm tabular-nums text-sky-700 dark:text-sky-400">{formatMoney(-refunded)}</dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{t("payments.refunds.costInTheEnd")}</dt>
+              <dd className="text-sm font-semibold tabular-nums">{formatMoney(payment.netTotal)}</dd>
+            </div>
+          </>
+        )}
       </dl>
 
       <section className="space-y-2">
@@ -171,6 +231,20 @@ function PaymentDetailBody({ payment }: { payment: Payment }) {
           <LineDetail key={line.id} line={line} />
         ))}
       </section>
+
+      {!isRefund && payment.refunds.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="flex items-center gap-1.5 font-heading text-sm font-semibold">
+            <RotateCcw className="size-4 text-muted-foreground" aria-hidden="true" />
+            {t("payments.refunds.title")}
+          </h3>
+          <ul className="space-y-1.5">
+            {payment.refunds.map((r) => (
+              <RefundRow key={r.id} refund={r} />
+            ))}
+          </ul>
+        </section>
+      )}
 
       {payment.attachments.length > 0 && (
         <section className="space-y-1">
@@ -254,6 +328,11 @@ function LineDetail({ line }: { line: PaymentLine }) {
         <div className="shrink-0 text-end">
           <p className="font-semibold tabular-nums">{formatMoney(line.amount)}</p>
           {howMuch[line.type] && <p className="text-[11px] text-muted-foreground tabular-nums">{howMuch[line.type]}</p>}
+          {decimalOr0(line.refunded) > 0 && (
+            <p className="text-[11px] tabular-nums text-sky-700 dark:text-sky-400">
+              {t("payments.refunds.lineRefunded", { amount: formatMoney(line.refunded) })}
+            </p>
+          )}
         </div>
       </div>
 
@@ -330,6 +409,36 @@ function LineDetail({ line }: { line: PaymentLine }) {
   );
 }
 
+/** One refund in the payment's Refunds list; opens the refund itself. */
+function RefundRow({ refund }: { refund: PaymentRefund }) {
+  const t = useTranslations("maintenanceSystem");
+  const locale = useLocale();
+  return (
+    <li className={refund.mistaken ? "rounded-md border border-dashed p-2.5 text-sm opacity-70" : "rounded-md border p-2.5 text-sm"}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <Link href={paymentHref(locale, refund.id)} className="font-medium text-primary hover:underline">
+            {t("payments.refunds.refundOn", { date: formatPaidDate(refund.refundedAt) })}
+          </Link>
+          <p className="text-xs text-muted-foreground">
+            {[refund.paymentMethod?.name, refund.reference].filter(Boolean).join(" · ") || t("payments.methods.notSaid")}
+          </p>
+          {refund.reason && <p className="mt-0.5 text-xs">{refund.reason}</p>}
+          {refund.mistaken && (
+            <p className="mt-0.5 text-xs text-destructive">
+              {t("payments.refunds.undone")}
+              {refund.mistakenReason ? `: ${refund.mistakenReason}` : ""}
+            </p>
+          )}
+        </div>
+        <span className={refund.mistaken ? "shrink-0 font-semibold tabular-nums line-through" : "shrink-0 font-semibold tabular-nums text-sky-700 dark:text-sky-400"}>
+          {formatMoney(-decimalOr0(refund.amount))}
+        </span>
+      </div>
+    </li>
+  );
+}
+
 /** "Mark as mistake": confirmation with a required reason, styled destructive. */
 function MarkMistakeDialog({
   open,
@@ -354,7 +463,7 @@ function MarkMistakeDialog({
     }
     try {
       await mark.run(payment.id, { reason: reason.trim() });
-      toast.success(t("payments.markedMistaken"));
+      toast.success(payment.kind === "refund" ? t("payments.refunds.undoneToast") : t("payments.markedMistaken"));
       onOpenChange(false);
       setReason("");
       onDone();
@@ -368,8 +477,12 @@ function MarkMistakeDialog({
     <AlertDialog open={open} onOpenChange={(next) => !mark.isPending && onOpenChange(next)}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{t("payments.markMistakeTitle", { id: payment.id })}</AlertDialogTitle>
-          <AlertDialogDescription>{t("payments.markMistakeBody")}</AlertDialogDescription>
+          <AlertDialogTitle>
+            {payment.kind === "refund" ? t("payments.refunds.undoTitle", { id: payment.id }) : t("payments.markMistakeTitle", { id: payment.id })}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {payment.kind === "refund" ? t("payments.refunds.undoBody") : t("payments.markMistakeBody")}
+          </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-1">
           <Label htmlFor="pay-mistake-reason" className="text-xs font-medium">
@@ -401,7 +514,7 @@ function MarkMistakeDialog({
           <AlertDialogCancel disabled={mark.isPending}>{t("common.cancel")}</AlertDialogCancel>
           <Button variant="destructive" disabled={mark.isPending} onClick={() => void submit()}>
             {mark.isPending && <Loader2 className="size-4 animate-spin" />}
-            {t("common.markAsMistake")}
+            {payment.kind === "refund" ? t("payments.refunds.undo") : t("common.markAsMistake")}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -82,11 +82,15 @@ import { useActualShiftMutations } from "@/lib/hooks/use-actual-shift-mutations"
 import { useScheduleTemplates } from "@/lib/hooks/use-schedule-templates";
 import { usePublishedSchedules } from "@/lib/hooks/use-published-schedules";
 import { useBulkOperation } from "@/lib/hooks/use-bulk-operation";
+import { useMovedShiftRemoval } from "@/lib/hooks/use-moved-shift-removal";
 import {
+  countChanges,
   useScheduleDraftStore,
   useWeekDrafts,
   useWeekDraftSaveMode,
+  useWeekRemovals,
   type DraftShift,
+  type RemovedShift,
 } from "@/lib/scheduling/draft.store";
 import { DraftActionBar } from "./draft-action-bar";
 import {
@@ -157,11 +161,11 @@ import {
   mergeActualShifts,
 } from "@/lib/scheduling/utils";
 import {
-  draftFromCopy,
-  type CopyTargetCheck,
-  type ShiftCopySource,
-  type ShiftCopyTarget,
-} from "@/lib/scheduling/shift-copy";
+  draftFromSource,
+  type DropTargetCheck,
+  type ShiftDragSource,
+  type ShiftDropTarget,
+} from "@/lib/scheduling/shift-drag";
 import type {
   Shift,
   ScheduleTemplate,
@@ -364,11 +368,18 @@ export function SchedulingManager() {
     storeId,
     onSettled: (operation) => {
       refetch();
+      // A save that moved shifts is waiting on this to decide what becomes of
+      // the originals.
+      const moving = pendingMoveRef.current;
+      pendingMoveRef.current = null;
       /**
        * A whole-batch failure means nothing was created, so the manager's layout
        * must come back rather than vanish. Per-item failures are NOT restored —
        * those are recoverable server-side through `retry-failed`, which the
        * progress dialog already offers, and re-drafting them would double up.
+       *
+       * The pending removals of moved shifts were never touched, so putting the
+       * drafts back (and keeping them) brings the whole staged state back.
        */
       if (operation?.status === "failed" && lastSubmittedDraftsRef.current.length) {
         // `onSettled` lives in a ref that is refreshed every render, so these
@@ -377,11 +388,34 @@ export function SchedulingManager() {
           storeId!,
           week.start,
           lastSubmittedDraftsRef.current.map(({ draftId: _drop, ...rest }) => rest),
-          "merge"
+          "merge",
+          { keepRemovals: true }
         );
         lastSubmittedDraftsRef.current = [];
         toast.error("Nothing was saved — your shifts have been put back.");
+        return;
       }
+      if (!moving) return;
+      if (operation?.status === "completed") {
+        // The new shifts exist, so the originals of the moved ones can go.
+        removalScopeRef.current = {
+          storeId: moving.storeId,
+          weekStart: moving.weekStart,
+          saved: true,
+        };
+        removal.start(moving.removals);
+        return;
+      }
+      /**
+       * Anything short of a clean finish — some shifts failed, or we lost track
+       * of the batch — deletes NOTHING. Deleting an original whose new shift
+       * never arrived would lose the shift; leaving it means at worst a
+       * duplicate. We do not try to match failures to moves.
+       */
+      clearRemovals(moving.storeId, moving.weekStart);
+      toast.warning(
+        "Some shifts didn't save, so no originals were removed — moved shifts may now appear twice."
+      );
     },
   });
 
@@ -449,17 +483,37 @@ export function SchedulingManager() {
   const [isCopyingWeek, setIsCopyingWeek] = useState(false);
   /** The set most recently submitted, so a failed batch can be restored. */
   const lastSubmittedDraftsRef = useRef<DraftShift[]>([]);
+  /**
+   * Set by a save that created new shifts for MOVED ones: the originals to delete
+   * once that batch finishes cleanly. Consumed (and cleared) by `onSettled`.
+   */
+  const pendingMoveRef = useRef<{
+    storeId: string;
+    weekStart: string;
+    removals: RemovedShift[];
+  } | null>(null);
+  /** Which store-week the running delete step belongs to, and whether it follows a save. */
+  const removalScopeRef = useRef<{
+    storeId: string;
+    weekStart: string;
+    saved: boolean;
+  } | null>(null);
 
   /* ── Drafts ──────────────────────────────────────────────────────────────
    * Adding a shift is local until Save. Drafts are persisted per store + week,
    * so changing week or store parks them rather than losing them.
    */
   const drafts = useWeekDrafts(storeId, week.start);
+  const removals = useWeekRemovals(storeId, week.start);
   const draftSaveMode = useWeekDraftSaveMode(storeId, week.start);
   const addDraft = useScheduleDraftStore((st) => st.addDraft);
   const updateDraft = useScheduleDraftStore((st) => st.updateDraft);
   const removeDraft = useScheduleDraftStore((st) => st.removeDraft);
+  const moveDraft = useScheduleDraftStore((st) => st.moveDraft);
+  const moveSavedShift = useScheduleDraftStore((st) => st.moveSavedShift);
   const clearDraftWeek = useScheduleDraftStore((st) => st.clearWeek);
+  const settleDrafts = useScheduleDraftStore((st) => st.settleDrafts);
+  const clearRemovals = useScheduleDraftStore((st) => st.clearRemovals);
   const replaceDraftWeek = useScheduleDraftStore((st) => st.replaceWeek);
   const pruneExpiredDrafts = useScheduleDraftStore((st) => st.pruneExpired);
 
@@ -467,10 +521,54 @@ export function SchedulingManager() {
     pruneExpiredDrafts();
   }, [pruneExpiredDrafts]);
 
-  const hasDrafts = drafts.length > 0;
+  /**
+   * Everything the week is waiting to save: unsaved shifts, plus saved shifts
+   * that were moved and are pending deletion. A move is ONE change, though it is
+   * a new shift and a deletion underneath.
+   */
+  const changeCount = countChanges(drafts, removals);
+  const hasChanges = changeCount > 0;
 
-  /** Warns before any action that moves away from drafted shifts. */
-  const guard = useUnsavedShiftsGuard({ hasDrafts, draftCount: drafts.length });
+  /** Warns before any action that moves away from unsaved changes. */
+  const guard = useUnsavedShiftsGuard({
+    hasDrafts: hasChanges,
+    draftCount: changeCount,
+  });
+
+  /**
+   * Deletes the originals of moved shifts, once their replacements exist. Runs
+   * from `bulk`'s `onSettled` (or straight from Save when there was nothing to
+   * create) and reports back here.
+   */
+  const removal = useMovedShiftRemoval({
+    storeId,
+    refetchWeek: refetch,
+    onFinished: ({ removed, failed, failureMessage }) => {
+      const scope = removalScopeRef.current;
+      if (!scope) return;
+      if (removed.length > 0) {
+        clearRemovals(
+          scope.storeId,
+          scope.weekStart,
+          removed.map((r) => r.id)
+        );
+      }
+      if (failed.length > 0) {
+        const plural = failed.length !== 1;
+        toast.error(
+          `${failed.length} original shift${plural ? "s" : ""} couldn't be removed${
+            failureMessage ? ` — ${failureMessage}` : ""
+          }. ${plural ? "They stay" : "It stays"} hidden; press Save to try again.`
+        );
+      } else if (removed.length > 0) {
+        toast.success(
+          `${scope.saved ? "Moved" : "Removed"} ${removed.length} shift${
+            removed.length !== 1 ? "s" : ""
+          }`
+        );
+      }
+    },
+  });
 
 
   /**
@@ -515,6 +613,7 @@ export function SchedulingManager() {
   const weekIsSettling =
     isRefetching ||
     bulk.isStarting ||
+    removal.isRunning ||
     // Still working. Once it finishes, `isRefetching` carries the rest — the
     // dialog lingers a moment after that, and claiming to be busy underneath
     // a result that has already landed is its own small lie.
@@ -535,12 +634,30 @@ export function SchedulingManager() {
    * ad-hoc coverage. Pure planned mode just shows the plan as-is; Actual and
    * Comparison modes both need the merged reality to compute totals/conflicts.
    */
+  /**
+   * The saved shifts as the PLANNED view shows them: without the ones that were
+   * moved away and are waiting to be deleted on Save. Hours, totals and the plan
+   * row read this, so a moved shift already counts in its new place. Actual and
+   * Compare keep `shifts`: there the originals are what really happened.
+   */
+  const removedIds = useMemo(
+    () => new Set(removals.map((r) => r.id)),
+    [removals]
+  );
+  const plannedShifts = useMemo(
+    () =>
+      removedIds.size === 0
+        ? shifts
+        : shifts.filter((s) => !removedIds.has(s.id)),
+    [shifts, removedIds]
+  );
+
   const displayShifts = useMemo(
     () =>
       scheduleMode === "planned" && !comparisonMode
-        ? shifts
+        ? plannedShifts
         : mergeActualShifts(shifts, actualShifts),
-    [scheduleMode, comparisonMode, shifts, actualShifts]
+    [scheduleMode, comparisonMode, plannedShifts, shifts, actualShifts]
   );
 
   /**
@@ -585,9 +702,9 @@ export function SchedulingManager() {
   const weekPlan = useMemo(
     () =>
       insights.data
-        ? buildWeekPlan(insights.data, week, shifts, drafts, insightsBasis)
+        ? buildWeekPlan(insights.data, week, plannedShifts, drafts, insightsBasis)
         : null,
-    [insights.data, week, shifts, drafts, insightsBasis],
+    [insights.data, week, plannedShifts, drafts, insightsBasis],
   );
   /** The history as the stats tiles see it: only while planning. */
   const outlook = isPlannedOnly ? weekPlan : null;
@@ -712,7 +829,7 @@ export function SchedulingManager() {
     // The server's figures describe SAVED shifts only, so once drafts exist
     // they would be stale — the manager would add five shifts and watch the
     // totals refuse to move. Fall through to the local calculation instead.
-    if (isPlannedOnly && data?.stats && !hasDrafts) return data.stats;
+    if (isPlannedOnly && data?.stats && !hasChanges) return data.stats;
 
     // Drafts have no server-computed duration, so their hours come from the
     // times on screen. Wall-clock is acceptable here and nowhere else: these
@@ -755,7 +872,7 @@ export function SchedulingManager() {
     displayShifts,
     employeeLookup,
     store?.defaultLaborRate,
-    hasDrafts,
+    hasChanges,
     drafts,
   ]);
 
@@ -982,7 +1099,23 @@ export function SchedulingManager() {
    * repeating it would delete what the previous batch just created.
    */
   const handleSaveDrafts = useCallback(() => {
-    if (!storeId || drafts.length === 0) return;
+    if (!storeId || changeCount === 0) return;
+
+    // Replace mode wipes the week on the server, originals included, so there
+    // is nothing left to delete afterwards.
+    const replacing = draftSaveMode === "replace";
+
+    // Nothing to create (a moved shift was deleted again): only the originals
+    // are left, so delete them directly — there is no batch to show.
+    if (drafts.length === 0) {
+      removalScopeRef.current = {
+        storeId,
+        weekStart: week.start,
+        saved: false,
+      };
+      removal.start(removals);
+      return;
+    }
 
     const MAX_PER_REQUEST = 500;
     const batches: DraftShift[][] = [];
@@ -992,6 +1125,12 @@ export function SchedulingManager() {
 
     // Held so a total batch failure can put the manager's layout back.
     lastSubmittedDraftsRef.current = drafts;
+    // Create first, delete after: the originals of moved shifts go only once the
+    // new ones are known to exist (see `onSettled`).
+    pendingMoveRef.current =
+      !replacing && removals.length > 0
+        ? { storeId, weekStart: week.start, removals: [...removals] }
+        : null;
 
     void bulk
       .run(
@@ -1017,15 +1156,35 @@ export function SchedulingManager() {
         { fallbackMessage: "Could not save these shifts." }
       )
       .then((accepted) => {
+        if (!accepted) {
+          pendingMoveRef.current = null;
+          return;
+        }
         /**
          * Only clear once the batch has actually been ACCEPTED. Clearing on
          * submit would throw the manager's layout away on a rejected request,
          * even though nothing was written. If the batch later fails outright,
          * `onSettled` puts the drafts back.
+         *
+         * Only the DRAFTS clear: the pending removals stay until their
+         * originals are really deleted — unless the save replaced the whole
+         * week, which took them with it.
          */
-        if (accepted) clearDraftWeek(storeId, week.start);
+        settleDrafts(storeId, week.start);
+        if (replacing) clearRemovals(storeId, week.start);
       });
-  }, [storeId, drafts, draftSaveMode, week.start, bulk, clearDraftWeek]);
+  }, [
+    storeId,
+    changeCount,
+    drafts,
+    removals,
+    draftSaveMode,
+    week.start,
+    bulk,
+    removal,
+    settleDrafts,
+    clearRemovals,
+  ]);
 
   const handleCancelDrafts = useCallback(() => {
     setCancelDraftsOpen(false);
@@ -1051,32 +1210,76 @@ export function SchedulingManager() {
   );
 
   /**
-   * A shift was dragged onto another cell: make an unsaved copy there.
+   * A shift was dragged onto another cell: move it there, or copy it there when
+   * Ctrl/⌘ was held at the drop.
    *
-   * A copy is an ordinary draft — nothing is sent until Save, and it counts in
-   * the totals and the plan row straight away. Only time and label travel (see
-   * `draftFromCopy`). A blocked person (leave, or unavailable at that time) is
-   * a warning, not a refusal, the same as adding a shift over a block; someone
-   * who is not set up yet is refused, because their draft could only fail on
-   * Save.
+   * Everything is staged — nothing is sent until Save, and the totals and the
+   * plan row follow at once.
+   *   copy             -> an ordinary draft in the new cell (time and label only,
+   *                       see `draftFromSource`); the original stays.
+   *   move a draft     -> the draft changes cell (and keeps its note). Dropping a
+   *                       moved draft back where its original was cancels the move.
+   *   move a saved one -> the original is hidden as a pending removal and a draft
+   *                       stands in for it at the new place. It counts as ONE
+   *                       change; Save creates the draft, then deletes the original.
+   *
+   * A blocked person (leave, or unavailable at that time) is a warning, not a
+   * refusal, the same as adding a shift over a block; someone who is not set up
+   * yet is refused, because their draft could only fail on Save.
    */
-  const handleCopyShift = useCallback(
+  const handleDropShift = useCallback(
     (
-      source: ShiftCopySource,
-      target: ShiftCopyTarget,
-      check: CopyTargetCheck,
+      source: ShiftDragSource,
+      target: ShiftDropTarget,
+      check: DropTargetCheck,
+      copy: boolean
     ) => {
       if (!storeId) return;
       if (check.status === "unsynced") {
         toast.error(check.reason);
         return;
       }
-      addDraft(storeId, week.start, draftFromCopy(source, target));
-      if (check.status === "blocked") {
-        toast.warning(`Shift copied — ${check.reason}.`);
+      const warn = (verb: string) => {
+        if (check.status === "blocked") {
+          toast.warning(`Shift ${verb} — ${check.reason}.`);
+        }
+      };
+
+      if (copy) {
+        addDraft(storeId, week.start, draftFromSource(source, target));
+        warn("copied");
+        return;
       }
+
+      if (source.origin.kind === "draft") {
+        const undone = moveDraft(
+          storeId,
+          week.start,
+          source.origin.draftId,
+          target
+        );
+        if (undone) toast.info("Move undone — the shift is back where it was.");
+        else warn("moved");
+        return;
+      }
+
+      moveSavedShift(
+        storeId,
+        week.start,
+        {
+          id: source.origin.id,
+          shiftId: source.origin.shiftId,
+          employeeId: source.fromEmployeeId,
+          dayIndex: source.fromDayIndex,
+          startTime: source.startTime,
+          endTime: source.endTime,
+          label: source.label,
+        },
+        draftFromSource(source, target)
+      );
+      warn("moved");
     },
-    [storeId, week.start, addDraft]
+    [storeId, week.start, addDraft, moveDraft, moveSavedShift]
   );
 
   /** One-click "worked exactly as planned" — no dialog, addresses the assignment. */
@@ -1455,7 +1658,7 @@ export function SchedulingManager() {
   const handleSaveTemplate = useCallback(() => {
     // The server snapshots the week from its OWN data, so drafts are invisible
     // to it — saving now would produce a template missing the shifts on screen.
-    if (hasDrafts) {
+    if (hasChanges) {
       toast.warning("Save your unsaved shifts first — a template can't include them.");
       return;
     }
@@ -1480,7 +1683,7 @@ export function SchedulingManager() {
         setTemplateDescription("");
         toast.success(`Template "${templateName.trim()}" saved`);
       });
-  }, [templateName, templateDescription, shifts.length, week.start, templates, hasDrafts]);
+  }, [templateName, templateDescription, shifts.length, week.start, templates, hasChanges]);
 
   /**
    * Apply a template to the displayed week.
@@ -2624,9 +2827,10 @@ export function SchedulingManager() {
         */}
         {isPlannedOnly && (
           <DraftActionBar
-            count={drafts.length}
+            count={changeCount}
+            moved={removals.length}
             saveMode={draftSaveMode}
-            isSaving={bulk.isStarting}
+            isSaving={bulk.isStarting || removal.isRunning}
             onSave={handleSaveDrafts}
             onCancel={() => setCancelDraftsOpen(true)}
           />
@@ -2636,7 +2840,7 @@ export function SchedulingManager() {
         <div ref={gridRef} data-guide-id="sched-grid">
           <ScheduleGrid
             employees={filteredEmployees}
-            shifts={shifts}
+            shifts={isPlannedOnly ? plannedShifts : shifts}
             week={week}
             conflictIds={conflictIds}
             overtimeEmpIds={overtimeEmpIds}
@@ -2663,7 +2867,7 @@ export function SchedulingManager() {
             draftShifts={drafts}
             onEditDraft={handleEditDraft}
             onDeleteDraft={handleDeleteDraft}
-            onCopyShift={handleCopyShift}
+            onDropShift={handleDropShift}
             weekPlan={isPlannedOnly ? weekPlan : null}
             weekPlanLoading={isPlannedOnly && insights.isLoading && !weekPlan}
             skillsByEmployee={skillsByEmployee}
@@ -2761,8 +2965,8 @@ export function SchedulingManager() {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>
-                Discard {drafts.length} unsaved shift
-                {drafts.length !== 1 ? "s" : ""}?
+                Discard {changeCount} unsaved shift
+                {changeCount !== 1 ? "s" : ""}?
               </AlertDialogTitle>
               <AlertDialogDescription>
                 This removes the shifts you have laid out but not saved, and
@@ -2846,6 +3050,22 @@ export function SchedulingManager() {
           onConfirm={mutations.confirmWarning}
           onCancel={mutations.cancelWarning}
           isSubmitting={mutations.isSubmitting}
+        />
+
+        {/* The same "already published" question, asked once when the originals of moved shifts are deleted */}
+        <ScheduleWarningDialog
+          code={removal.warning ? "SHIFT_PUBLISHED" : null}
+          message={removal.warning?.message}
+          detail={
+            removal.warning
+              ? `Removing the original of ${removal.warning.count} moved shift${
+                  removal.warning.count !== 1 ? "s" : ""
+                }`
+              : undefined
+          }
+          onConfirm={removal.confirmWarning}
+          onCancel={removal.cancelWarning}
+          isSubmitting={removal.isRunning}
         />
 
         {/* Async bulk operation progress */}

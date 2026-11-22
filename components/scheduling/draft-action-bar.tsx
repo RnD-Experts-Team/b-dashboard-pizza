@@ -18,7 +18,10 @@ import { cn } from "@/lib/utils";
  */
 
 interface DraftActionBarProps {
+  /** Changes waiting to save. A moved shift counts once. */
   count: number;
+  /** How many of them are saved shifts that were moved (their originals go on Save). */
+  moved?: number;
   /** `replace` only comes from Copy Previous Week, and it needs saying out loud. */
   saveMode: "merge" | "replace";
   isSaving: boolean;
@@ -28,6 +31,7 @@ interface DraftActionBarProps {
 
 export function DraftActionBar({
   count,
+  moved = 0,
   saveMode,
   isSaving,
   onSave,
@@ -62,6 +66,8 @@ export function DraftActionBar({
               <TriangleAlert className="h-3 w-3 shrink-0" />
               Saving replaces everything currently in this week.
             </span>
+          ) : moved > 0 ? (
+            `${moved} moved — the originals are removed when you save. Overlaps and overtime are checked then.`
           ) : (
             "Overlaps and overtime are checked when you save."
           )}

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
+import { MaintenanceTicketsError } from "@/lib/api/maintenance-error";
 import { businessReportsService } from "@/lib/api/services/business-reports.service";
 import type {
   BusinessReportsData,
@@ -23,6 +24,7 @@ const SECTION_KEYS: SectionKey[] = [
   "payrollWeeks",
   "feedback",
   "tickets",
+  "maintenanceCosts",
   "skills",
   "salesHistory",
 ];
@@ -48,11 +50,17 @@ const MESSAGES: Record<SectionErrorKind, string> = {
 /**
  * What went wrong, in the user's words: a timeout or a server that gave up
  * (5xx — on these heavy reports that is the range being too big) reads as
- * "too much data", a 403 as no access; never the raw server error.
+ * "too much data", a 403 as no access; never the raw server error. The
+ * Maintenance client throws its own error type, read by its code.
  */
 function toError(err: unknown): { error: string; errorKind: SectionErrorKind } {
-  const status = axios.isAxiosError(err) ? err.response?.status : undefined;
-  const timedOut = axios.isAxiosError(err) && (err.code === "ECONNABORTED" || err.code === "ETIMEDOUT");
+  const maintenance = err instanceof MaintenanceTicketsError ? err.code : undefined;
+  const maintenanceStatus = maintenance === "FORBIDDEN" ? HTTP_FORBIDDEN : undefined;
+  const status = axios.isAxiosError(err) ? err.response?.status : maintenanceStatus;
+  const timedOut =
+    (axios.isAxiosError(err) && (err.code === "ECONNABORTED" || err.code === "ETIMEDOUT")) ||
+    maintenance === "TIMEOUT" ||
+    maintenance === "SERVER_ERROR";
   const kind: SectionErrorKind =
     [
       { when: status === HTTP_FORBIDDEN, kind: "no-access" as const },
@@ -119,6 +127,7 @@ export function useBusinessReports(): UseBusinessReportsResult {
     void settle("labor", svc.getLabor(params, signal));
     void settle("feedback", svc.getFeedback(params, signal));
     void settle("tickets", svc.getTickets(params, signal));
+    void settle("maintenanceCosts", svc.getMaintenanceCosts(params, signal));
     void settle("skills", svc.getSkills(params, signal));
     void settle("salesHistory", svc.getSalesHistory(params, signal));
     if (params.withStoreScore) {

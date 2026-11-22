@@ -1,6 +1,7 @@
 import axios from "axios";
 import type {
   BootsOnTheGround,
+  MyUsage,
   UsageReport,
   UsageReportParams,
   UsageSegmentReport,
@@ -87,6 +88,20 @@ export const screenUsageService = {
       signal,
     });
     return data.segments;
+  },
+
+  /**
+   * The signed-in person's own segments over [from, to) — the live "Today" view.
+   * Proxied through GET /api/screen-project/usage/mine
+   */
+  async getMine(params: { from: string; to: string }, signal?: AbortSignal): Promise<MyUsage> {
+    const query = new URLSearchParams({ from: params.from, to: params.to });
+    const { data } = await axios.get<MyUsage>(`/api/screen-project/usage/mine?${query}`, {
+      headers: buildHeaders(),
+      timeout: 30_000,
+      signal,
+    });
+    return data;
   },
 
   /**

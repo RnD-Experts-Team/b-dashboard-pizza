@@ -23,16 +23,16 @@ const NO_DRAFTS: DraftShift[] = [];
 import { actualForPlanned, groupClockInsByPlan } from "@/lib/scheduling/utils";
 import {
   blockReasonFor as describeBlock,
-  checkCopyTarget,
-  type CopyTargetCheck,
-  type ShiftCopySource,
-  type ShiftCopyTarget,
-} from "@/lib/scheduling/shift-copy";
+  checkDropTarget,
+  type DropTargetCheck,
+  type ShiftDragSource,
+  type ShiftDropTarget,
+} from "@/lib/scheduling/shift-drag";
 import {
-  CopyDropCell,
+  DragDropCell,
   DraggableShift,
-  ShiftCopyProvider,
-} from "./shift-copy-dnd";
+  ShiftDragProvider,
+} from "./shift-drag-dnd";
 import { ShiftCard } from "./shift-card";
 import { ActualShiftCard } from "./actual-shift-card";
 import { TimeclockReviewCard } from "./timeclock-review-card";
@@ -103,14 +103,16 @@ interface ScheduleGridProps {
   onEditDraft?: (draft: DraftShift) => void;
   onDeleteDraft?: (draftId: string) => void;
   /**
-   * A shift was dragged onto another cell. Planned view only; the caller turns it
-   * into a draft. `check` says whether the target person can take it: fine,
-   * blocked (warn, still copy) or not yet set up (refuse).
+   * A shift was dragged onto another cell. Planned view only; the caller moves
+   * it, or copies it when `copy` is true (Ctrl/⌘ held at the drop). `check` says
+   * whether the target person can take it: fine, blocked (warn, still do it) or
+   * not yet set up (refuse).
    */
-  onCopyShift?: (
-    source: ShiftCopySource,
-    target: ShiftCopyTarget,
-    check: CopyTargetCheck,
+  onDropShift?: (
+    source: ShiftDragSource,
+    target: ShiftDropTarget,
+    check: DropTargetCheck,
+    copy: boolean,
   ) => void;
   /**
    * Past weeks against the plan being built, shown as a row under the day
@@ -209,7 +211,7 @@ export function ScheduleGrid({
   draftShifts = [],
   onEditDraft,
   onDeleteDraft,
-  onCopyShift,
+  onDropShift,
   weekPlan,
   weekPlanLoading,
   skillsByEmployee,
@@ -356,19 +358,24 @@ export function ScheduleGrid({
     isPlannedMode && !employeeView && (!!weekPlan || !!weekPlanLoading);
 
   /**
-   * Shifts can be dragged to copy them in the planned view only: a copy is a new
-   * unsaved shift, which Actual and Compare have no place for. Switched off for
-   * the staff-facing image too, so nothing of the gesture can reach the PNG.
+   * Shifts can be dragged (to move them, or to copy them with Ctrl/⌘) in the
+   * planned view only: both end in unsaved changes, which Actual and Compare have
+   * no place for. Switched off for the staff-facing image too, so nothing of the
+   * gesture can reach the PNG.
    */
-  const copyEnabled = isPlannedMode && !employeeView && !!onCopyShift;
+  const dragEnabled = isPlannedMode && !employeeView && !!onDropShift;
 
-  const handleCopy = (source: ShiftCopySource, target: ShiftCopyTarget) => {
+  const handleDrop = (
+    source: ShiftDragSource,
+    target: ShiftDropTarget,
+    copy: boolean,
+  ) => {
     const emp = employees.find((e) => e.id === target.employeeId);
-    if (!emp || !onCopyShift) return;
-    onCopyShift(
+    if (!emp || !onDropShift) return;
+    onDropShift(
       source,
       target,
-      checkCopyTarget(
+      checkDropTarget(
         emp,
         target.dayIndex,
         source.startTime,
@@ -376,13 +383,14 @@ export function ScheduleGrid({
         availability,
         timeOff,
       ),
+      copy,
     );
   };
 
   return (
     // Outside the table on purpose: the drag context renders <div>s beside its
     // children, which have no place inside a <table>.
-    <ShiftCopyProvider onCopy={handleCopy}>
+    <ShiftDragProvider onDrop={handleDrop}>
     <div className="rounded-lg border bg-card overflow-hidden">
       {/*
         Scrolls both ways, so the day headers (and the plan row under them) stay
@@ -608,13 +616,13 @@ export function ScheduleGrid({
                           );
 
                     return (
-                      <CopyDropCell
+                      <DragDropCell
                         key={dayIdx}
                         employeeId={emp.id}
                         dayIndex={dayIdx}
-                        enabled={copyEnabled}
+                        enabled={dragEnabled}
                         check={(src) =>
-                          checkCopyTarget(
+                          checkDropTarget(
                             emp,
                             dayIdx,
                             src.startTime,
@@ -844,7 +852,7 @@ export function ScheduleGrid({
                                   key={shift.id}
                                   id={`shift:${shift.id}`}
                                   disabled={
-                                    !copyEnabled || isPendingShift(shift.id)
+                                    !dragEnabled || isPendingShift(shift.id)
                                   }
                                   source={{
                                     startTime: shift.startTime,
@@ -853,6 +861,11 @@ export function ScheduleGrid({
                                     type: shift.type,
                                     fromEmployeeId: emp.id,
                                     fromDayIndex: dayIdx,
+                                    origin: {
+                                      kind: "saved",
+                                      id: shift.id,
+                                      shiftId: shift.shiftId,
+                                    },
                                   }}
                                 >
                                   <ShiftCard
@@ -881,7 +894,7 @@ export function ScheduleGrid({
                                   <DraggableShift
                                     key={draft.draftId}
                                     id={`draft:${draft.draftId}`}
-                                    disabled={!copyEnabled}
+                                    disabled={!dragEnabled}
                                     source={{
                                       startTime: draft.startTime,
                                       endTime: draft.endTime,
@@ -889,6 +902,10 @@ export function ScheduleGrid({
                                       type: draft.type,
                                       fromEmployeeId: emp.id,
                                       fromDayIndex: dayIdx,
+                                      origin: {
+                                        kind: "draft",
+                                        draftId: draft.draftId,
+                                      },
                                     }}
                                   >
                                     <DraftShiftCard
@@ -960,7 +977,7 @@ export function ScheduleGrid({
                             </>
                           )}
                         </div>
-                      </CopyDropCell>
+                      </DragDropCell>
                     );
                   })}
 
@@ -1026,8 +1043,11 @@ export function ScheduleGrid({
               ))}
               <td className="px-1 sm:px-2 py-2 text-center">
                 <p className="text-[11px] sm:text-xs font-bold">
-                  {effectiveShifts.length > 0
-                    ? `${effectiveShifts.reduce((t, s) => t + s.durationMinutes / 60, 0).toFixed(1)}h`
+                  {/* The sum of the day totals beside it, so the two always
+                      agree — including unsaved shifts, which a moved shift now
+                      is until it is saved. */}
+                  {dayTotals.some((d) => d.shifts > 0)
+                    ? `${dayTotals.reduce((t, d) => t + d.hours, 0).toFixed(1)}h`
                     : "—"}
                 </p>
               </td>
@@ -1050,6 +1070,6 @@ export function ScheduleGrid({
         skills={skills}
       />
     </div>
-    </ShiftCopyProvider>
+    </ShiftDragProvider>
   );
 }

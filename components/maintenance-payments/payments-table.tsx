@@ -1,11 +1,11 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Paperclip } from "lucide-react";
+import { Paperclip, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatMoney } from "@/lib/maintenance/money";
+import { decimalOr0, formatMoney } from "@/lib/maintenance/money";
 import type { PaymentListRow } from "@/types/maintenance-system";
 import { LineTypeBadges } from "./line-type-badges";
 import { formatPaidDate } from "./payment-detail-sheet";
@@ -19,8 +19,10 @@ function categoryName(row: PaymentListRow): string | null {
 /**
  * The payments list: date, paid to, stores, types, attachments (and an
  * older payment's invoice #), total. A
- * mistaken payment is struck through and says "Mistake" in words. Cards
- * below md; the table from md up. A row opens the detail sheet.
+ * mistaken payment is struck through and says "Mistake" in words. A refund
+ * is its own row with a negative total and says "Refund of #N" in words; a
+ * payment with refunds shows what came back under its total. Cards below md;
+ * the table from md up. A row opens the detail sheet.
  */
 export function PaymentsTable({ rows, onOpen }: { rows: PaymentListRow[]; onOpen: (id: number) => void }) {
   const t = useTranslations("maintenanceSystem");
@@ -39,6 +41,23 @@ export function PaymentsTable({ rows, onOpen }: { rows: PaymentListRow[]; onOpen
     </Badge>
   );
 
+  // A refund says so in words (not by colour alone), with the payment it refunds.
+  const refundBadge = (row: PaymentListRow) =>
+    row.kind === "refund" ? (
+      <Badge variant="outline" className="gap-1 border-sky-500/40 px-1.5 py-0 text-[10px] text-sky-700 dark:text-sky-400">
+        <RotateCcw className="size-3" aria-hidden="true" />
+        {row.refundOf ? t("payments.refunds.refundOfShort", { id: row.refundOf.id }) : t("payments.refunds.badge")}
+      </Badge>
+    ) : null;
+
+  // Under a payment's total: what its refunds gave back.
+  const refundedNote = (row: PaymentListRow) =>
+    row.kind === "payment" && decimalOr0(row.refundedTotal) > 0 ? (
+      <span className="block text-[11px] font-normal text-sky-700 tabular-nums dark:text-sky-400">
+        {t("payments.refunds.lineRefunded", { amount: formatMoney(row.refundedTotal) })}
+      </span>
+    ) : null;
+
   return (
     <>
       {/* Mobile cards */}
@@ -56,12 +75,14 @@ export function PaymentsTable({ rows, onOpen }: { rows: PaymentListRow[]; onOpen
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className={cn("truncate text-sm font-medium", row.mistaken && "line-through")}>{row.paidTo.name}</p>
+                  {refundBadge(row)}
                   <p className="text-[11px] text-muted-foreground tabular-nums">
                     {[formatPaidDate(row.paidAt), row.stores.join(", ")].filter(Boolean).join(" · ")}
                   </p>
                 </div>
                 <div className="shrink-0 text-end">
                   <p className={cn("text-base font-semibold tabular-nums", row.mistaken && "line-through")}>{formatMoney(row.total)}</p>
+                  {refundedNote(row)}
                   {row.mistaken && mistakeBadge(row)}
                 </div>
               </div>
@@ -107,6 +128,7 @@ export function PaymentsTable({ rows, onOpen }: { rows: PaymentListRow[]; onOpen
                 <TableCell>
                   <span className="flex items-center gap-1.5">
                     <span className={cn("font-medium", row.mistaken && "line-through")}>{row.paidTo.name}</span>
+                    {refundBadge(row)}
                     {row.mistaken && mistakeBadge(row)}
                   </span>
                   {categoryName(row) && <span className="block text-[11px] text-muted-foreground">{categoryName(row)}</span>}
@@ -118,6 +140,7 @@ export function PaymentsTable({ rows, onOpen }: { rows: PaymentListRow[]; onOpen
                 <TableCell>{invoiceCell(row)}</TableCell>
                 <TableCell className={cn("text-end font-semibold tabular-nums", row.mistaken && "line-through")}>
                   {formatMoney(row.total)}
+                  {refundedNote(row)}
                 </TableCell>
               </TableRow>
             ))}

@@ -113,7 +113,7 @@ export const SCHEDULING_GUIDE: SchedulingGuideEntry[] = [
       bullets: [
         "Click an empty cell to add a shift there",
         "Hover over a shift to edit or delete it",
-        "Drag a shift onto another cell to copy its time and label — to the same person on another day, or to someone else. The copy is a draft, and you are warned if that person is unavailable then",
+        "Drag a shift onto another cell to move it — to the same person on another day, or to someone else. Hold Ctrl while you drag to copy its time and label instead. Either way it waits for Save, and you are warned if that person is unavailable then",
         "New shifts are held as drafts until you press Save, so you can lay out a whole week before committing to any of it",
         "Publish the week once you are happy with it — that is what your team sees",
       ],

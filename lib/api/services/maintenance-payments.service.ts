@@ -28,6 +28,7 @@ import type {
   PaymentListRow,
   PaymentMethodOption,
   ReasonPayload,
+  RefundInput,
   TechnicianPurchase,
   TechnicianPurchaseFilters,
   TechnicianPurchaseInput,
@@ -67,8 +68,13 @@ export const maintenancePaymentsService = {
   editPayment(id: number, input: EditPaymentInput): Promise<Payment> {
     return http.post<Payment>(`${paymentPath(id)}/edit`, input);
   },
+  /** Also undoes a refund: a refund is a payment of kind "refund". */
   markPaymentMistaken(id: number, payload: ReasonPayload): Promise<Payment> {
     return http.post<Payment>(`${paymentPath(id)}/mistaken`, payload);
+  },
+  /** Money that came back for a payment. Answers with the payment, its refunds included. */
+  createRefund(id: number, input: RefundInput): Promise<Payment> {
+    return http.post<Payment>(`${paymentPath(id)}/refunds`, input);
   },
   addPaymentNote(id: number, note: { body: string; files?: File[] }): Promise<TicketNote> {
     return http.post<TicketNote>(`${paymentPath(id)}/notes`, note);

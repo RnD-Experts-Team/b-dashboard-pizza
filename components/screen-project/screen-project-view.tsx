@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ScreenTile } from "./screen-tile";
 import { UsageDebugPanel, UsageDebugToggle } from "./usage/usage-debug-panel";
+import { MyUsageTodayChip } from "./usage/my-usage-today";
 import type { StationStateMsg, ScreenShareMode } from "./screen-tile";
 import { StationsDialog } from "./stations-dialog";
 import { ObserverDialog } from "./observer-dialog";
@@ -1381,6 +1382,9 @@ export function ScreenProjectView() {
             stations={stations}
             onRefetch={refetch}
           />
+          <div className="w-px h-5 bg-white/10" />
+          {/* Your own presence and talking time today, live */}
+          <MyUsageTodayChip />
         </div>
 
         {/* ── Center: personal A/V controls ── */}
