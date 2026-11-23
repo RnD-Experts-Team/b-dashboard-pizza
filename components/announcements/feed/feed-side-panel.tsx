@@ -80,7 +80,7 @@ export function FeedSidePanel({
             </div>
           ) : (
             <p className="flex items-center gap-2 text-sm font-medium">
-              <CheckCheck className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
+              <CheckCheck className="size-4 text-muted-foreground" aria-hidden />
               {t("caughtUpTitle")}
             </p>
           )}

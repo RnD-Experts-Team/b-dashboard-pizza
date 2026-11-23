@@ -238,7 +238,7 @@ export function ReactionsBar({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: reduceMotion ? 0.1 : 0.15 }}
-              className="inline-flex items-center gap-1 px-1 text-xs font-medium text-emerald-600 dark:text-emerald-400"
+              className="inline-flex items-center gap-1 px-1 text-xs font-medium text-muted-foreground"
             >
               <CheckCheck className="size-3.5" aria-hidden />
               {t("seen")}

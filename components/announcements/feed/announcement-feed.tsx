@@ -383,7 +383,7 @@ export function AnnouncementFeed({ deepLinkId = null, className }: AnnouncementF
       {/* Everything has been read */}
       {items.length > 0 && filter === "unread" && unread.length === 0 && !filtersActive && (
         <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-4 py-14 text-center">
-          <CheckCheck className="size-9 text-emerald-600 dark:text-emerald-400" aria-hidden />
+          <CheckCheck className="size-9 text-muted-foreground/60" aria-hidden />
           <div className="space-y-1">
             <p className="font-heading text-base font-medium">{t("caughtUpTitle")}</p>
             <p className="mx-auto max-w-xs text-sm text-muted-foreground">{t("caughtUpHint")}</p>
