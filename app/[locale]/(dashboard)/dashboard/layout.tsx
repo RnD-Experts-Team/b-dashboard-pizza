@@ -5,7 +5,6 @@ import { useRouter, useParams } from "next/navigation";
 import Script from "next/script";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { AppShell } from "@/components/layout/app-shell";
-// import { AnnouncementPopup } from "@/components/announcements/announcement-popup";
 import { AnnouncementOnLoadPopup } from "@/components/announcements/announcement-onload-popup";
 import { PizzaLoader } from "@/components/shared/pizza-loader";
 import { ReportProblemRoot } from "@/components/report-problem";
@@ -40,7 +39,6 @@ export default function DashboardLayout({
   return (
     <>
       <AppShell>{children}</AppShell>
-      {/* <AnnouncementPopup /> */}
       <AnnouncementOnLoadPopup />
       <ReportProblemRoot />
       <DocumentScrollGuard />

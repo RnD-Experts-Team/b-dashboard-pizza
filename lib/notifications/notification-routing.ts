@@ -48,6 +48,24 @@ export function getReportNotificationHref(
   }
 }
 
+/**
+ * Where an Announcements notification (`announcement.*`) goes: the Announcements
+ * page, scrolled to that announcement's post when the notification carries its
+ * id (`data.announcement_id`, read by the page as `?announcement=`). A missing or
+ * malformed id opens the plain page. Only the id (digits) ever reaches the URL.
+ */
+export function getAnnouncementNotificationHref(locale: string, notification: Notification): string {
+  const base = `/${locale}/dashboard/announcements`;
+  const raw: unknown = notification.data?.announcement_id;
+  const id =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string" && /^\d+$/.test(raw)
+        ? Number(raw)
+        : null;
+  return id !== null && Number.isSafeInteger(id) && id > 0 ? `${base}?announcement=${id}` : base;
+}
+
 /** The day a Calendar notification is about ("YYYY-MM-DD"): a `date` / `due_date` field, else the first ISO date in its text. */
 function calendarNotificationDay(notification: Notification): string | null {
   const data = notification.data ?? {};

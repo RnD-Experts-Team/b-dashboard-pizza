@@ -9,5 +9,6 @@ export { useSelectedStoreStore } from "./selected-store.store";
 export { useDsprStore } from "./dspr.store";
 export { useNotificationStore } from "./notification.store";
 export { useAnnouncementStore } from "./announcement.store";
+export { useAnnouncementCommentsStore } from "./announcement-comments.store";
 export { useReferenceCatalogStore } from "./reference-catalog.store";
 export { useBottomNavStore } from "./bottom-nav.store";

@@ -1,189 +1,45 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import {
-  requireAuthorization,
-  getAuthorizationHeader,
-  errorResponse,
-} from "@/app/api/_lib/auth";
+  invalidParam,
+  isPositiveIntParam,
+  proxyNotifications,
+} from "../_lib/proxy";
+import { validateMediaFields } from "../_lib/validate";
 
-const NOTIFICATIONS_BASE_URL =
-  process.env.NOTIFICATIONS_API_URL ||
-  process.env.NEXT_PUBLIC_NOTIFICATIONS_API_URL ||
-  "https://notifications.lcportal.cloud/api";
-
-const UPSTREAM_TIMEOUT_MS =
-  Number(process.env.NOTIFICATIONS_TIMEOUT_MS) || 15_000;
+type Ctx = { params: Promise<{ id: string }> };
 
 /**
  * GET /api/announcements/:id
  * Proxy → GET {NOTIFICATIONS_BASE_URL}/announcements/:id
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const authError = requireAuthorization(request);
-  if (authError) return authError;
-
-  const authorization = getAuthorizationHeader(request)!;
+export async function GET(request: NextRequest, { params }: Ctx) {
   const { id } = await params;
-
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
-
-    const upstream = await fetch(
-      `${NOTIFICATIONS_BASE_URL}/announcements/${encodeURIComponent(id)}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: authorization,
-          Accept: "application/json",
-        },
-        signal: controller.signal,
-      },
-    );
-
-    clearTimeout(timer);
-
-    const body = await upstream.text();
-
-    return new NextResponse(body, {
-      status: upstream.status,
-      headers: {
-        "Content-Type":
-          upstream.headers.get("Content-Type") || "application/json",
-        "Cache-Control": "no-store",
-      },
-    });
-  } catch (err) {
-    if (err instanceof DOMException && err.name === "AbortError") {
-      return errorResponse("TIMEOUT", "Upstream request timed out", 504);
-    }
-    return errorResponse(
-      "UPSTREAM_ERROR",
-      "Failed to reach notifications service",
-      502,
-    );
-  }
+  if (!isPositiveIntParam(id)) return invalidParam("announcement id");
+  return proxyNotifications(request, `/announcements/${id}`, { method: "GET" });
 }
 
 /**
  * PUT /api/announcements/:id
  * Proxy → PUT {NOTIFICATIONS_BASE_URL}/announcements/:id
+ * Partial update: the client sends only the keys that changed.
  */
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const authError = requireAuthorization(request);
-  if (authError) return authError;
-
-  const authorization = getAuthorizationHeader(request)!;
+export async function PUT(request: NextRequest, { params }: Ctx) {
   const { id } = await params;
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return errorResponse("INVALID_REQUEST", "Invalid JSON body", 400);
-  }
-
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
-
-    const upstream = await fetch(
-      `${NOTIFICATIONS_BASE_URL}/announcements/${encodeURIComponent(id)}`,
-      {
-        method: "PUT",
-        headers: {
-          Authorization: authorization,
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      },
-    );
-
-    clearTimeout(timer);
-
-    const responseBody = await upstream.text();
-
-    return new NextResponse(responseBody, {
-      status: upstream.status,
-      headers: {
-        "Content-Type":
-          upstream.headers.get("Content-Type") || "application/json",
-        "Cache-Control": "no-store",
-      },
-    });
-  } catch (err) {
-    if (err instanceof DOMException && err.name === "AbortError") {
-      return errorResponse("TIMEOUT", "Upstream request timed out", 504);
-    }
-    return errorResponse(
-      "UPSTREAM_ERROR",
-      "Failed to reach notifications service",
-      502,
-    );
-  }
+  if (!isPositiveIntParam(id)) return invalidParam("announcement id");
+  return proxyNotifications(request, `/announcements/${id}`, {
+    method: "PUT",
+    body: "json",
+    validateJson: validateMediaFields,
+  });
 }
 
 /**
  * DELETE /api/announcements/:id
  * Proxy → DELETE {NOTIFICATIONS_BASE_URL}/announcements/:id
+ * Also deletes the announcement's own uploaded media (never a picked GIF).
  */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const authError = requireAuthorization(request);
-  if (authError) return authError;
-
-  const authorization = getAuthorizationHeader(request)!;
+export async function DELETE(request: NextRequest, { params }: Ctx) {
   const { id } = await params;
-
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
-
-    const upstream = await fetch(
-      `${NOTIFICATIONS_BASE_URL}/announcements/${encodeURIComponent(id)}`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: authorization,
-          Accept: "application/json",
-        },
-        signal: controller.signal,
-      },
-    );
-
-    clearTimeout(timer);
-
-    if (upstream.status === 204) {
-      return new NextResponse(null, { status: 204 });
-    }
-
-    const responseBody = await upstream.text();
-
-    return new NextResponse(responseBody, {
-      status: upstream.status,
-      headers: {
-        "Content-Type":
-          upstream.headers.get("Content-Type") || "application/json",
-        "Cache-Control": "no-store",
-      },
-    });
-  } catch (err) {
-    if (err instanceof DOMException && err.name === "AbortError") {
-      return errorResponse("TIMEOUT", "Upstream request timed out", 504);
-    }
-    return errorResponse(
-      "UPSTREAM_ERROR",
-      "Failed to reach notifications service",
-      502,
-    );
-  }
+  if (!isPositiveIntParam(id)) return invalidParam("announcement id");
+  return proxyNotifications(request, `/announcements/${id}`, { method: "DELETE" });
 }

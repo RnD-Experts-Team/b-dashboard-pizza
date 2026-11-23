@@ -327,6 +327,306 @@ html[data-secondary-font="instrumentSans"] body {
 .announcement-body strong { font-weight: 600; }
 .announcement-body em { font-style: italic; }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Announcements (v2) — components/announcements/**
+   Everything below is read by that feature only. Colours are the semantic
+   tokens, except `--ann-start` / `--ann-end`: the accent an author chose,
+   set inline by <AccentFrame> / <AccentTitle>.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Accent ring ──────────────────────────────────────────────────────────
+   A masked ::before ring (mask-composite: exclude) rather than border-image,
+   so it follows border-radius and works on any card colour or theme. With no
+   accent it is the ordinary 1px border colour.
+   `--ann-angle` is registered so the conic gradient can be animated. A browser
+   without @property flips it between 0deg and 360deg (the same picture), so
+   the ring is simply static there; no feature query needed. */
+@property --ann-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes ann-border-spin {
+  from { --ann-angle: 0deg; }
+  to   { --ann-angle: 360deg; }
+}
+
+.ann-ring {
+  --ann-ring-w: 1px;
+}
+.ann-ring[data-accent="solid"],
+.ann-ring[data-accent="gradient"] {
+  --ann-ring-w: 2px;
+}
+
+.ann-ring::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  padding: var(--ann-ring-w);
+  background: linear-gradient(135deg, var(--ann-start, var(--border)), var(--ann-end, var(--border)));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* The popup and the composer preview: a rotating conic ring and a soft glow. */
+.ann-ring--animated::before {
+  background: conic-gradient(from var(--ann-angle), var(--ann-start), var(--ann-end), var(--ann-start));
+  animation: ann-border-spin 4s linear infinite;
+}
+/* A solid accent has nothing to blend into: a bright arc travels round it. */
+.ann-ring--animated[data-accent="solid"]::before {
+  background: conic-gradient(
+    from var(--ann-angle),
+    var(--ann-start),
+    color-mix(in oklab, var(--ann-start) 28%, transparent) 40%,
+    var(--ann-start) 80%
+  );
+}
+.ann-ring--animated::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  background: conic-gradient(from var(--ann-angle), var(--ann-start), var(--ann-end), var(--ann-start));
+  filter: blur(14px);
+  opacity: 0.32;
+  pointer-events: none;
+  animation: ann-border-spin 4s linear infinite;
+}
+/* Off screen: nobody can see it, so stop it (set by <AccentFrame> via IntersectionObserver). */
+.ann-ring--animated[data-offscreen]::before,
+.ann-ring--animated[data-offscreen]::after {
+  animation-play-state: paused;
+}
+
+/* ── Accent title ─────────────────────────────────────────────────────────
+   Each accent colour is mixed with the foreground colour, so a pale accent on
+   a light card (or a dark one on a dark card) still reads. */
+.ann-title-gradient {
+  --ann-mix: 72%;
+  width: fit-content;
+  max-width: 100%;
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--ann-start) var(--ann-mix), var(--foreground)),
+    color-mix(in oklab, var(--ann-end) var(--ann-mix), var(--foreground))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* One light sweep across the title, once. */
+.ann-title-shine {
+  background-image:
+    linear-gradient(100deg, transparent 38%, rgb(255 255 255 / 0.85) 50%, transparent 62%),
+    linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--ann-start) var(--ann-mix), var(--foreground)),
+      color-mix(in oklab, var(--ann-end) var(--ann-mix), var(--foreground))
+    );
+  background-size: 250% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  background-position: 160% 0, 0 0;
+  animation: ann-title-shine 1.2s ease-out var(--ann-shine-delay, 0.6s) 1 forwards;
+}
+/* Emoji keep their own colours inside gradient text (see AccentTitle). */
+.ann-title-gradient .ann-emoji {
+  -webkit-text-fill-color: initial;
+  color: var(--foreground);
+}
+@keyframes ann-title-shine {
+  to { background-position: -60% 0, 0 0; }
+}
+
+/* ── Announcement body (the sanitized HTML, and the editor's content) ────── */
+.announcement-body {
+  overflow-wrap: anywhere;
+}
+.announcement-body > :first-child { margin-top: 0; }
+.announcement-body > :last-child { margin-bottom: 0; }
+.announcement-body ul,
+.announcement-body ol { padding-left: 0; padding-inline-start: 1.25rem; }
+
+.announcement-body h2,
+.announcement-body h3,
+.announcement-body h4 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 0.75rem 0 0.25rem;
+}
+.announcement-body h2 { font-size: 1.125rem; }
+.announcement-body h3 { font-size: 1rem; }
+.announcement-body h4 { font-size: 0.9375rem; }
+
+.announcement-body u { text-underline-offset: 3px; }
+.announcement-body s { opacity: 0.75; }
+
+.announcement-body blockquote {
+  margin: 0.5rem 0;
+  padding-inline-start: 0.75rem;
+  border-inline-start: 3px solid color-mix(in oklab, var(--ann-start, var(--muted-foreground)) 55%, transparent);
+  color: var(--muted-foreground);
+}
+
+.announcement-body code {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.875em;
+  background-color: var(--muted);
+  padding: 0.1em 0.35em;
+  border-radius: 0.3rem;
+}
+.announcement-body pre {
+  margin: 0.5rem 0;
+  padding: 0.625rem 0.75rem;
+  background-color: var(--muted);
+  border-radius: 0.5rem;
+  overflow-x: auto;
+}
+.announcement-body pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.8125rem;
+}
+
+.announcement-body hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 0.75rem 0;
+}
+
+.announcement-body mark {
+  background-color: color-mix(in oklab, oklch(0.85 0.17 90) 60%, transparent);
+  color: inherit;
+  padding: 0 0.15em;
+  border-radius: 0.2em;
+}
+
+/* Alignment comes through as an inline `text-align` (the sanitizer keeps only
+   colour, background-colour and text-align). */
+
+/* Links: blue (the app's "information" colour), underlined in the announcement's
+   accent, pointer cursor, visible focus. `.ann-link` is also used on the plain
+   <a> that comments get. */
+.announcement-body a,
+a.ann-link {
+  --ann-link: oklch(0.546 0.245 262.881); /* blue-600 */
+  color: var(--ann-link);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in oklab, var(--ann-start, var(--ann-link)) 55%, transparent);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: color 150ms, background-color 150ms, text-decoration-color 150ms;
+}
+.dark .announcement-body a,
+.dark a.ann-link {
+  --ann-link: oklch(0.707 0.165 254.624); /* blue-400 */
+}
+.announcement-body a:hover,
+a.ann-link:hover {
+  text-decoration-color: currentColor;
+  background-color: color-mix(in oklab, var(--ann-link) 12%, transparent);
+}
+.announcement-body a:focus-visible,
+a.ann-link:focus-visible {
+  outline: 2px solid var(--ann-link);
+  outline-offset: 2px;
+}
+/* A small "opens in a new tab" arrow; mirrored in right-to-left layouts. */
+.announcement-body a[target="_blank"]::after,
+a.ann-link[target="_blank"]::after {
+  content: "\2197\FE0E";
+  display: inline-block;
+  margin-inline-start: 0.15em;
+  font-size: 0.75em;
+  line-height: 1;
+  text-decoration: none;
+  opacity: 0.7;
+}
+[dir="rtl"] .announcement-body a[target="_blank"]::after,
+[dir="rtl"] a.ann-link[target="_blank"]::after {
+  content: "\2196\FE0E";
+}
+
+/* The editor's own placeholder (Tiptap's Placeholder extension) */
+.ann-editor p.is-editor-empty:first-child::before,
+.ann-editor .is-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: inline-start;
+  height: 0;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+
+/* ── Popup: the blocks of the body rise one after another, 40 ms apart ────
+   `.ann-stagger` goes on the body's wrapper; `--ann-stagger-base` is when the
+   first block starts. Only the first 12 blocks are staggered, the rest arrive
+   with the 13th. */
+@keyframes ann-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+.ann-stagger .announcement-body > * {
+  --ann-i: 0;
+  animation: ann-rise 0.35s ease-out both;
+  animation-delay: calc(var(--ann-stagger-base, 0.3s) + var(--ann-i) * 40ms);
+}
+.ann-stagger .announcement-body > :nth-child(2)  { --ann-i: 1; }
+.ann-stagger .announcement-body > :nth-child(3)  { --ann-i: 2; }
+.ann-stagger .announcement-body > :nth-child(4)  { --ann-i: 3; }
+.ann-stagger .announcement-body > :nth-child(5)  { --ann-i: 4; }
+.ann-stagger .announcement-body > :nth-child(6)  { --ann-i: 5; }
+.ann-stagger .announcement-body > :nth-child(7)  { --ann-i: 6; }
+.ann-stagger .announcement-body > :nth-child(8)  { --ann-i: 7; }
+.ann-stagger .announcement-body > :nth-child(9)  { --ann-i: 8; }
+.ann-stagger .announcement-body > :nth-child(10) { --ann-i: 9; }
+.ann-stagger .announcement-body > :nth-child(11) { --ann-i: 10; }
+.ann-stagger .announcement-body > :nth-child(12) { --ann-i: 11; }
+.ann-stagger .announcement-body > :nth-child(n + 13) { --ann-i: 12; }
+
+/* ── Reduced motion: the ring and the shine stand still ─────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .ann-stagger .announcement-body > * {
+    animation: none;
+  }
+  .ann-ring.ann-ring--animated[data-accent]::before {
+    animation: none;
+    background: linear-gradient(135deg, var(--ann-start), var(--ann-end));
+  }
+  .ann-ring--animated::after {
+    animation: none;
+    display: none;
+  }
+  .ann-title-shine {
+    animation: none;
+    background-image: linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--ann-start) var(--ann-mix), var(--foreground)),
+      color-mix(in oklab, var(--ann-end) var(--ann-mix), var(--foreground))
+    );
+    background-size: 100% 100%;
+    background-position: 0 0;
+  }
+  .announcement-body a,
+  a.ann-link {
+    transition: none;
+  }
+}
+
 /* DSPR dashboard shimmer animation for refresh indicator */
 @keyframes shimmer {
   0% { transform: translateX(-100%); }

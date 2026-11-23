@@ -8288,5 +8288,428 @@
         "recipientsRequired": "Choose at least one recipient."
       }
     }
+  },
+  "announcements": {
+    "errors": {
+      "validation": "Please check the highlighted fields.",
+      "auth": "Your session expired, or your account isn't set up in Notifications yet.",
+      "forbidden": "You don't have permission to do that.",
+      "notFound": "That item no longer exists.",
+      "rateLimited": "Too many requests. Please wait a moment and try again.",
+      "rateLimitedIn": "Try again in {seconds}s",
+      "network": "Can't reach the server. Check your connection and try again.",
+      "timeout": "The request took too long. Please try again.",
+      "server": "Something went wrong on the server. Please try again.",
+      "uploadExpired": "This upload expired on the server. Please upload the file again.",
+      "tooLarge": "That file is too large for the server to accept.",
+      "cancelled": "Cancelled.",
+      "unknown": "Something went wrong. Please try again.",
+      "unsupportedType": "Use a JPG, PNG, WebP or GIF image, or an MP4, MOV or WebM video.",
+      "imageTooLarge": "Images and GIFs can be up to {size}.",
+      "emptyFile": "That file is empty."
+    },
+    "warnings": {
+      "videoMetadataUnavailable": "Your browser couldn't read this video's size and length (some formats, like HEVC .mov files, can't be read here). You can still upload it."
+    },
+    "types": {
+      "general": "General",
+      "maintenance": "Maintenance",
+      "urgent": "Urgent"
+    },
+    "status": {
+      "live": "Live",
+      "scheduled": "Scheduled",
+      "expired": "Expired",
+      "inactive": "Inactive"
+    },
+    "window": {
+      "noStart": "Starts now",
+      "noEnd": "No end date"
+    },
+    "colors": {
+      "presets": {
+        "sunset": "Sunset",
+        "ocean": "Ocean",
+        "mint": "Mint",
+        "berry": "Berry",
+        "gold": "Gold",
+        "aurora": "Aurora",
+        "meadow": "Meadow",
+        "red": "Red",
+        "blue": "Blue",
+        "green": "Green",
+        "amber": "Amber",
+        "violet": "Violet"
+      }
+    },
+    "shared": {
+      "retry": "Try again",
+      "retryIn": "Try again in {seconds}s",
+      "dismiss": "Dismiss",
+      "fields": {
+        "title": "Title",
+        "body": "Message",
+        "type": "Type",
+        "version": "Version",
+        "is_active": "Active",
+        "is_pinned": "Pinned",
+        "starts_at": "Start date",
+        "ends_at": "End date",
+        "media": "Media",
+        "media_path": "Media",
+        "media_type": "Media type",
+        "media_width": "Media width",
+        "media_height": "Media height",
+        "media_duration_seconds": "Media length",
+        "color_start": "Start color",
+        "color_end": "End color",
+        "chunk": "Video chunk",
+        "total_chunks": "Chunk count",
+        "total_size": "File size",
+        "original_filename": "File name",
+        "upload_uuid": "Upload",
+        "announcement_ids": "Announcements",
+        "per_page": "Page size",
+        "page": "Page",
+        "q": "Search"
+      }
+    },
+    "display": {
+      "close": "Close",
+      "gif": "GIF",
+      "video": "Video",
+      "viewFullSize": "View full size",
+      "imageAlt": "Announcement image",
+      "mediaBroken": "This media couldn't be loaded.",
+      "mediaRetry": "Try again",
+      "readMore": "Read more",
+      "readLess": "Show less",
+      "like": "Like",
+      "unlike": "Unlike",
+      "comments": "Comments",
+      "markAsRead": "Mark as read",
+      "seen": "Seen"
+    },
+    "comments": {
+      "title": "Comments",
+      "unknownUser": "Someone",
+      "you": "You",
+      "attachmentAlt": "Attachment from {name}",
+      "deleteConfirm": "Delete this comment?",
+      "delete": "Delete",
+      "cancel": "Cancel",
+      "loadError": "Couldn't load the comments",
+      "empty": "No comments yet",
+      "emptyHint": "Be the first to say something.",
+      "viewMore": "{count, plural, one {View # more comment} other {View # more comments}}",
+      "placeholder": "Write a comment…",
+      "uploadProgress": "{percent}% · {loaded} of {total}",
+      "cancelUpload": "Cancel upload",
+      "uploading": "Uploading",
+      "videoNotAllowed": "Comments can't include video.",
+      "attachmentPreview": "Attachment preview",
+      "removeAttachment": "Remove attachment",
+      "emojiAndGifs": "Emoji and GIFs",
+      "attachImage": "Attach an image",
+      "sending": "Sending…",
+      "send": "Send comment",
+      "tooLong": "This comment is longer than the {max} characters allowed."
+    },
+    "pickers": {
+      "panelTitle": "Emoji and GIFs",
+      "panelDescription": "Pick an emoji or a GIF.",
+      "tabs": {
+        "emoji": "Emoji",
+        "gif": "GIF"
+      },
+      "emoji": {
+        "search": "Search emoji",
+        "skinTone": "Skin tone",
+        "loading": "Loading emoji…",
+        "empty": "No emoji found for “{query}”",
+        "loadFailed": "Couldn't load the emoji",
+        "loadFailedHint": "Check your connection and try again.",
+        "retry": "Try again"
+      },
+      "gif": {
+        "search": "Search GIFs",
+        "clear": "Clear search",
+        "resultsFor": "Results for “{query}”",
+        "trending": "Trending",
+        "loadFailed": "Couldn't load GIFs",
+        "noResults": "No GIFs found for “{query}”",
+        "noTrending": "No GIFs right now.",
+        "select": "Use GIF {n}",
+        "loadingMore": "Loading more…",
+        "poweredBy": "Powered by GIPHY"
+      },
+      "color": {
+        "label": "Accent color",
+        "presets": "Presets",
+        "clear": "Clear",
+        "custom": "Custom",
+        "mode": "Color type",
+        "solid": "Solid",
+        "gradient": "Gradient",
+        "startColor": "Start color",
+        "endColor": "End color",
+        "hex": "{label} hex code",
+        "pickStartFirst": "Choose the start color first.",
+        "preview": "Preview",
+        "previewTitle": "Your announcement",
+        "contrastLow": "The {color} will be hard to see on the card (contrast {ratio}:1). Try a stronger color.",
+        "contrastVeryLow": "The {color} is almost invisible on the card (contrast {ratio}:1). Pick a different color."
+      }
+    },
+    "editor": {
+      "placeholder": "Write your announcement…",
+      "ariaLabel": "Announcement text",
+      "toolbar": "Formatting tools",
+      "undo": "Undo",
+      "redo": "Redo",
+      "paragraph": "Paragraph",
+      "heading2": "Heading",
+      "heading3": "Subheading",
+      "bold": "Bold",
+      "italic": "Italic",
+      "underline": "Underline",
+      "strike": "Strikethrough",
+      "code": "Code",
+      "textColor": "Text color",
+      "colors": {
+        "default": "Default",
+        "red": "Red",
+        "orange": "Orange",
+        "green": "Green",
+        "blue": "Blue",
+        "gray": "Gray"
+      },
+      "highlight": "Highlight",
+      "alignLeft": "Align left",
+      "alignCenter": "Center",
+      "alignRight": "Align right",
+      "bulletList": "Bulleted list",
+      "orderedList": "Numbered list",
+      "quote": "Quote",
+      "rule": "Divider line",
+      "link": {
+        "title": "Link",
+        "open": "Open link",
+        "edit": "Edit link",
+        "remove": "Remove link",
+        "url": "Link address",
+        "placeholder": "example.com",
+        "invalid": "Enter a web address or an e-mail address. Links can start with http, https, mailto or tel.",
+        "apply": "Apply"
+      },
+      "emoji": "Emoji",
+      "clearFormatting": "Clear formatting",
+      "linkHint": "Select text, then use the link button to add a link.",
+      "characters": "{count, plural, one {# character} other {# characters}}",
+      "charactersOf": "{count} / {max} characters"
+    },
+    "mediaField": {
+      "progress": "{percent}% · {loaded} of {total}",
+      "speed": "{speed}/s",
+      "cancelling": "Cancelling…",
+      "cancel": "Cancel",
+      "uploading": "Uploading",
+      "uploadFailed": "Couldn't upload this file",
+      "replace": "Replace",
+      "chooseGif": "Choose GIF",
+      "remove": "Remove",
+      "kinds": {
+        "image": "Image",
+        "gif": "GIF",
+        "video": "Video"
+      },
+      "dropAria": "Add an image, GIF or video",
+      "dropHere": "Drop to upload",
+      "dropTitle": "Drag an image or video here, or click to browse",
+      "hint": "JPG, PNG, WebP or GIF up to {size} · MP4, MOV or WebM",
+      "gifHint": "or pick one from GIPHY"
+    },
+    "post": {
+      "pinned": "Pinned",
+      "unread": "Unread",
+      "window": "Visible",
+      "collapse": "Show less",
+      "expand": "Open “{title}”",
+      "someone": "Someone",
+      "sentGif": "sent a GIF",
+      "sentImage": "sent a picture",
+      "openComments": "Open the comments",
+      "moreComments": "+{count} more"
+    },
+    "popup": {
+      "gotIt": "Got it",
+      "close": "Close",
+      "previewBadge": "Preview",
+      "position": "Announcement {current} of {total}",
+      "description": "New announcement. Choose Got it to continue.",
+      "previewDescription": "A preview of how this announcement looks to people when they open the dashboard."
+    },
+    "admin": {
+      "noMedia": "No media",
+      "accentGradient": "Gradient accent color",
+      "accentSolid": "Solid accent color",
+      "pinned": "Pinned",
+      "likes": "{count, plural, one {# like} other {# likes}}",
+      "preview": "Preview",
+      "edit": "Edit",
+      "delete": "Delete",
+      "tabs": {
+        "all": "All"
+      },
+      "statusTabs": "Filter by status",
+      "searchPlaceholder": "Search by title…",
+      "searchLabel": "Search announcements",
+      "clearSearch": "Clear search",
+      "countsNote": "Counts and filters cover the {loaded} of {total} announcements loaded so far.",
+      "loadError": "Couldn't load the announcements",
+      "loading": "Loading announcements",
+      "emptyTitle": "No announcements yet",
+      "emptyHint": "Create the first one to show it to everyone.",
+      "create": "Create announcement",
+      "noMatchTitle": "No announcements match",
+      "noMatchHint": "Try another search or status.",
+      "clearFilters": "Clear filters",
+      "listLabel": "Announcements",
+      "loadMoreError": "Couldn't load more announcements",
+      "loadMore": "Load more",
+      "loadingMore": "Loading…",
+      "deleteDialog": {
+        "title": "Delete announcement?",
+        "description": "“{title}” will be permanently removed, along with the media uploaded for it. This can't be undone.",
+        "failed": "Couldn't delete the announcement",
+        "cancel": "Cancel",
+        "confirm": "Delete",
+        "deleting": "Deleting…",
+        "success": "Announcement deleted."
+      }
+    },
+    "page": {
+      "title": "Announcements",
+      "description": "Stay up to date with the latest news and updates.",
+      "views": {
+        "label": "View",
+        "user": "User",
+        "admin": "Admin"
+      },
+      "create": "Create announcement",
+      "createShort": "Create",
+      "filters": {
+        "label": "Show",
+        "all": "All",
+        "unread": "Unread"
+      },
+      "markAllRead": "Mark all as read ({count})",
+      "linkedMissing": "That announcement isn't available anymore. It may have ended or been removed.",
+      "dismiss": "Dismiss",
+      "loadError": "Couldn't load the announcements",
+      "loading": "Loading announcements",
+      "emptyTitle": "No announcements right now",
+      "emptyHint": "New announcements will show up here.",
+      "caughtUpTitle": "You're all caught up",
+      "caughtUpHint": "There are no unread announcements.",
+      "showAll": "Show all announcements",
+      "sections": {
+        "pinned": "Pinned",
+        "latest": "Latest"
+      },
+      "panel": {
+        "label": "Feed summary",
+        "title": "Your feed",
+        "unread": "unread",
+        "markAll": "Mark all as read",
+        "pinned": "Pinned"
+      },
+      "search": {
+        "placeholder": "Search announcements",
+        "label": "Search announcements",
+        "clear": "Clear search",
+        "short": "Search"
+      },
+      "type": {
+        "label": "Type",
+        "all": "All types"
+      },
+      "noMatchTitle": "Nothing matches",
+      "noMatchHint": "Try a different word, or clear the search and filters.",
+      "clearFilters": "Clear filters",
+      "showMore": "Show more ({count} left)",
+      "results": "{count, plural, one {# announcement} other {# announcements}}"
+    },
+    "composer": {
+      "createTitle": "New announcement",
+      "editTitle": "Edit announcement",
+      "description": "Write the announcement, add media and a color, and check the preview before you post.",
+      "close": "Close",
+      "write": "Write",
+      "preview": {
+        "tab": "Preview",
+        "untitled": "Your announcement title",
+        "emptyBody": "Your message will appear here."
+      },
+      "previewTitle": "Live preview",
+      "previewHint": "This is how it will look in the feed.",
+      "loading": "Loading the announcement…",
+      "loadError": "Couldn't load this announcement",
+      "sections": {
+        "content": "Content",
+        "media": "Media",
+        "style": "Style",
+        "details": "Details"
+      },
+      "fields": {
+        "title": "Title",
+        "titleCounter": "{count} / {max}",
+        "titlePlaceholder": "What's the announcement about?",
+        "emoji": "Add emoji",
+        "body": "Message",
+        "mediaHint": "One image, GIF or video, shown at the top of the announcement.",
+        "styleHint": "Colors the card's border and its title.",
+        "type": "Type",
+        "version": "Version",
+        "versionPlaceholder": "e.g. 2.4",
+        "schedule": "Schedule",
+        "startNow": "Start now",
+        "startNowHint": "Visible as soon as it is active.",
+        "startsAt": "Start date and time",
+        "noEnd": "No end date",
+        "noEndHint": "Stays visible until you switch it off.",
+        "endsAt": "End date and time",
+        "active": "Active",
+        "activeHint": "Inactive announcements are hidden from everyone.",
+        "pinned": "Pinned",
+        "pinnedHint": "Keeps it at the top of the list."
+      },
+      "errors": {
+        "titleRequired": "Enter a title.",
+        "bodyRequired": "Write the message.",
+        "windowInvalid": "The end is before the start. The server will refuse this.",
+        "saveFailed": "Couldn't save the announcement"
+      },
+      "actions": {
+        "cancel": "Cancel",
+        "post": "Post announcement",
+        "posting": "Posting…",
+        "save": "Save changes",
+        "saving": "Saving…",
+        "waitingUpload": "Waiting for upload…"
+      },
+      "toasts": {
+        "created": "Announcement posted.",
+        "updated": "Announcement updated.",
+        "noChanges": "Nothing to save: there are no changes."
+      },
+      "discard": {
+        "title": "Discard your changes?",
+        "description": "You have changes that haven't been saved.",
+        "uploadNote": "An upload is still running and will be cancelled.",
+        "keep": "Keep editing",
+        "discard": "Discard"
+      }
+    }
   }
 }

@@ -83,6 +83,22 @@ const hiringApiUrl =
 const hiringOrigin =
   getApiDomain(hiringApiUrl) || "https://hiring.lcportal.cloud";
 
+// Notifications backend. Announcement data/API calls (and the Giphy proxy and the
+// chunked video upload) are proxied through app/api/announcements/**, so connect-src
+// 'self' covers them. What the browser loads DIRECTLY is announcement media:
+// <img> is already covered by img-src https:, but a <video> src from this host needs
+// media-src. Same env chain and fallback as app/api/announcements/_lib/proxy.ts.
+// The headers are fixed at build time: restart or rebuild after changing the env.
+// If the real media host differs (see docs/ANNOUNCEMENTS.md, open question 7) or
+// it does not answer Range requests with 206, replace this with a rewrite like the
+// four above.
+const notificationsApiUrl =
+  process.env.NOTIFICATIONS_API_URL ||
+  process.env.NEXT_PUBLIC_NOTIFICATIONS_API_URL ||
+  "https://notifications.lcportal.cloud/api";
+const notificationsOrigin =
+  getApiDomain(notificationsApiUrl) || "https://notifications.lcportal.cloud";
+
 // Chat widget (rdexperts) loaded by app/[locale]/(dashboard)/dashboard/layout.tsx.
 // Allowed in script-src / connect-src / frame-src below. Remove with the <Script>.
 const CHAT_WIDGET_ORIGIN = "https://chat.rdexperts.tech";
@@ -136,7 +152,8 @@ const nextConfig: NextConfig = {
               // Station media plays from blob: object URLs (cached bytes) served
               // via our same-origin proxy. Without this, <video> falls back to
               // default-src 'self' and blob: playback is blocked.
-              "media-src 'self' blob:",
+              // Announcement videos play straight from the Notifications host.
+              `media-src 'self' blob: ${notificationsOrigin}`,
               "font-src 'self' data:",
               `connect-src 'self' ${CHAT_WIDGET_ORIGIN}${apiDomain ? ` ${apiDomain}` : ""} ${livekitDomain} ${livekitWss}${reverbWss ? ` ${reverbWss}` : ""}${reverbAuthDomain ? ` ${reverbAuthDomain}` : ""}${isDev ? " ws://localhost:3000 wss://localhost:3000" : ""}`,
               `frame-src 'self' ${luminaBase} ${CHAT_WIDGET_ORIGIN}`,

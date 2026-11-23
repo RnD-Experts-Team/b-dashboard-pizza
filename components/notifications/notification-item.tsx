@@ -30,6 +30,7 @@ import { useHiringActionStore, type HiringActionTab } from "@/lib/store/hiring-a
 import { useCleaningActionStore } from "@/lib/store/cleaning-action.store";
 import type { PeriodType } from "@/types/cleaning.types";
 import {
+  getAnnouncementNotificationHref,
   getCalendarNotificationHref,
   getReportNotificationHref,
   isReportNotification,
@@ -327,7 +328,7 @@ export function NotificationItem({
     onNavigate?.();
 
     if (isAnnouncementType) {
-      router.push(`/${locale}/dashboard/announcements`);
+      router.push(getAnnouncementNotificationHref(locale, notification));
       return;
     }
 

@@ -8287,5 +8287,428 @@
         "recipientsRequired": "اختر مستلمًا واحدًا على الأقل."
       }
     }
+  },
+  "announcements": {
+    "errors": {
+      "validation": "يرجى التحقق من الحقول المميَّزة.",
+      "auth": "انتهت صلاحية جلستك، أو أن حسابك لم يُعدَّ بعد في خدمة الإشعارات.",
+      "forbidden": "ليست لديك صلاحية للقيام بذلك.",
+      "notFound": "هذا العنصر لم يعد موجوداً.",
+      "rateLimited": "عدد الطلبات كبير جداً. يرجى الانتظار قليلاً ثم المحاولة مجدداً.",
+      "rateLimitedIn": "حاول مجدداً بعد {seconds} ث",
+      "network": "تعذّر الاتصال بالخادم. تحقق من اتصالك بالإنترنت وحاول مجدداً.",
+      "timeout": "استغرق الطلب وقتاً طويلاً. يرجى المحاولة مجدداً.",
+      "server": "حدث خطأ في الخادم. يرجى المحاولة مجدداً.",
+      "uploadExpired": "انتهت صلاحية هذا الرفع على الخادم. يرجى رفع الملف مرة أخرى.",
+      "tooLarge": "حجم هذا الملف أكبر مما يقبله الخادم.",
+      "cancelled": "تم الإلغاء.",
+      "unknown": "حدث خطأ ما. يرجى المحاولة مجدداً.",
+      "unsupportedType": "استخدم صورة بصيغة JPG أو PNG أو WebP أو GIF، أو فيديو بصيغة MP4 أو MOV أو WebM.",
+      "imageTooLarge": "يمكن أن يصل حجم الصور وملفات GIF إلى {size}.",
+      "emptyFile": "هذا الملف فارغ."
+    },
+    "warnings": {
+      "videoMetadataUnavailable": "تعذّر على المتصفح قراءة أبعاد هذا الفيديو ومدته (بعض الصيغ، مثل ملفات HEVC بصيغة .mov، لا يمكن قراءتها هنا). لا يزال بإمكانك رفعه."
+    },
+    "types": {
+      "general": "عام",
+      "maintenance": "صيانة",
+      "urgent": "عاجل"
+    },
+    "status": {
+      "live": "نشط حالياً",
+      "scheduled": "مجدول",
+      "expired": "منتهي",
+      "inactive": "غير مفعّل"
+    },
+    "window": {
+      "noStart": "يبدأ الآن",
+      "noEnd": "بدون تاريخ انتهاء"
+    },
+    "colors": {
+      "presets": {
+        "sunset": "غروب",
+        "ocean": "محيط",
+        "mint": "نعناع",
+        "berry": "توت",
+        "gold": "ذهبي",
+        "aurora": "شفق",
+        "meadow": "مرج",
+        "red": "أحمر",
+        "blue": "أزرق",
+        "green": "أخضر",
+        "amber": "كهرماني",
+        "violet": "بنفسجي"
+      }
+    },
+    "shared": {
+      "retry": "حاول مجدداً",
+      "retryIn": "حاول مجدداً بعد {seconds} ث",
+      "dismiss": "إغلاق",
+      "fields": {
+        "title": "العنوان",
+        "body": "المحتوى",
+        "type": "النوع",
+        "version": "الإصدار",
+        "is_active": "مفعّل",
+        "is_pinned": "مثبّت",
+        "starts_at": "تاريخ البدء",
+        "ends_at": "تاريخ الانتهاء",
+        "media": "الوسائط",
+        "media_path": "الوسائط",
+        "media_type": "نوع الوسائط",
+        "media_width": "عرض الوسائط",
+        "media_height": "ارتفاع الوسائط",
+        "media_duration_seconds": "مدة الوسائط",
+        "color_start": "لون البداية",
+        "color_end": "لون النهاية",
+        "chunk": "جزء الفيديو",
+        "total_chunks": "عدد الأجزاء",
+        "total_size": "حجم الملف",
+        "original_filename": "اسم الملف",
+        "upload_uuid": "الرفع",
+        "announcement_ids": "الإعلانات",
+        "per_page": "حجم الصفحة",
+        "page": "الصفحة",
+        "q": "البحث"
+      }
+    },
+    "display": {
+      "close": "إغلاق",
+      "gif": "GIF",
+      "video": "فيديو",
+      "viewFullSize": "عرض بالحجم الكامل",
+      "imageAlt": "صورة الإعلان",
+      "mediaBroken": "تعذّر تحميل هذه الوسائط.",
+      "mediaRetry": "إعادة المحاولة",
+      "readMore": "عرض المزيد",
+      "readLess": "عرض أقل",
+      "like": "إعجاب",
+      "unlike": "إلغاء الإعجاب",
+      "comments": "التعليقات",
+      "markAsRead": "تحديد كمقروء",
+      "seen": "تمت المشاهدة"
+    },
+    "comments": {
+      "title": "التعليقات",
+      "unknownUser": "مستخدم",
+      "you": "أنت",
+      "attachmentAlt": "مرفق من {name}",
+      "deleteConfirm": "حذف هذا التعليق؟",
+      "delete": "حذف",
+      "cancel": "إلغاء",
+      "loadError": "تعذّر تحميل التعليقات",
+      "empty": "لا توجد تعليقات بعد",
+      "emptyHint": "كن أول من يعلّق.",
+      "viewMore": "{count, plural, zero {عرض # تعليق إضافي} one {عرض تعليق إضافي واحد} two {عرض تعليقين إضافيين} few {عرض # تعليقات إضافية} many {عرض # تعليقاً إضافياً} other {عرض # تعليق إضافي}}",
+      "placeholder": "اكتب تعليقاً…",
+      "uploadProgress": "{percent}% · {loaded} من {total}",
+      "cancelUpload": "إلغاء الرفع",
+      "uploading": "جارٍ الرفع",
+      "videoNotAllowed": "لا يمكن إرفاق فيديو في التعليقات.",
+      "attachmentPreview": "معاينة المرفق",
+      "removeAttachment": "إزالة المرفق",
+      "emojiAndGifs": "الرموز التعبيرية وصور GIF",
+      "attachImage": "إرفاق صورة",
+      "sending": "جارٍ الإرسال…",
+      "send": "إرسال التعليق",
+      "tooLong": "هذا التعليق أطول من الحد المسموح به ({max} حرفاً)."
+    },
+    "pickers": {
+      "panelTitle": "الرموز التعبيرية وصور GIF",
+      "panelDescription": "اختر رمزاً تعبيرياً أو صورة GIF.",
+      "tabs": {
+        "emoji": "الرموز التعبيرية",
+        "gif": "GIF"
+      },
+      "emoji": {
+        "search": "ابحث عن رمز تعبيري",
+        "skinTone": "لون البشرة",
+        "loading": "جارٍ تحميل الرموز التعبيرية…",
+        "empty": "لا توجد رموز تعبيرية لـ «{query}»",
+        "loadFailed": "تعذّر تحميل الرموز التعبيرية",
+        "loadFailedHint": "تحقق من اتصالك بالإنترنت ثم حاول مجدداً.",
+        "retry": "إعادة المحاولة"
+      },
+      "gif": {
+        "search": "ابحث عن صور GIF",
+        "clear": "مسح البحث",
+        "resultsFor": "نتائج «{query}»",
+        "trending": "الأكثر رواجاً",
+        "loadFailed": "تعذّر تحميل صور GIF",
+        "noResults": "لا توجد صور GIF لـ «{query}»",
+        "noTrending": "لا توجد صور GIF حالياً.",
+        "select": "اختيار صورة GIF رقم {n}",
+        "loadingMore": "جارٍ تحميل المزيد…",
+        "poweredBy": "بدعم من GIPHY"
+      },
+      "color": {
+        "label": "لون التمييز",
+        "presets": "ألوان جاهزة",
+        "clear": "مسح",
+        "custom": "مخصّص",
+        "mode": "نوع اللون",
+        "solid": "لون واحد",
+        "gradient": "تدرّج",
+        "startColor": "لون البداية",
+        "endColor": "لون النهاية",
+        "hex": "رمز Hex لـ {label}",
+        "pickStartFirst": "اختر لون البداية أولاً.",
+        "preview": "معاينة",
+        "previewTitle": "إعلانك هنا",
+        "contrastLow": "سيصعب رؤية {color} على البطاقة (التباين {ratio}:1). جرّب لوناً أقوى.",
+        "contrastVeryLow": "{color} يكاد لا يُرى على البطاقة (التباين {ratio}:1). اختر لوناً مختلفاً."
+      }
+    },
+    "editor": {
+      "placeholder": "اكتب إعلانك…",
+      "ariaLabel": "نص الإعلان",
+      "toolbar": "أدوات التنسيق",
+      "undo": "تراجع",
+      "redo": "إعادة",
+      "paragraph": "فقرة",
+      "heading2": "عنوان رئيسي",
+      "heading3": "عنوان فرعي",
+      "bold": "غامق",
+      "italic": "مائل",
+      "underline": "تسطير",
+      "strike": "يتوسطه خط",
+      "code": "رمز برمجي",
+      "textColor": "لون النص",
+      "colors": {
+        "default": "الافتراضي",
+        "red": "أحمر",
+        "orange": "برتقالي",
+        "green": "أخضر",
+        "blue": "أزرق",
+        "gray": "رمادي"
+      },
+      "highlight": "تمييز",
+      "alignLeft": "محاذاة لليسار",
+      "alignCenter": "توسيط",
+      "alignRight": "محاذاة لليمين",
+      "bulletList": "قائمة نقطية",
+      "orderedList": "قائمة مرقّمة",
+      "quote": "اقتباس",
+      "rule": "خط فاصل",
+      "link": {
+        "title": "رابط",
+        "open": "فتح الرابط",
+        "edit": "تعديل الرابط",
+        "remove": "إزالة الرابط",
+        "url": "عنوان الرابط",
+        "placeholder": "example.com",
+        "invalid": "أدخل عنوان ويب أو بريداً إلكترونياً. يمكن أن تبدأ الروابط بـ http أو https أو mailto أو tel.",
+        "apply": "تطبيق"
+      },
+      "emoji": "رمز تعبيري",
+      "clearFormatting": "إزالة التنسيق",
+      "linkHint": "حدّد نصاً ثم استخدم زر الرابط لإضافة رابط.",
+      "characters": "{count, plural, zero {# حرف} one {حرف واحد} two {حرفان} few {# أحرف} many {# حرفاً} other {# حرف}}",
+      "charactersOf": "{count} / {max} حرف"
+    },
+    "mediaField": {
+      "progress": "{percent}% · {loaded} من {total}",
+      "speed": "{speed}/ث",
+      "cancelling": "جارٍ الإلغاء…",
+      "cancel": "إلغاء",
+      "uploading": "جارٍ الرفع",
+      "uploadFailed": "تعذّر رفع هذا الملف",
+      "replace": "استبدال",
+      "chooseGif": "اختيار GIF",
+      "remove": "إزالة",
+      "kinds": {
+        "image": "صورة",
+        "gif": "GIF",
+        "video": "فيديو"
+      },
+      "dropAria": "إضافة صورة أو GIF أو فيديو",
+      "dropHere": "أفلت الملف للرفع",
+      "dropTitle": "اسحب صورة أو فيديو إلى هنا، أو انقر للتصفّح",
+      "hint": "JPG أو PNG أو WebP أو GIF حتى {size} · MP4 أو MOV أو WebM",
+      "gifHint": "أو اختر واحدة من GIPHY"
+    },
+    "post": {
+      "pinned": "مثبّت",
+      "unread": "غير مقروء",
+      "window": "مدة الظهور",
+      "collapse": "عرض أقل",
+      "expand": "فتح «{title}»",
+      "someone": "شخص ما",
+      "sentGif": "أرسل صورة GIF",
+      "sentImage": "أرسل صورة",
+      "openComments": "فتح التعليقات",
+      "moreComments": "+{count} أخرى"
+    },
+    "popup": {
+      "gotIt": "فهمت",
+      "close": "إغلاق",
+      "previewBadge": "معاينة",
+      "position": "الإعلان {current} من {total}",
+      "description": "إعلان جديد. اختر «فهمت» للمتابعة.",
+      "previewDescription": "معاينة لكيفية ظهور هذا الإعلان للمستخدمين عند فتح لوحة التحكم."
+    },
+    "admin": {
+      "noMedia": "بدون وسائط",
+      "accentGradient": "لون تمييز متدرّج",
+      "accentSolid": "لون تمييز واحد",
+      "pinned": "مثبّت",
+      "likes": "{count, plural, zero {لا إعجابات} one {إعجاب واحد} two {إعجابان} few {# إعجابات} many {# إعجاباً} other {# إعجاب}}",
+      "preview": "معاينة",
+      "edit": "تعديل",
+      "delete": "حذف",
+      "tabs": {
+        "all": "الكل"
+      },
+      "statusTabs": "التصفية حسب الحالة",
+      "searchPlaceholder": "ابحث بالعنوان…",
+      "searchLabel": "البحث في الإعلانات",
+      "clearSearch": "مسح البحث",
+      "countsNote": "تشمل الأعداد والتصفية {loaded} من أصل {total} إعلان تم تحميلها حتى الآن.",
+      "loadError": "تعذّر تحميل الإعلانات",
+      "loading": "جارٍ تحميل الإعلانات",
+      "emptyTitle": "لا توجد إعلانات بعد",
+      "emptyHint": "أنشئ أول إعلان ليظهر للجميع.",
+      "create": "إنشاء إعلان",
+      "noMatchTitle": "لا توجد إعلانات مطابقة",
+      "noMatchHint": "جرّب بحثاً أو حالة أخرى.",
+      "clearFilters": "مسح التصفية",
+      "listLabel": "الإعلانات",
+      "loadMoreError": "تعذّر تحميل المزيد من الإعلانات",
+      "loadMore": "تحميل المزيد",
+      "loadingMore": "جارٍ التحميل…",
+      "deleteDialog": {
+        "title": "حذف الإعلان؟",
+        "description": "سيتم حذف «{title}» نهائياً مع الوسائط التي رُفعت له. لا يمكن التراجع عن هذا الإجراء.",
+        "failed": "تعذّر حذف الإعلان",
+        "cancel": "إلغاء",
+        "confirm": "حذف",
+        "deleting": "جارٍ الحذف…",
+        "success": "تم حذف الإعلان."
+      }
+    },
+    "page": {
+      "title": "الإعلانات",
+      "description": "ابقَ على اطلاع بآخر الأخبار والتحديثات.",
+      "views": {
+        "label": "العرض",
+        "user": "المستخدم",
+        "admin": "المشرف"
+      },
+      "create": "إنشاء إعلان",
+      "createShort": "إنشاء",
+      "filters": {
+        "label": "عرض",
+        "all": "الكل",
+        "unread": "غير المقروءة"
+      },
+      "markAllRead": "تحديد الكل كمقروء ({count})",
+      "linkedMissing": "هذا الإعلان لم يعد متاحاً. ربما انتهت مدته أو تمت إزالته.",
+      "dismiss": "إغلاق",
+      "loadError": "تعذّر تحميل الإعلانات",
+      "loading": "جارٍ تحميل الإعلانات",
+      "emptyTitle": "لا توجد إعلانات حالياً",
+      "emptyHint": "ستظهر الإعلانات الجديدة هنا.",
+      "caughtUpTitle": "لقد اطّلعت على كل شيء",
+      "caughtUpHint": "لا توجد إعلانات غير مقروءة.",
+      "showAll": "عرض كل الإعلانات",
+      "sections": {
+        "pinned": "المثبّتة",
+        "latest": "الأحدث"
+      },
+      "panel": {
+        "label": "ملخّص الإعلانات",
+        "title": "إعلاناتك",
+        "unread": "غير مقروءة",
+        "markAll": "تعليم الكل كمقروء",
+        "pinned": "المثبّتة"
+      },
+      "search": {
+        "placeholder": "ابحث في الإعلانات",
+        "label": "البحث في الإعلانات",
+        "clear": "مسح البحث",
+        "short": "بحث"
+      },
+      "type": {
+        "label": "النوع",
+        "all": "كل الأنواع"
+      },
+      "noMatchTitle": "لا توجد نتائج مطابقة",
+      "noMatchHint": "جرّب كلمة أخرى، أو امسح البحث والمرشّحات.",
+      "clearFilters": "مسح المرشّحات",
+      "showMore": "عرض المزيد (المتبقي {count})",
+      "results": "{count, plural, one {إعلان واحد} two {إعلانان} few {# إعلانات} many {# إعلانًا} other {# إعلان}}"
+    },
+    "composer": {
+      "createTitle": "إعلان جديد",
+      "editTitle": "تعديل الإعلان",
+      "description": "اكتب الإعلان، وأضف الوسائط واللون، ثم راجع المعاينة قبل النشر.",
+      "close": "إغلاق",
+      "write": "كتابة",
+      "preview": {
+        "tab": "معاينة",
+        "untitled": "عنوان إعلانك",
+        "emptyBody": "ستظهر رسالتك هنا."
+      },
+      "previewTitle": "معاينة مباشرة",
+      "previewHint": "هكذا سيظهر الإعلان في الصفحة.",
+      "loading": "جارٍ تحميل الإعلان…",
+      "loadError": "تعذّر تحميل هذا الإعلان",
+      "sections": {
+        "content": "المحتوى",
+        "media": "الوسائط",
+        "style": "التنسيق",
+        "details": "التفاصيل"
+      },
+      "fields": {
+        "title": "العنوان",
+        "titleCounter": "{count} / {max}",
+        "titlePlaceholder": "ما موضوع الإعلان؟",
+        "emoji": "إضافة إيموجي",
+        "body": "الرسالة",
+        "mediaHint": "صورة أو GIF أو فيديو واحد يظهر أعلى الإعلان.",
+        "styleHint": "يلوّن حدود البطاقة وعنوانها.",
+        "type": "النوع",
+        "version": "الإصدار",
+        "versionPlaceholder": "مثال: 2.4",
+        "schedule": "الجدولة",
+        "startNow": "ابدأ الآن",
+        "startNowHint": "يظهر فور تفعيله.",
+        "startsAt": "تاريخ البدء ووقته",
+        "noEnd": "بدون تاريخ انتهاء",
+        "noEndHint": "يبقى ظاهراً إلى أن توقفه.",
+        "endsAt": "تاريخ الانتهاء ووقته",
+        "active": "مفعّل",
+        "activeHint": "الإعلانات غير المفعّلة مخفية عن الجميع.",
+        "pinned": "مثبّت",
+        "pinnedHint": "يبقيه في أعلى القائمة."
+      },
+      "errors": {
+        "titleRequired": "أدخل عنواناً.",
+        "bodyRequired": "اكتب نص الإعلان.",
+        "windowInvalid": "تاريخ الانتهاء قبل تاريخ البدء. سيرفض الخادم هذا.",
+        "saveFailed": "تعذّر حفظ الإعلان"
+      },
+      "actions": {
+        "cancel": "إلغاء",
+        "post": "نشر الإعلان",
+        "posting": "جارٍ النشر…",
+        "save": "حفظ التغييرات",
+        "saving": "جارٍ الحفظ…",
+        "waitingUpload": "بانتظار انتهاء الرفع…"
+      },
+      "toasts": {
+        "created": "تم نشر الإعلان.",
+        "updated": "تم تحديث الإعلان.",
+        "noChanges": "لا شيء لحفظه: لا توجد تغييرات."
+      },
+      "discard": {
+        "title": "تجاهل التغييرات؟",
+        "description": "لديك تغييرات لم تُحفظ بعد.",
+        "uploadNote": "هناك عملية رفع جارية وسيتم إلغاؤها.",
+        "keep": "متابعة التحرير",
+        "discard": "تجاهل"
+      }
+    }
   }
 }
