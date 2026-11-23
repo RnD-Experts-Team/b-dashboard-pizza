@@ -14,7 +14,7 @@ import type { AnalyticsFilters } from "./use-analytics-filters";
 const PRESETS: RangePreset[] = ["yesterday", "last7", "last30", "thisMonth", "thisYear"];
 const PRESET_OPTIONS = PRESETS.map((id) => ({ id, label: id }));
 const ALL = "all";
-const TECHNICIAN_PAGE_SIZE = 500;
+const TECHNICIAN_PAGE_SIZE = 3000;
 
 /**
  * The analytics page's one filter row (docs/MAINTENANCE-UI.md §8): the

@@ -6016,6 +6016,7 @@
         "picked": "{count} مختارة",
         "noOptions": "لا شيء مطابق.",
         "clearThis": "مسح هذا الفلتر",
+        "selectAll": "تحديد الكل",
         "showing": "عرض {from}–{to} من {total}",
         "page": "صفحة {current} من {total}",
         "previous": "الصفحة السابقة",
@@ -6702,6 +6703,7 @@
       "recordPayment": "تسجيل دفعة"
     },
     "technicians": {
+      "search": "ابحث عن فني…",
       "none": "لا يوجد فنيون.",
       "addTechnician": "إضافة فني",
       "addSupplier": "إضافة مورّد",

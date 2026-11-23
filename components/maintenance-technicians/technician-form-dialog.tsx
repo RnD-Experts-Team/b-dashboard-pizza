@@ -32,7 +32,7 @@ import { CategoryManagerDialog } from "./category-manager-dialog";
 import { useStoreNumberOptions } from "./use-store-options";
 
 /** Every technician's name, deleted ones too: names stay taken after a delete. */
-const NAME_CHECK_PAGE_SIZE = 1000;
+const NAME_CHECK_PAGE_SIZE = 3000;
 const ALL_NAMES = { withTrashed: true, perPage: NAME_CHECK_PAGE_SIZE } as const;
 const NO_CATEGORY = "none";
 

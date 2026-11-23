@@ -10,7 +10,7 @@ import { useTechnicianCategories, useTechnicians } from "@/lib/hooks/use-mainten
 import { TechnicianCheckList } from "../technician-check-list";
 
 const ALL = "all";
-const PICKER_PAGE_SIZE = 100;
+const PICKER_PAGE_SIZE = 3000;
 
 /**
  * The ranked technician picker for booking (UI doc §2): the server ranks
@@ -83,6 +83,7 @@ export function TechnicianPicker({
           technicians={technicians}
           selected={value ? [value] : []}
           onToggle={onChange}
+          searchable
           emptyText={ranked ? t("noneRanked") : t("none")}
         />
       )}

@@ -15,7 +15,7 @@ import type { Technician, TechnicianAbility } from "@/types/maintenance-system";
 /* ────────────────────────────────────────────────────────────────────────── */
 
 /** Enough for the dropdowns: one page this size holds every technician. */
-const TECHNICIANS_PAGE_SIZE = 500;
+const TECHNICIANS_PAGE_SIZE = 3000;
 
 interface MaintenanceTicketsCatalogState {
   issues: CatalogIssue[];

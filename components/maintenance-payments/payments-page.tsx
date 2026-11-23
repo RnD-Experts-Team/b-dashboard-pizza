@@ -32,7 +32,10 @@ import { useStoreOptions } from "./use-payment-lookups";
 import { PaymentMethodsDialog } from "./payment-methods";
 
 const PER_PAGE = 25;
-const CATALOG_PAGE = 200;
+/** Every technician and company in one go: the list is not paged in the picker, so a lower number hides the rest. */
+const TECHNICIANS_PAGE = 3000;
+/** The suppliers endpoint allows 200 per page. */
+const SUPPLIERS_PAGE = 200;
 const SKELETON_ROWS = 6;
 
 type DialogState = { open: false } | { open: true; paymentId?: number; prefill?: PaymentPrefill };
@@ -74,8 +77,8 @@ export function PaymentsPage() {
 
   const list = usePayments(toPaymentFilters(filters, PER_PAGE));
   const unpaid = useUnpaidWork();
-  const { technicians } = useTechnicians({ perPage: CATALOG_PAGE, withTrashed: true });
-  const { suppliers } = useSuppliers({ perPage: CATALOG_PAGE, withTrashed: true });
+  const { technicians } = useTechnicians({ perPage: TECHNICIANS_PAGE, withTrashed: true });
+  const { suppliers } = useSuppliers({ perPage: SUPPLIERS_PAGE, withTrashed: true });
   const { categories } = useTechnicianCategories();
   const { stores, resolveStoreId } = useStoreOptions();
 

@@ -28,6 +28,7 @@ export function FilterMulti<T extends string | number>({
   disabled,
   single = false,
   deferred = false,
+  selectAll = false,
 }: {
   label: string;
   allLabel: string;
@@ -39,6 +40,8 @@ export function FilterMulti<T extends string | number>({
   single?: boolean;
   /** Hold the picks and report them once, when the list closes (costly filters such as stores). */
   deferred?: boolean;
+  /** A "Select all" button: picks every option shown (what the search matches). */
+  selectAll?: boolean;
 }) {
   const t = useTranslations("maintenanceSystem");
   const [open, setOpen] = useState(false);
@@ -123,11 +126,24 @@ export function FilterMulti<T extends string | number>({
             );
           })}
         </div>
-        {current.length ? (
-          <div className="border-t p-1">
-            <Button variant="ghost" size="sm" className="h-8 w-full text-xs" onClick={() => emit([])}>
-              {t("tickets.list.clearThis")}
-            </Button>
+        {current.length || (selectAll && !single) ? (
+          <div className="flex border-t p-1">
+            {selectAll && !single ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 flex-1 text-xs"
+                disabled={shown.length === 0}
+                onClick={() => emit([...new Set([...current, ...shown.map((o) => o.value)])])}
+              >
+                {t("tickets.list.selectAll")}
+              </Button>
+            ) : null}
+            {current.length ? (
+              <Button variant="ghost" size="sm" className="h-8 flex-1 text-xs" onClick={() => emit([])}>
+                {t("tickets.list.clearThis")}
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </PopoverContent>
