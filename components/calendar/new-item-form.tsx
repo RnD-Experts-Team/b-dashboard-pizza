@@ -345,7 +345,8 @@ export function NewItemForm({
                 role="radio"
                 aria-checked={on}
                 onClick={() => {
-                  set("kind", key);
+                  // "Chosen people" is for tasks only (user-requested 2026-11-23): leaving tasks drops it.
+                  setForm((s) => ({ ...s, kind: key, scope: key !== "task" && s.scope === "people" ? "custom" : s.scope }));
                   setServerError(null);
                 }}
                 className={cn(
@@ -363,8 +364,8 @@ export function NewItemForm({
 
       {/* Two columns from lg: what it is and who gets it on the left, when and how it moves on the right —
           wide enough that the dialog doesn't need to scroll. */}
-      <div className="grid gap-x-10 gap-y-6 px-6 py-5 lg:grid-cols-2">
-        <div className="space-y-5">
+      <div className="grid gap-x-10 gap-y-6 px-6 py-4 lg:grid-cols-2">
+        <div className="space-y-4">
           <SectionTitle title={t("steps.what")} />
 
           <div className="space-y-1.5">
@@ -387,7 +388,7 @@ export function NewItemForm({
             <Segmented
               label={t("fields.scope")}
               value={form.scope}
-              items={SCOPES.map((s) => ({ value: s, label: t(`scope.${s}`) }))}
+              items={SCOPES.filter((s) => s !== "people" || form.kind === "task").map((s) => ({ value: s, label: t(`scope.${s}`) }))}
               onChange={(v) => set("scope", v)}
             />
           )}
@@ -486,35 +487,11 @@ export function NewItemForm({
                   onChange={(v) => set("priority", v)}
                 />
               </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-baseline justify-between gap-3">
-                  <Label htmlFor={`${ids}-notes`}>
-                    {tc("editor.steps.details")} <span className="font-normal text-muted-foreground">({tc("editor.optional")})</span>
-                  </Label>
-                  <span className="text-[11px] tabular-nums text-muted-foreground">
-                    {form.notes.length}/{NOTES_MAX}
-                  </span>
-                </div>
-                <Textarea
-                  id={`${ids}-notes`}
-                  dir="auto"
-                  rows={3}
-                  maxLength={NOTES_MAX}
-                  value={form.notes}
-                  placeholder={tc("editor.fields.notesPlaceholder")}
-                  onChange={(e) => set("notes", e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) e.currentTarget.form?.requestSubmit();
-                  }}
-                  className="resize-none"
-                />
-              </div>
             </>
           )}
         </div>
 
-        <div className="space-y-5">
+        <div className="space-y-4">
           <SectionTitle
             title={form.kind === "reminder" ? t("steps.remind") : t("steps.when")}
             aside={
@@ -629,6 +606,34 @@ export function NewItemForm({
                   {form.requiresReview ? tc("signs.approved") : t("flow.autoDone")}
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* Details sit under the date and rules (right column): the left column is the tall one
+              (title, who, stores, managers, type), so this keeps the whole form on one screen. */}
+          {form.kind !== "reminder" && (
+            <div className="space-y-1.5">
+              <div className="flex items-baseline justify-between gap-3">
+                <Label htmlFor={`${ids}-notes`}>
+                  {tc("editor.steps.details")} <span className="font-normal text-muted-foreground">({tc("editor.optional")})</span>
+                </Label>
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  {form.notes.length}/{NOTES_MAX}
+                </span>
+              </div>
+              <Textarea
+                id={`${ids}-notes`}
+                dir="auto"
+                rows={form.kind === "task" ? 2 : 3}
+                maxLength={NOTES_MAX}
+                value={form.notes}
+                placeholder={tc("editor.fields.notesPlaceholder")}
+                onChange={(e) => set("notes", e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) e.currentTarget.form?.requestSubmit();
+                }}
+                className="resize-none"
+              />
             </div>
           )}
         </div>
