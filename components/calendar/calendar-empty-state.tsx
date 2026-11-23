@@ -10,6 +10,7 @@ import { isSameDay, weekDays } from "@/lib/calendar/dates";
 import { fiscalWeekOf } from "@/lib/calendar/fiscal";
 import type { CalendarView } from "@/lib/calendar/types";
 import { useCalendarClock } from "./calendar-clock";
+import { useNewItemLabel } from "./use-new-item-label";
 import { useCalendarFormat } from "./use-calendar-format";
 
 /**
@@ -162,6 +163,7 @@ export function RangeEmptyState({
   onView: (v: CalendarView) => void;
 }) {
   const t = useTranslations("calendar");
+  const newLabel = useNewItemLabel();
   const f = useCalendarFormat();
   const now = new Date(useCalendarClock());
   const strip = { days: weekDays(cursor), focus: view === "day" ? cursor : now };
@@ -196,7 +198,7 @@ export function RangeEmptyState({
     <EmptyState reason="empty" strip={strip} title={title} hint={hint}>
       <Button size="sm" onClick={onCreate}>
         <Plus className="size-4" />
-        {t("newEvent")}
+        {newLabel}
       </Button>
       {view !== "month" && (
         <Button variant="outline" size="sm" onClick={() => onView(view === "day" ? "week" : "month")}>

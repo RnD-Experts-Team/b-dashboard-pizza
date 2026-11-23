@@ -4164,7 +4164,8 @@
       "removeAll": "Remove all",
       "noManagers": "No store manager at the stores picked.",
       "apply": "Apply"
-    }
+    },
+    "newReminder": "New reminder"
   },
   "bottomNav": {
     "editTrigger": "Customize quick links",

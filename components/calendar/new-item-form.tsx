@@ -183,9 +183,17 @@ export function NewItemForm({
   const shown = useCalendarStores();
   const { create } = useCalendarToolbox();
 
+  // Events and tasks are for a super admin only (user-requested 2026-11-23); everyone else can set
+  // a reminder for themselves, so that is all their form offers (and where it starts).
+  const isAdmin = useAuthStore((s) => s.isSuperAdmin());
+  const kinds = isAdmin ? KINDS : KINDS.filter((k) => k.key === "reminder");
+
   // Starts with ONE store (the first the calendar shows), never every shown store:
   // an event or task for 39 stores is a deliberate choice, not a default.
-  const [form, setForm] = useState<FormState>(() => initialState(start, allDay, shown[0] ? [shown[0].code] : []));
+  const [form, setForm] = useState<FormState>(() => ({
+    ...initialState(start, allDay, shown[0] ? [shown[0].code] : []),
+    kind: isAdmin ? "event" : "reminder",
+  }));
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -194,7 +202,6 @@ export function NewItemForm({
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((s) => ({ ...s, [k]: v }));
 
   const withStores = form.kind !== "reminder";
-  const isAdmin = useAuthStore((s) => s.isSuperAdmin());
   /** Proof + approval apply to store tasks only. */
   const hasTaskRules = form.kind === "task" && form.scope !== "private";
 
@@ -335,8 +342,9 @@ export function NewItemForm({
           <DialogTitle className="font-heading">{t("heading")}</DialogTitle>
           <DialogDescription>{t(`hint.${form.kind}`)}</DialogDescription>
         </div>
+        {kinds.length > 1 && (
         <div role="radiogroup" aria-label={t("kindLabel")} className="inline-flex w-fit shrink-0 gap-0.5 rounded-lg bg-muted/60 p-0.5">
-          {KINDS.map(({ key, icon: Icon }) => {
+          {kinds.map(({ key, icon: Icon }) => {
             const on = form.kind === key;
             return (
               <button
@@ -360,6 +368,7 @@ export function NewItemForm({
             );
           })}
         </div>
+        )}
       </DialogHeader>
 
       {/* Two columns from lg: what it is and who gets it on the left, when and how it moves on the right —
@@ -368,8 +377,21 @@ export function NewItemForm({
         <div className="space-y-4">
           <SectionTitle title={t("steps.what")} />
 
-          {/* The audience (who sees it, stores, managers) comes first, so the pickers open downward
-              with room (user-requested 2026-11-23); the title follows. */}
+          <div className="space-y-1.5">
+            <Label htmlFor={`${ids}-title`}>{tc("editor.fields.title")}</Label>
+            <Input
+              id={`${ids}-title`}
+              dir="auto"
+              autoFocus
+              maxLength={TITLE_MAX}
+              value={form.title}
+              placeholder={t(`titlePlaceholder.${form.kind}`)}
+              aria-invalid={!!errors.title}
+              onChange={(e) => set("title", e.target.value)}
+            />
+            {fieldError(errors.title)}
+          </div>
+
           {/* "All stores", "Only me" and "Chosen people" exist for super admins only (Toolbox answers 403 to anyone else). */}
           {withStores && isAdmin && (
             <Segmented
@@ -449,21 +471,6 @@ export function NewItemForm({
               {fieldError(errors.stores ?? serverFields.stores)}
             </div>
           )}
-
-          <div className="space-y-1.5">
-            <Label htmlFor={`${ids}-title`}>{tc("editor.fields.title")}</Label>
-            <Input
-              id={`${ids}-title`}
-              dir="auto"
-              autoFocus
-              maxLength={TITLE_MAX}
-              value={form.title}
-              placeholder={t(`titlePlaceholder.${form.kind}`)}
-              aria-invalid={!!errors.title}
-              onChange={(e) => set("title", e.target.value)}
-            />
-            {fieldError(errors.title)}
-          </div>
 
           {form.kind !== "reminder" && (
             <>
