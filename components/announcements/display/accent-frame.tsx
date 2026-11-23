@@ -14,6 +14,13 @@ export interface AccentFrameProps
    * off screen, and off under `prefers-reduced-motion` (see globals.css).
    */
   animated?: boolean;
+  /**
+   * With `animated`: also draw the soft blurred glow around the frame (the
+   * popup does). Turn it off where many frames are on screen at once or the
+   * frame is small: the glow is the costly part and it spills onto neighbours.
+   * `"soft"` draws it at half strength (the feed's posts).
+   */
+  glow?: boolean | "soft";
   /** Radius utility shared by the ring and the content. */
   rounded?: string;
   /** Classes for the content layer (its background defaults to the card colour). */
@@ -35,6 +42,7 @@ export interface AccentFrameProps
 export function AccentFrame({
   accent,
   animated = false,
+  glow = true,
   rounded = "rounded-2xl",
   innerClassName,
   clip = true,
@@ -65,6 +73,7 @@ export function AccentFrame({
       ref={ref}
       data-slot="accent-frame"
       data-accent={accent.kind}
+      data-glow={glow === true ? undefined : glow === false ? "off" : glow}
       data-offscreen={spins && offscreen ? "" : undefined}
       className={cn(
         "ann-ring relative isolate",

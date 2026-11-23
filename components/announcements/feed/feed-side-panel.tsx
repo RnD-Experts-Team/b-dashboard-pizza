@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Announcement } from "@/types/announcement.types";
+import { SidePanelSkeleton } from "./feed-skeleton";
 import {
   FeedSearch,
   TypeFilterList,
@@ -30,6 +31,8 @@ export interface FeedSidePanelProps {
   typeFilter: TypeFilter;
   onTypeChange: (type: TypeFilter) => void;
   typeCounts: TypeCounts;
+  /** The list is still loading: draw placeholders instead of empty zeros. */
+  loading?: boolean;
   className?: string;
 }
 
@@ -54,9 +57,20 @@ export function FeedSidePanel({
   typeFilter,
   onTypeChange,
   typeCounts,
+  loading = false,
   className,
 }: FeedSidePanelProps) {
   const t = useTranslations("announcements.page");
+
+  if (loading) {
+    return (
+      <aside aria-hidden className={cn("min-w-0", className)}>
+        <div className="sticky top-4">
+          <SidePanelSkeleton />
+        </div>
+      </aside>
+    );
+  }
 
   const filters: { key: FeedFilter; label: string; count: number }[] = [
     { key: "all", label: t("filters.all"), count: total },

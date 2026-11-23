@@ -90,3 +90,26 @@ export function formatWindow(
   const to = end ? fmt.format(end) : labels.noEnd;
   return `${from} – ${to}`;
 }
+
+/** The day groups of the feed, newest first. */
+export const DAY_BUCKETS = ["today", "yesterday", "week", "earlier"] as const;
+export type DayBucket = (typeof DAY_BUCKETS)[number];
+
+/**
+ * Which group a post falls in, by the reader's own calendar days: today,
+ * yesterday, the five days before that ("this week"), or earlier. A future or
+ * unreadable date counts as today / earlier.
+ */
+export function dayBucket(value: string | null | undefined, now: Date = new Date()): DayBucket {
+  const time = value ? new Date(value).getTime() : NaN;
+  if (!Number.isFinite(time)) return "earlier";
+
+  // Calendar days, so a daylight-saving change cannot shift a post by a day.
+  const startOfDay = (daysBack: number) =>
+    new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysBack).getTime();
+
+  if (time >= startOfDay(0)) return "today";
+  if (time >= startOfDay(1)) return "yesterday";
+  if (time >= startOfDay(6)) return "week";
+  return "earlier";
+}

@@ -125,7 +125,8 @@ function AnnouncementPostBase({
     >
       <AccentFrame
         accent={accent}
-        animated={preview}
+        animated
+        glow="soft"
         className={cn(
           "shadow-xs transition-shadow duration-500",
           highlight && "ring-2 ring-ring/70 ring-offset-2 ring-offset-background",

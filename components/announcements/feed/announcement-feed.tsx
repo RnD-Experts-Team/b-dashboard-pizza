@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { DAY_BUCKETS, dayBucket } from "@/lib/announcements/status";
 import { matchesQuery } from "@/lib/announcements/text";
 import { normalizeAnnouncementType } from "@/types/announcement.types";
 import { selectUnreadCount, useAnnouncementStore } from "@/lib/store/announcement.store";
@@ -21,7 +22,7 @@ import {
   type TypeFilter,
 } from "./feed-filters";
 import { FeedSidePanel, type FeedFilter } from "./feed-side-panel";
-import { PostSkeleton } from "./post-skeleton";
+import { FeedTraySkeleton } from "./feed-skeleton";
 
 type Filter = FeedFilter;
 
@@ -124,6 +125,12 @@ export function AnnouncementFeed({ deepLinkId = null, className }: AnnouncementF
   const pinned = shownList.filter((a) => a.is_pinned);
   const others = shownList.filter((a) => !a.is_pinned);
   const remaining = ordered.length - shownList.length;
+  // The posts below "Pinned", by the reader's own days (Today, Yesterday, ...).
+  const now = new Date();
+  const dayGroups = DAY_BUCKETS.map((bucket) => ({
+    bucket,
+    posts: others.filter((a) => dayBucket(a.created_at, now) === bucket),
+  })).filter((group) => group.posts.length > 0);
   const allPinned = items.filter((a) => a.is_pinned);
 
   const clearFilters = () => {
@@ -362,10 +369,8 @@ export function AnnouncementFeed({ deepLinkId = null, className }: AnnouncementF
       )}
 
       {loading && (
-        <div className="space-y-4" aria-busy aria-label={t("loading")}>
-          <PostSkeleton withMedia />
-          <PostSkeleton />
-          <PostSkeleton />
+        <div aria-busy aria-label={t("loading")}>
+          <FeedTraySkeleton />
         </div>
       )}
 
@@ -414,7 +419,8 @@ export function AnnouncementFeed({ deepLinkId = null, className }: AnnouncementF
       </p>
 
       {ordered.length > 0 && (
-        <div className="space-y-6">
+        // The tray: a soft grey surface behind all the posts.
+        <div className="space-y-6 rounded-2xl border bg-muted/30 p-3 sm:p-4">
           {pinned.length > 0 && (
             <section aria-labelledby="feed-pinned" className="space-y-3">
               <h2
@@ -428,25 +434,30 @@ export function AnnouncementFeed({ deepLinkId = null, className }: AnnouncementF
             </section>
           )}
 
-          {others.length > 0 && (
-            <section
-              aria-labelledby={pinned.length > 0 ? "feed-latest" : undefined}
-              className="space-y-3"
-            >
-              {pinned.length > 0 && (
+          {dayGroups.map((group, groupIndex) => {
+            // Where this group starts in the whole list (for the first posts' fade-up).
+            const offset =
+              pinned.length +
+              dayGroups.slice(0, groupIndex).reduce((total, g) => total + g.posts.length, 0);
+            return (
+              <section
+                key={group.bucket}
+                aria-labelledby={`feed-day-${group.bucket}`}
+                className="space-y-3"
+              >
                 <h2
-                  id="feed-latest"
+                  id={`feed-day-${group.bucket}`}
                   className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase"
                 >
-                  {t("sections.latest")}
+                  {t(`sections.${group.bucket}`)}
                 </h2>
-              )}
-              {others.map((announcement, index) => renderPost(announcement, pinned.length + index))}
-            </section>
-          )}
+                {group.posts.map((announcement, index) => renderPost(announcement, offset + index))}
+              </section>
+            );
+          })}
 
           {remaining > 0 && (
-            <div ref={sentinelRef} className="flex justify-center pb-2">
+            <div ref={sentinelRef} className="flex justify-center pb-1">
               <Button
                 type="button"
                 variant="outline"
@@ -475,6 +486,7 @@ export function AnnouncementFeed({ deepLinkId = null, className }: AnnouncementF
         typeFilter={typeFilter}
         onTypeChange={setTypeFilter}
         typeCounts={typeCounts}
+        loading={loading}
         className="hidden @4xl/feed:block @4xl/feed:self-stretch"
       />
       </div>

@@ -65,8 +65,8 @@ export function ExpandableSlot({ expanded, children }: ExpandableSlotProps) {
         animateHeight ? { duration: HEIGHT_SECONDS, ease: [0.22, 1, 0.36, 1] } : { duration: 0 }
       }
       // `clip` with a margin: the slot hides what is growing, but a focus or
-      // deep-link ring around the post (a few pixels out) is still drawn.
-      className="relative overflow-clip [overflow-clip-margin:8px]"
+      // deep-link ring around the post (a few pixels out) and the soft glow of an animated border are still drawn.
+      className="relative overflow-clip [overflow-clip-margin:24px]"
     >
       <AnimatePresence initial={false} mode="popLayout">
         <motion.div

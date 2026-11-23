@@ -245,16 +245,24 @@ export function AdminRowSkeleton() {
   return (
     <li
       aria-hidden
-      className="flex min-w-0 gap-3 rounded-xl border bg-card p-3 md:items-center md:px-4"
+      className="min-w-0 rounded-xl border bg-card p-3 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-4 md:px-4"
     >
-      <Skeleton className="size-14 shrink-0 rounded-lg md:size-[4.5rem]" />
-      <div className="min-w-0 flex-1 space-y-2">
-        <Skeleton className="h-4 w-2/3" />
-        <div className="flex gap-2">
-          <Skeleton className="h-5 w-20 rounded-full" />
-          <Skeleton className="h-5 w-16 rounded-full" />
+      <div className="flex min-w-0 gap-3">
+        <Skeleton className="size-14 shrink-0 rounded-lg md:size-[4.5rem]" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <Skeleton className="h-4 w-2/3" />
+          <div className="flex flex-wrap items-center gap-2">
+            <Skeleton className="h-3.5 w-14" />
+            <Skeleton className="h-5 w-16 rounded-full" />
+            <Skeleton className="h-3.5 w-8" />
+          </div>
+          <Skeleton className="h-3 w-44" />
         </div>
-        <Skeleton className="h-3 w-44" />
+      </div>
+      <div className="hidden items-center gap-1.5 md:flex">
+        <Skeleton className="size-8 rounded-md" />
+        <Skeleton className="size-8 rounded-md" />
+        <Skeleton className="size-8 rounded-md" />
       </div>
     </li>
   );

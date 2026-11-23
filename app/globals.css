@@ -401,6 +401,14 @@ html[data-secondary-font="instrumentSans"] body {
   pointer-events: none;
   animation: ann-border-spin 4s linear infinite;
 }
+/* The feed's posts: the same glow at half strength. */
+.ann-ring[data-glow="soft"]::after {
+  opacity: 0.16;
+}
+/* A frame that asked for no glow keeps only the moving ring. */
+.ann-ring[data-glow="off"]::after {
+  display: none;
+}
 /* Off screen: nobody can see it, so stop it (set by <AccentFrame> via IntersectionObserver). */
 .ann-ring--animated[data-offscreen]::before,
 .ann-ring--animated[data-offscreen]::after {

@@ -97,7 +97,7 @@ function AnnouncementPostCompactBase({
       }}
       className={cn("scroll-mt-24 min-w-0", className)}
     >
-      <AccentFrame accent={accent} rounded="rounded-xl" className="shadow-xs">
+      <AccentFrame accent={accent} animated glow="soft" rounded="rounded-xl" className="shadow-xs">
         <button
           type="button"
           onClick={onExpand}
