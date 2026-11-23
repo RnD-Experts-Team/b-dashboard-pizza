@@ -30,7 +30,7 @@ import { LinkStatusBadge, TripStateBadge, TripStatusBadge } from "./trip-badges"
 
 const LIVE_PAGE_SIZE = 50;
 const HISTORY_PAGE_SIZE = 25;
-const TECH_FILTER_PAGE_SIZE = 100;
+const TECH_FILTER_PAGE_SIZE = 3000;
 const ON_CLOCK_REFRESH_MS = 60_000;
 const ALL = "all";
 const SKELETON_CARDS = 3;

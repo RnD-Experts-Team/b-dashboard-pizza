@@ -69,7 +69,10 @@ export interface PaymentDialogProps {
 }
 
 /** Enough for the whole catalog in one picker. */
-const CATALOG_PAGE = 200;
+/** Every technician and company in one go: the list is not paged in the picker, so a lower number hides the rest. */
+const TECHNICIANS_PAGE = 3000;
+/** The suppliers endpoint allows 200 per page. */
+const SUPPLIERS_PAGE = 200;
 const ERROR_SHAPE = { rootFields: [...PAYMENT_ROOT_FIELDS], itemArrays: ["lines"] } as const;
 /** A line's notes / files errors, cleared as the person changes them. */
 const LINE_EXTRAS_FIELDS = ["files", "notes", "keepNoteIds", "keepAttachmentIds"];
@@ -106,8 +109,8 @@ function PaymentDialogBody({ onOpenChange, paymentId, prefill, onSaved }: Paymen
 
   /* ── Catalog ──────────────────────────────────────────────────────── */
 
-  const techniciansRes = useTechnicians({ perPage: CATALOG_PAGE, withTrashed: editing });
-  const suppliersRes = useSuppliers({ perPage: CATALOG_PAGE, withTrashed: editing });
+  const techniciansRes = useTechnicians({ perPage: TECHNICIANS_PAGE, withTrashed: editing });
+  const suppliersRes = useSuppliers({ perPage: SUPPLIERS_PAGE, withTrashed: editing });
   const partsRes = useParts();
   const [createdSuppliers, setCreatedSuppliers] = useState<Supplier[]>([]);
   const [createdParts, setCreatedParts] = useState<Part[]>([]);

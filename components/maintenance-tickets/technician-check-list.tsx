@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { standingOf } from "@/lib/maintenance-tickets/technician-ranking";
@@ -18,17 +20,37 @@ export function TechnicianCheckList({
   selected,
   onToggle,
   emptyText,
+  searchable = false,
 }: {
   technicians: Technician[];
   selected: number[];
   onToggle: (technicianId: number) => void;
   emptyText?: string;
+  /** A search box over name, category and phone; the order stays as given. */
+  searchable?: boolean;
 }) {
   const t = useTranslations("maintenanceSystem.technicians");
-  const live = technicians.filter((tech) => !tech.deletedAt);
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
+  const live = technicians
+    .filter((tech) => !tech.deletedAt)
+    .filter((tech) => !needle || [tech.name, tech.category?.name, tech.phone].some((v) => v?.toLowerCase().includes(needle)));
 
   return (
-    <div className="max-h-56 divide-y overflow-y-auto rounded-md border bg-background">
+    <div className="rounded-md border bg-background">
+      {searchable ? (
+        <div className="relative border-b">
+          <Search className="pointer-events-none absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("search")}
+            aria-label={t("search")}
+            className="w-full bg-transparent py-2 ps-8 pe-2 text-sm outline-none placeholder:text-muted-foreground"
+          />
+        </div>
+      ) : null}
+      <div className="max-h-56 divide-y overflow-y-auto">
       {live.length === 0 ? (
         <p className="px-3 py-2 text-xs text-muted-foreground">{emptyText ?? t("none")}</p>
       ) : (
@@ -70,6 +92,7 @@ export function TechnicianCheckList({
           );
         })
       )}
+      </div>
     </div>
   );
 }

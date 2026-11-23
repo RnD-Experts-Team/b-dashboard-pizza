@@ -36,9 +36,14 @@ export const runsAnyOf = (p: CalendarPerson, stores: ReadonlySet<string>): boole
  * Toolbox answers at most 100 people per call and can't filter by store, so the whole
  * list is gathered once (`listAllPeople`, cached, started as soon as this field shows)
  * and filtered here. The people picked are kept as objects: they stay named in the chips
- * under the field. The popover is `modal`: inside the event dialog a non-modal popover's
- * list would not scroll with the wheel (the dialog's scroll lock only lets its own
- * content scroll, and the popover is portaled outside it).
+ * under the field.
+ *
+ * It looks and behaves like the stores picker above it (`store-multi-select.tsx`, user-requested
+ * 2026-11-23): a compact dropdown with a title and count, a search box, a Select all row and
+ * a short list that scrolls on its own, plus an Apply button that closes it. The popover is
+ * `modal`: inside the event dialog a non-modal popover's list would not scroll with the
+ * wheel (the dialog's scroll lock only lets its own content scroll, and the popover is
+ * portaled outside it).
  */
 export function PeopleMultiSelect({
   value,
@@ -109,7 +114,6 @@ export function PeopleMultiSelect({
   const shownOwn = own.filter(hit);
   const shownShared = shared.filter(hit);
   const shown = [...shownOwn, ...shownShared];
-  const total = own.length + shared.length;
 
   const picked = useMemo(() => new Set(value.map((p) => p.id)), [value]);
   const full = value.length >= PEOPLE_MAX;
@@ -193,7 +197,7 @@ export function PeopleMultiSelect({
         <PopoverContent
           align="start"
           collisionPadding={16}
-          className="flex max-h-(--radix-popover-content-available-height) w-[min(24rem,calc(100vw-2rem))] flex-col p-0"
+          className="flex w-[min(21rem,calc(100vw-2rem))] flex-col overflow-hidden p-0"
         >
           <div className="shrink-0 space-y-2 border-b p-2">
             <div className="flex items-center justify-between px-1">
@@ -217,78 +221,83 @@ export function PeopleMultiSelect({
             </label>
           </div>
 
-          {state.status === "loading" ? (
-            <p className="flex items-center justify-center gap-2 px-2 py-8 text-sm text-muted-foreground" aria-busy>
-              <Loader2 className="size-4 animate-spin" />
-              {t("loading")}
-            </p>
-          ) : state.status === "error" ? (
-            <div className="flex flex-col items-center gap-2 px-2 py-6 text-center">
-              <p className="text-sm text-muted-foreground">{t(`errors.${state.kind}`)}</p>
-              {state.kind === "other" && (
-                <Button type="button" variant="outline" size="sm" onClick={retry}>
-                  <RotateCw className="size-3.5" />
-                  {t("retry")}
-                </Button>
-              )}
-            </div>
-          ) : (
-            <>
-              <div className="flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
-                <span className="min-w-0 flex-1 truncate text-xs tabular-nums text-muted-foreground">
-                  {t("inStores", { n: total, stores: stores.length })}
-                </span>
-                {shown.length > 0 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={toggleAll}
-                    disabled={!allOn && full}
-                    className="-me-1.5 h-7 shrink-0 px-2 text-xs"
-                  >
-                    {allOn ? t("clearAll") : t("selectAll")}
-                  </Button>
-                )}
-              </div>
-              {/* The list scrolls on its own (wheel included — see `modal` above). */}
-              <div className="max-h-72 min-h-0 flex-1 overflow-y-auto overscroll-contain p-1.5">
-                {shown.length === 0 ? (
-                  <p className="px-2 py-6 text-center text-sm text-muted-foreground">{q ? t("none") : t("noManagers")}</p>
-                ) : (
-                  <>
-                    {shownOwn.map(row)}
-                    {shownShared.length > 0 && (
-                      <p
-                        className={cn(
-                          "px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground",
-                          shownOwn.length ? "mt-1.5 border-t pt-2.5" : "pt-1",
-                        )}
-                      >
-                        {t("sharedHeading")}
-                      </p>
-                    )}
-                    {shownShared.map(row)}
-                  </>
-                )}
-              </div>
-            </>
-          )}
-
-          {(full || (state.status === "ready" && !state.complete)) && (
-            <div className="shrink-0 space-y-1 border-t px-3 py-2 text-xs text-muted-foreground">
-              {full && <p>{t("max", { n: PEOPLE_MAX })}</p>}
-              {state.status === "ready" && !state.complete && (
-                <p className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1">{t("partial")}</span>
-                  <Button type="button" variant="ghost" size="sm" className="h-6 shrink-0 px-2 text-xs" onClick={retry}>
-                    <RotateCw className="size-3" />
+          {/* Only the list gives way when there is little room: the header, Select all and Apply stay. */}
+          <div className="flex min-h-0 flex-1 flex-col p-1.5">
+            {state.status === "loading" ? (
+              <p className="flex items-center justify-center gap-2 px-2 py-8 text-sm text-muted-foreground" aria-busy>
+                <Loader2 className="size-4 animate-spin" />
+                {t("loading")}
+              </p>
+            ) : state.status === "error" ? (
+              <div className="flex flex-col items-center gap-2 px-2 py-6 text-center">
+                <p className="text-sm text-muted-foreground">{t(`errors.${state.kind}`)}</p>
+                {state.kind === "other" && (
+                  <Button type="button" variant="outline" size="sm" onClick={retry}>
+                    <RotateCw className="size-3.5" />
                     {t("retry")}
                   </Button>
-                </p>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            ) : (
+              <>
+                {shown.length > 0 && (
+                  <label
+                    className={cn(
+                      "flex shrink-0 select-none items-center gap-3 rounded-md px-2 py-1.5 transition-colors duration-150",
+                      !allOn && full ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-accent/50",
+                    )}
+                  >
+                    <Checkbox checked={allOn} disabled={!allOn && full} onCheckedChange={toggleAll} className="rounded-sm" />
+                    <span className="flex-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {allOn ? t("clearAll") : t("selectAll")}
+                    </span>
+                    <span className="text-xs tabular-nums text-muted-foreground">{shown.length}</span>
+                  </label>
+                )}
+                {/* The list scrolls on its own (wheel included — see `modal` above). */}
+                <div className="max-h-[max(11rem,min(16rem,calc(var(--radix-popover-content-available-height)-12.5rem)))] min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                  {shown.length === 0 ? (
+                    <p className="px-2 py-6 text-center text-sm text-muted-foreground">{q ? t("none") : t("noManagers")}</p>
+                  ) : (
+                    <>
+                      {shownOwn.map(row)}
+                      {shownShared.length > 0 && (
+                        <p
+                          className={cn(
+                            "px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground",
+                            shownOwn.length ? "mt-1.5 border-t pt-2.5" : "pt-1",
+                          )}
+                        >
+                          {t("sharedHeading")}
+                        </p>
+                      )}
+                      {shownShared.map(row)}
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="shrink-0 space-y-2 border-t p-2">
+            {(full || (state.status === "ready" && !state.complete)) && (
+              <div className="space-y-1 px-1 text-xs text-muted-foreground">
+                {full && <p>{t("max", { n: PEOPLE_MAX })}</p>}
+                {state.status === "ready" && !state.complete && (
+                  <p className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1">{t("partial")}</span>
+                    <Button type="button" variant="ghost" size="sm" className="h-6 shrink-0 px-2 text-xs" onClick={retry}>
+                      <RotateCw className="size-3" />
+                      {t("retry")}
+                    </Button>
+                  </p>
+                )}
+              </div>
+            )}
+            <Button type="button" size="sm" className="h-8 w-full" onClick={() => setOpen(false)}>
+              {t("apply")}
+            </Button>
+          </div>
         </PopoverContent>
       </Popover>
 

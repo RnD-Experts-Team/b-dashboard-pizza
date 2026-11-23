@@ -14,6 +14,7 @@ import { useReminderTargets } from "@/lib/hooks/use-calendar-events";
 import { AssigneeLabel } from "./assignee-label";
 import { EventDot } from "./event-parts";
 import { EventSigns, ReminderTargetsProvider } from "./event-signs";
+import { useNewItemLabel } from "./use-new-item-label";
 import { useCalendarFormat } from "./use-calendar-format";
 
 /** Attention rows shown before "+N more". */
@@ -78,6 +79,7 @@ export function TodayPanel({
   onNewEvent: () => void;
 }) {
   const t = useTranslations("calendar");
+  const newLabel = useNewItemLabel();
   const f = useCalendarFormat();
   const locale = useLocale();
   const base = `/${locale}/dashboard/calendar`;
@@ -323,7 +325,7 @@ export function TodayPanel({
         <div className="grid grid-cols-2 gap-1.5 border-t p-2">
           <Button variant="outline" size="sm" onClick={onNewEvent}>
             <Plus className="size-3.5" />
-            {t("newEvent")}
+            {newLabel}
           </Button>
           <Button asChild variant="ghost" size="sm">
             <Link href={base} onClick={onNavigate}>

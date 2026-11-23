@@ -4161,8 +4161,10 @@
       "alsoStores": "{n, plural, one {+متجر آخر} two {+متجران آخران} few {+# متاجر أخرى} many {+# متجرًا آخر} other {+# متجر آخر}}",
       "partial": "تعذّر تحميل بعض مديري المتاجر.",
       "removeAll": "إزالة الكل",
-      "noManagers": "لا يوجد مدير في المتاجر المختارة."
-    }
+      "noManagers": "لا يوجد مدير في المتاجر المختارة.",
+      "apply": "تطبيق"
+    },
+    "newReminder": "تذكير جديد"
   },
   "bottomNav": {
     "editTrigger": "تخصيص الروابط السريعة",
@@ -6016,6 +6018,7 @@
         "picked": "{count} مختارة",
         "noOptions": "لا شيء مطابق.",
         "clearThis": "مسح هذا الفلتر",
+        "selectAll": "تحديد الكل",
         "showing": "عرض {from}–{to} من {total}",
         "page": "صفحة {current} من {total}",
         "previous": "الصفحة السابقة",
@@ -6702,6 +6705,7 @@
       "recordPayment": "تسجيل دفعة"
     },
     "technicians": {
+      "search": "ابحث عن فني…",
       "none": "لا يوجد فنيون.",
       "addTechnician": "إضافة فني",
       "addSupplier": "إضافة مورّد",
