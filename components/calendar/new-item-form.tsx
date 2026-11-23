@@ -368,21 +368,8 @@ export function NewItemForm({
         <div className="space-y-4">
           <SectionTitle title={t("steps.what")} />
 
-          <div className="space-y-1.5">
-            <Label htmlFor={`${ids}-title`}>{tc("editor.fields.title")}</Label>
-            <Input
-              id={`${ids}-title`}
-              dir="auto"
-              autoFocus
-              maxLength={TITLE_MAX}
-              value={form.title}
-              placeholder={t(`titlePlaceholder.${form.kind}`)}
-              aria-invalid={!!errors.title}
-              onChange={(e) => set("title", e.target.value)}
-            />
-            {fieldError(errors.title)}
-          </div>
-
+          {/* The audience (who sees it, stores, managers) comes first, so the pickers open downward
+              with room (user-requested 2026-11-23); the title follows. */}
           {/* "All stores", "Only me" and "Chosen people" exist for super admins only (Toolbox answers 403 to anyone else). */}
           {withStores && isAdmin && (
             <Segmented
@@ -462,6 +449,21 @@ export function NewItemForm({
               {fieldError(errors.stores ?? serverFields.stores)}
             </div>
           )}
+
+          <div className="space-y-1.5">
+            <Label htmlFor={`${ids}-title`}>{tc("editor.fields.title")}</Label>
+            <Input
+              id={`${ids}-title`}
+              dir="auto"
+              autoFocus
+              maxLength={TITLE_MAX}
+              value={form.title}
+              placeholder={t(`titlePlaceholder.${form.kind}`)}
+              aria-invalid={!!errors.title}
+              onChange={(e) => set("title", e.target.value)}
+            />
+            {fieldError(errors.title)}
+          </div>
 
           {form.kind !== "reminder" && (
             <>

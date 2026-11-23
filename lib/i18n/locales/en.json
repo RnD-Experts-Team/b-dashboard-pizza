@@ -4162,7 +4162,8 @@
       "alsoStores": "{n, plural, one {+# other store} other {+# other stores}}",
       "partial": "Some store managers could not be loaded.",
       "removeAll": "Remove all",
-      "noManagers": "No store manager at the stores picked."
+      "noManagers": "No store manager at the stores picked.",
+      "apply": "Apply"
     }
   },
   "bottomNav": {
