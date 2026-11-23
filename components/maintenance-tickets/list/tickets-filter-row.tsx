@@ -12,7 +12,7 @@ import { TicketsSearch } from "../tickets-search";
 import { DateRangeFilter } from "./date-range-filter";
 import { FilterMulti } from "./filter-multi";
 
-const TECHNICIAN_PAGE_SIZE = 500;
+const TECHNICIAN_PAGE_SIZE = 3000;
 /** Sent as technician_ids when a category has nobody in it: matches no ticket. */
 export const NO_TECHNICIAN = 0;
 
@@ -100,6 +100,7 @@ export function TicketsFilterRow({
           onChange={onStoresChange}
           disabled={disabled}
           deferred
+          selectAll
         />
       ) : null}
       <FilterMulti<Priority>
