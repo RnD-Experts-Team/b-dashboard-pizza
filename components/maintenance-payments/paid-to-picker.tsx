@@ -70,10 +70,12 @@ export function PaidToPicker({
   const groups = useMemo<ComboGroup[]>(() => {
     const techOptions = technicians
       .filter((x) => !x.deletedAt || (value?.type === "technician" && value.id === x.id))
-      .map((x) => ({ value: `technician${SEP}${x.id}`, label: x.name, hint: x.category?.name ?? undefined }));
+      .map((x) => ({ value: `technician${SEP}${x.id}`, label: x.name, hint: x.category?.name ?? undefined }))
+      .sort((a, b) => a.label.localeCompare(b.label));
     const supplierOptions = suppliers
       .filter((x) => !x.deletedAt || (value?.type === "supplier" && value.id === x.id))
-      .map((x) => ({ value: `supplier${SEP}${x.id}`, label: x.name }));
+      .map((x) => ({ value: `supplier${SEP}${x.id}`, label: x.name }))
+      .sort((a, b) => a.label.localeCompare(b.label));
     const known = [...techOptions, ...supplierOptions].some((o) => o.value === paidToValue(value));
     const missing = value && !known && fallbackName ? [{ value: paidToValue(value) as string, label: fallbackName }] : [];
     return [

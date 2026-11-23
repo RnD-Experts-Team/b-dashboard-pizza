@@ -23,7 +23,7 @@ import { draftFor, otherDraft, StopIssueList, StoreChoices, useTripStores, type 
 
 /* ── The dialog ──────────────────────────────────────────────────────────── */
 
-const TECH_PAGE_SIZE = 50;
+const TECH_PAGE_SIZE = 3000;
 
 /**
  * New trip (UI doc §3): technician (ranked for the first store), date, and
