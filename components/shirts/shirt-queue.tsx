@@ -482,6 +482,19 @@ export function ShirtQueue({
                             hex={m.shirt_color?.hex_code}
                             name={m.shirt_color?.name}
                           />
+                          {/* The fallback, for whoever orders the shirt. */}
+                          {m.secondary_shirt_color && (
+                            <>
+                              <span className="text-[10px] text-muted-foreground">
+                                or
+                              </span>
+                              <ColorSwatch
+                                className="h-3 w-3"
+                                hex={m.secondary_shirt_color.hex_code}
+                                name={`Second choice: ${m.secondary_shirt_color.name}`}
+                              />
+                            </>
+                          )}
                           <LogoThumb logo={m.shirt_logo} />
                           <span className="text-xs text-muted-foreground">
                             {m.t_shirt_size ?? "—"}

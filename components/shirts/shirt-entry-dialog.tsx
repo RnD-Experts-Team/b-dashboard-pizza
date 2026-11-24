@@ -26,7 +26,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Skeleton } from "@/components/ui/skeleton";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -42,6 +41,8 @@ import { employeeService } from "@/lib/api/services/employee.service";
 import { shirtMilestoneService } from "@/lib/api/services/shirt-milestone.service";
 import { useShirtCatalog } from "@/lib/shirts/use-shirt-catalog";
 import {
+  SECONDARY_COLOR_REQUIRED_MESSAGE,
+  SECONDARY_COLOR_SAME_MESSAGE,
   SHIRT_SIZES,
   SIZE_REQUIRED_MESSAGE,
   isSizeRequired,
@@ -51,7 +52,7 @@ import {
   shirtEmployeeName,
 } from "@/lib/shirts/shirt-utils";
 import { ShirtPreview } from "@/components/shirts/shirt-preview";
-import { ColorSwatch, LogoThumb } from "@/components/shirts/shirt-ui";
+import { ColorSelect, LogoSelect } from "@/components/shirts/shirt-selects";
 import type { EmployeeV1Record } from "@/types/employee.types";
 import type {
   ShirtGender,
@@ -96,6 +97,9 @@ export function ShirtEntryDialog({
   } = useShirtCatalog({ enabled: open });
 
   const [colorId, setColorId] = useState<number | null>(null);
+  /* The fallback when the first colour isn't available. We never check stock —
+     fulfilment does when ordering — so every entry names a second choice. */
+  const [secondaryColorId, setSecondaryColorId] = useState<number | null>(null);
   const [logoId, setLogoId] = useState<number | null>(null);
   const [size, setSize] = useState<TShirtSize | "">("");
   const [notes, setNotes] = useState("");
@@ -120,6 +124,7 @@ export function ShirtEntryDialog({
   useEffect(() => {
     if (!open) return;
     setColorId(null);
+    setSecondaryColorId(null);
     setLogoId(null);
     setNotes("");
     setError(null);
@@ -183,6 +188,21 @@ export function ShirtEntryDialog({
   const selectedColor = colors.find((c) => c.id === colorId) ?? null;
   const selectedLogo = logos.find((l) => l.id === logoId) ?? null;
 
+  /* A second choice equal to the first is no fallback, so the first colour is
+     left out of the list (the API refuses it too). */
+  const secondaryOptions = useMemo(
+    () => colors.filter((c) => c.id !== colorId),
+    [colors, colorId],
+  );
+
+  /* The preview keeps showing the first colour only. Changing the first colour
+     to the one already picked as the second choice would leave both the same,
+     so the second choice is cleared instead. */
+  function handleColorChange(id: number) {
+    setColorId(id);
+    if (id === secondaryColorId) setSecondaryColorId(null);
+  }
+
   // Preview only. The payload omits shirt_template_id so the server stays
   // authoritative about which template a shirt is actually made from.
   const previewTemplate = useMemo(
@@ -198,6 +218,7 @@ export function ShirtEntryDialog({
 
   const isDirty =
     colorId !== null ||
+    secondaryColorId !== null ||
     logoId !== null ||
     notes !== "" ||
     (mode === "create" && (employeeId !== null || dueDate !== ""));
@@ -210,16 +231,17 @@ export function ShirtEntryDialog({
     onOpenChange(next);
   }
 
-  const validationError =
-    colorId === null
-      ? "Pick a shirt colour."
-      : logoId === null
-        ? "Pick a logo."
-        : sizeRequired && !size
-          ? SIZE_REQUIRED_MESSAGE
-          : mode === "create" && employeeId === null
-            ? "Pick an employee."
-            : null;
+  /* First problem wins, in the order the fields appear on the form. */
+  function findValidationError(): string | null {
+    if (colorId === null) return "Pick a shirt colour.";
+    if (secondaryColorId === null) return SECONDARY_COLOR_REQUIRED_MESSAGE;
+    if (secondaryColorId === colorId) return SECONDARY_COLOR_SAME_MESSAGE;
+    if (logoId === null) return "Pick a logo.";
+    if (sizeRequired && !size) return SIZE_REQUIRED_MESSAGE;
+    if (mode === "create" && employeeId === null) return "Pick an employee.";
+    return null;
+  }
+  const validationError = findValidationError();
 
   async function handleSubmit() {
     if (validationError) {
@@ -232,6 +254,7 @@ export function ShirtEntryDialog({
     try {
       const base = {
         shirt_color_id: colorId!,
+        secondary_shirt_color_id: secondaryColorId!,
         shirt_logo_id: logoId!,
         ...(size ? { t_shirt_size: size as TShirtSize } : {}),
         ...(notes.trim() ? { entry_notes: notes.trim() } : {}),
@@ -415,65 +438,49 @@ export function ShirtEntryDialog({
               )}
 
               <div className="flex flex-col gap-1.5">
-                <Label>
+                <Label htmlFor="shirt-color">
                   Shirt colour <span className="text-destructive">*</span>
                 </Label>
-                {catalogLoading ? (
-                  <Skeleton className="h-20 w-full" />
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    {colors.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => setColorId(c.id)}
-                        className={cn(
-                          "flex items-center gap-2 rounded-md border p-2 text-start text-sm hover:bg-muted",
-                          colorId === c.id && "ring-2 ring-primary",
-                        )}
-                      >
-                        <ColorSwatch hex={c.hex_code} name={c.name} />
-                        <span className="truncate">{c.name}</span>
-                      </button>
-                    ))}
-                    {colors.length === 0 && (
-                      <p className="col-span-2 text-sm text-muted-foreground">
-                        No active colours in the catalog.
-                      </p>
-                    )}
-                  </div>
-                )}
+                <ColorSelect
+                  id="shirt-color"
+                  colors={colors}
+                  value={colorId}
+                  onChange={handleColorChange}
+                  loading={catalogLoading}
+                />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label>
+                <Label htmlFor="shirt-secondary-color">
+                  Secondary colour <span className="text-destructive">*</span>
+                </Label>
+                <ColorSelect
+                  id="shirt-secondary-color"
+                  colors={secondaryOptions}
+                  value={secondaryColorId}
+                  onChange={setSecondaryColorId}
+                  loading={catalogLoading}
+                  placeholder="Select a second choice"
+                  emptyText="No other colour available"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {!catalogLoading && colors.length < 2
+                    ? "The catalog needs at least two active colours before a second choice can be picked."
+                    : "Used if the first colour isn't available — fulfilment checks availability when ordering."}
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="shirt-logo">
                   Logo <span className="text-destructive">*</span>
                 </Label>
-                {catalogLoading ? (
-                  <Skeleton className="h-20 w-full" />
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    {logos.map((l) => (
-                      <button
-                        key={l.id}
-                        type="button"
-                        onClick={() => setLogoId(l.id)}
-                        className={cn(
-                          "flex items-center gap-2 rounded-md border p-2 text-start text-sm hover:bg-muted",
-                          logoId === l.id && "ring-2 ring-primary",
-                        )}
-                      >
-                        <LogoThumb logo={l} />
-                        <span className="truncate">{l.name}</span>
-                      </button>
-                    ))}
-                    {logos.length === 0 && (
-                      <p className="col-span-2 text-sm text-muted-foreground">
-                        No active logos in the catalog.
-                      </p>
-                    )}
-                  </div>
-                )}
+                <LogoSelect
+                  id="shirt-logo"
+                  logos={logos}
+                  value={logoId}
+                  onChange={setLogoId}
+                  loading={catalogLoading}
+                />
               </div>
 
               <div className="flex flex-col gap-1.5">

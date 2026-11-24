@@ -139,6 +139,9 @@ export interface ShirtMilestone {
   /* Filled at entry. Snapshots — the catalog and the profile move on, what was
      ordered must not. */
   shirt_color_id: number | null;
+  /** The fallback colour, ordered when `shirt_color_id` is not available. null
+   *  on milestones submitted before this field existed. */
+  secondary_shirt_color_id: number | null;
   shirt_logo_id: number | null;
   shirt_template_id: number | null;
   /** The size THIS shirt was ordered in. `employee.obsession.t_shirt` is the
@@ -165,6 +168,8 @@ export interface ShirtMilestone {
   employee: ShirtMilestoneEmployee;
   store: ShirtMilestoneStore;
   shirt_color: ShirtColor | null;
+  /** null on milestones submitted before the second choice existed. */
+  secondary_shirt_color: ShirtColor | null;
   shirt_logo: ShirtLogo | null;
   shirt_template: ShirtTemplate | null;
   created_by_user: ShirtMilestoneActor | null;
@@ -180,6 +185,9 @@ export interface ShirtMilestone {
 
 export interface ShirtEntryPayload {
   shirt_color_id: number;
+  /** Required, and different from `shirt_color_id`: what fulfilment orders when
+   *  the first colour is not available. The system never checks availability. */
+  secondary_shirt_color_id: number;
   shirt_logo_id: number;
   /** Omit it and the API picks by the employee's gender, then unisex, then the
    *  default. Only send it if the user explicitly overrode the template. */

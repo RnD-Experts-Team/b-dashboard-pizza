@@ -198,6 +198,12 @@ export function isSizeRequired(m: Pick<ShirtMilestone, "employee"> | null): bool
 export const SIZE_REQUIRED_MESSAGE =
   "This employee has no shirt size on file, so a size is required.";
 
+/** Likewise mirrors the API's wording for the second-choice colour. */
+export const SECONDARY_COLOR_REQUIRED_MESSAGE =
+  "Pick a secondary colour, in case the first one is not available.";
+export const SECONDARY_COLOR_SAME_MESSAGE =
+  "The secondary colour must be different from the shirt colour.";
+
 /**
  * Mirror of the server's template resolution order, for the PREVIEW only —
  * the payload still omits `shirt_template_id` so the server stays authoritative.

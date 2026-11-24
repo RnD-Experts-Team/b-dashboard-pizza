@@ -177,6 +177,9 @@ export function ShirtHistoryDialog({
                         </p>
                         <p className="truncate text-xs text-muted-foreground">
                           {m.shirt_color?.name ?? "—"}
+                          {m.secondary_shirt_color
+                            ? ` (or ${m.secondary_shirt_color.name})`
+                            : ""}
                           {m.t_shirt_size ? ` · ${m.t_shirt_size}` : ""}
                           {m.delivered_at
                             ? ` · delivered ${formatInstant(m.delivered_at, "MMM d, yyyy")}`

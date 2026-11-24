@@ -123,6 +123,21 @@ export function ShirtMilestoneSheet({
                 {milestone.shirt_color?.name ?? "—"}
               </span>
             </DetailRow>
+            {/* What to order if the first colour isn't available. Milestones
+                submitted before this field existed have none. */}
+            <DetailRow label="Second choice">
+              {milestone.secondary_shirt_color ? (
+                <span className="inline-flex items-center gap-2">
+                  <ColorSwatch
+                    hex={milestone.secondary_shirt_color.hex_code}
+                    name={milestone.secondary_shirt_color.name}
+                  />
+                  {milestone.secondary_shirt_color.name}
+                </span>
+              ) : (
+                "—"
+              )}
+            </DetailRow>
             <DetailRow label="Logo">{milestone.shirt_logo?.name ?? "—"}</DetailRow>
             <DetailRow label="Template">
               {milestone.shirt_template?.name ?? "—"}
