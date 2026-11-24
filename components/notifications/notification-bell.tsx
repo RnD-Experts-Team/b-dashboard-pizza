@@ -1,18 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Bell } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@/components/ui/popover";
-import { Sheet, SheetTrigger, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useNotificationStore } from "@/lib/store/notification.store";
+import { useNotificationUiStore } from "@/lib/store/notification-ui.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useRealtimeNotifications } from "@/lib/realtime/use-realtime-notifications";
-import { NotificationPanel } from "@/components/notifications/notification-panel";
+import { NotificationDrawer } from "@/components/notifications/notification-drawer";
+import { NotificationToastStack } from "@/components/notifications/notification-toast-stack";
+import { useTopbarBox } from "@/components/notifications/use-topbar-box";
 import { cn } from "@/lib/utils";
 
 function BellIconButton({
@@ -20,11 +18,12 @@ function BellIconButton({
   className,
   ...props
 }: { unreadCount: number } & React.ComponentProps<typeof Button>) {
+  const t = useTranslations("notifications");
   return (
     <Button
       variant="ghost"
       size="icon"
-      aria-label="Notifications"
+      aria-label={t("title")}
       className={cn("relative", className)}
       {...props}
     >
@@ -43,18 +42,30 @@ function BellIconButton({
   );
 }
 
+/**
+ * The topbar bell. It owns the whole notification UI, so nothing else has to
+ * be mounted in the shell:
+ * - the drawer it opens (slides in from the inline-end side under the topbar);
+ * - the persistent toast stack (the screen's top inline-end corner);
+ * - the initial fetch and the realtime connection that feeds both.
+ * Both are portaled to <body>. The drawer is positioned from the topbar's
+ * measured box, so it fits every shell layout; the stack only needs its
+ * direction.
+ */
 export function NotificationBell() {
-  const [desktopOpen, setDesktopOpen] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const bellRef = useRef<HTMLButtonElement>(null);
+  const box = useTopbarBox(bellRef);
   const unreadCount = useNotificationStore((state) => state.unreadCount);
   const fetchNotifications = useNotificationStore((state) => state.fetchNotifications);
+  const drawerOpen = useNotificationUiStore((state) => state.drawerOpen);
+  const toggleDrawer = useNotificationUiStore((state) => state.toggleDrawer);
 
   // Auth state — needed for the Reverb WebSocket connection
   const token = useAuthStore((state) => state.token);
   const userId = useAuthStore((state) => state.user?.id ?? null);
 
   // ── Fetch notifications on mount — single source of truth shared by the
-  // badge count, the popover list, and the sidebar unread-dot indicator. ──
+  // badge count, the drawer list, and the sidebar unread-dot indicator. ──
   useEffect(() => {
     const ctrl = new AbortController();
     fetchNotifications(ctrl.signal);
@@ -66,39 +77,18 @@ export function NotificationBell() {
 
   return (
     <>
-      {/* Tablet/desktop — small anchored popover, same convention as app-shell's
-          desktop sidebar vs mobile Sheet split. */}
-      {/* data-guide-id: PageGuide spotlight target. Both mounts carry it — the
-          guide picks whichever one is actually rendered at this breakpoint. */}
-      <div data-guide-id="topbar-notifications" className="hidden sm:block">
-        <Popover open={desktopOpen} onOpenChange={setDesktopOpen}>
-          <PopoverTrigger asChild>
-            <BellIconButton unreadCount={unreadCount} />
-          </PopoverTrigger>
-          <PopoverContent
-            align="end"
-            className="w-auto overflow-hidden p-0"
-            sideOffset={8}
-            collisionPadding={16}
-          >
-            <NotificationPanel onClose={() => setDesktopOpen(false)} />
-          </PopoverContent>
-        </Popover>
+      {/* data-guide-id: PageGuide spotlight target. */}
+      <div data-guide-id="topbar-notifications">
+        <BellIconButton
+          ref={bellRef}
+          unreadCount={unreadCount}
+          aria-haspopup="dialog"
+          aria-expanded={drawerOpen}
+          onClick={toggleDrawer}
+        />
       </div>
-
-      {/* Mobile — full-width bottom sheet, so there's room for the full
-          notification text and a reliably-visible close button. */}
-      <div data-guide-id="topbar-notifications" className="sm:hidden">
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetTrigger asChild>
-            <BellIconButton unreadCount={unreadCount} />
-          </SheetTrigger>
-          <SheetContent side="bottom" className="flex h-[85dvh] flex-col gap-0 p-0">
-            <SheetTitle className="sr-only">Notifications</SheetTitle>
-            <NotificationPanel mobile onClose={() => setMobileOpen(false)} />
-          </SheetContent>
-        </Sheet>
-      </div>
+      <NotificationDrawer box={box} returnFocusRef={bellRef} />
+      <NotificationToastStack box={box} />
     </>
   );
 }

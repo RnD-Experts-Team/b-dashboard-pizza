@@ -6,7 +6,7 @@
  *
  * When a `.notification.created` event arrives the hook:
  *   1. Pushes the notification into the Zustand store.
- *   2. Shows a toast via showNotificationToast().
+ *   2. Queues it on the persistent toast stack (notification-ui.store).
  *
  * The WebSocket connection is established once the user is authenticated
  * (token + userId are available) and torn down when the component/hook
@@ -19,7 +19,7 @@ import { useEffect, useRef } from "react";
 import type Echo from "laravel-echo";
 import { createEchoInstance } from "@/lib/realtime/echo";
 import { useNotificationStore } from "@/lib/store/notification.store";
-import { showNotificationToast } from "@/components/notifications/notification-toast";
+import { useNotificationUiStore } from "@/lib/store/notification-ui.store";
 import { playSfx } from "@/lib/uisfx/play";
 import type { Notification } from "@/types/notification.types";
 
@@ -87,8 +87,9 @@ export function useRealtimeNotifications({
           // Push into the store so the bell badge & panel update instantly
           useNotificationStore.getState().addNotification(event);
 
-          // Show a slide-in toast so the user notices immediately
-          showNotificationToast(event);
+          // Put it on the toast stack so the user notices (it stays until
+          // dismissed; while the drawer is open the row flashes instead).
+          useNotificationUiStore.getState().pushToast(event);
 
           // Play the notification cue alongside the toast
           playSfx("notification");

@@ -8717,5 +8717,27 @@
         "discard": "تجاهل"
       }
     }
+  },
+  "notifications": {
+    "title": "الإشعارات",
+    "newNotifications": "إشعارات جديدة",
+    "moreCount": "+{count} {count, plural, one {إشعار آخر} two {إشعاران آخران} few {إشعارات أخرى} other {إشعارًا آخر}}",
+    "viewAll": "عرض الكل",
+    "dismiss": "إخفاء",
+    "dismissTop": "إخفاء الإشعار العلوي",
+    "close": "إغلاق",
+    "today": "اليوم",
+    "yesterday": "أمس",
+    "earlier": "أقدم",
+    "all": "الكل",
+    "unread": "غير مقروء",
+    "hasUnread": "(يحتوي على غير مقروء)",
+    "filterLabel": "تصفية الإشعارات",
+    "markAllRead": "تحديد الكل كمقروء",
+    "markRead": "تحديد كمقروء",
+    "emptyAll": "لا توجد إشعارات",
+    "emptyUnread": "اطلعت على كل شيء!",
+    "emptyGroup": "لا توجد إشعارات في {group}",
+    "retry": "إعادة المحاولة"
   }
 }

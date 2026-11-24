@@ -1,281 +1,57 @@
 "use client";
 
-import { useRouter, useParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Check, ExternalLink } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import type { Notification } from "@/types/notification.types";
 import { Button } from "@/components/ui/button";
+import { getNotificationVisuals } from "@/lib/notifications/notification-visuals";
 import {
-  Info,
-  AlertTriangle,
-  CheckCircle,
-  Megaphone,
-  Check,
-  Bell,
-  ExternalLink,
-  KeyRound,
-  Briefcase,
-  Shirt,
-  TrendingUp,
-  UserMinus,
-  SprayCan,
-  CalendarClock,
-  CalendarPlus,
-  Coffee,
-  MessageSquareWarning,
-  Wrench,
-  FileBarChart,
-} from "lucide-react";
-import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
-import { useHiringActionStore, type HiringActionTab } from "@/lib/store/hiring-action.store";
-import { useCleaningActionStore } from "@/lib/store/cleaning-action.store";
-import type { PeriodType } from "@/types/cleaning.types";
+  NOTIFICATION_FAMILY_LABEL,
+  getNotificationFamily,
+  getRelativeTime,
+  stripHtml,
+} from "@/lib/notifications/notification-actions";
+import { useOpenNotification } from "@/components/notifications/use-open-notification";
 import {
-  getAnnouncementNotificationHref,
-  getCalendarNotificationHref,
-  getReportNotificationHref,
-  isReportNotification,
-} from "@/lib/notifications/notification-routing";
-
-/**
- * Parse a debrief action URL and extract keyId, date, and storeId.
- * e.g. /data-entries/keys/29?date=2026-05-22&store_id=03795-00001
- */
-function parseDebriefActionUrl(
-  url: string
-): { keyId: number; date: string; storeId: string } | null {
-  try {
-    const parsed = new URL(url, "http://x");
-    const parts = parsed.pathname.split("/").filter(Boolean);
-    // pathname segments: ["data-entries", "keys", "29"]
-    const keyId = Number(parts[parts.length - 1]);
-    const date = parsed.searchParams.get("date") ?? "";
-    const storeId = parsed.searchParams.get("store_id") ?? "";
-    if (!keyId || !date || !storeId) return null;
-    return { keyId, date, storeId };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Extract the store/period a cleaning-evaluation notification is about.
- *
- * The real payload (confirmed against a live notification) carries
- * `period_type`/`period_key`/`store` as direct fields on `notification.data`
- * — e.g. `{ period_type: "week", period_key: "2026-W36", store: "Store 1" }`
- * — NOT as a numeric `store_id` in `action_url`'s query string (an earlier,
- * unverified assumption this replaces). `store` here is a human label, not
- * an id — there's nothing to resolve it against, and the one place this
- * deep-links to (the "My Store" tab) already shows the viewing user's own
- * store regardless, so it's carried through only for display, never
- * required. Falls back to parsing `action_url`'s query string in case a
- * future payload omits the direct fields.
- */
-function parseCleaningActionUrl(
-  notification: Notification
-): { periodType: PeriodType; periodKey: string; store: string | null } | null {
-  const data = notification.data;
-  let periodType = typeof data?.period_type === "string" ? data.period_type : null;
-  let periodKey = typeof data?.period_key === "string" ? data.period_key : null;
-  let store = typeof data?.store === "string" ? data.store : null;
-
-  if (!periodType || !periodKey) {
-    try {
-      const parsed = new URL(notification.action_url ?? "", "http://x");
-      periodType ??= parsed.searchParams.get("period_type");
-      periodKey ??= parsed.searchParams.get("period_key");
-      store ??= parsed.searchParams.get("store");
-    } catch {
-      // fall through — handled by the validity check below
-    }
-  }
-
-  if (periodType !== "week" && periodType !== "date") return null;
-  if (!periodKey) return null;
-  return { periodType, periodKey, store };
-}
-
-/** The `date` query param of a break notification's action_url, if it's a valid work date. */
-function parseBreakActionDate(actionUrl: string | null | undefined): string | null {
-  if (!actionUrl) return null;
-  try {
-    const date = new URL(actionUrl, "http://x").searchParams.get("date");
-    return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Ticket action_url is `/toolbox/tickets/{id}` — or, for a reply,
- * `/toolbox/tickets/{id}#response-{responseId}`. It carries no store code;
- * the ticket page resolves that itself. Only the id and anchor are used.
- */
-function parseTicketActionUrl(
-  actionUrl: string | null | undefined
-): { ticketId: string; hash: string } | null {
-  if (!actionUrl) return null;
-  const m = /\/tickets\/(\d{1,12})(?:[/?][^#]*)?(#response-\d{1,12})?$/.exec(actionUrl);
-  return m ? { ticketId: m[1], hash: m[2] ?? "" } : null;
-}
-
-const HIRING_SEGMENT_TO_TAB: Record<string, HiringActionTab> = {
-  "hiring-requests": "hiring",
-  "separation-requests": "separation",
-  "shirt-milestones": "shirt_milestones",
-};
-
-/**
- * Parse a hiring/separation/shirt-milestone action URL into its tab, target id, and store number.
- * e.g. /hiring/store/03795-00001/separation-requests/42
- */
-function parseHiringActionUrl(
-  url: string
-): { tab: HiringActionTab; requestId: number; storeNumber: string } | null {
-  try {
-    const parsed = new URL(url, "http://x");
-    const parts = parsed.pathname.split("/").filter(Boolean);
-    // pathname segments: ["hiring", "store", "03795-00001", "separation-requests", "42"]
-    if (parts.length < 5 || parts[0] !== "hiring" || parts[1] !== "store") return null;
-    const storeNumber = parts[2];
-    const tab = HIRING_SEGMENT_TO_TAB[parts[3]];
-    const requestId = Number(parts[4]);
-    if (!tab || !storeNumber || !requestId) return null;
-    return { tab, requestId, storeNumber };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Where a maintenance notification goes: the ticket's own page, with its store
- * so the page can authorise against it.
- *
- * Maintenance's notifications are role-based sends carrying type, title, body
- * and `action_url` (`/dashboard/maintenance-tickets/{id}?store={number}`), so
- * the ticket and store are read from that path; `ticket_id` / `store_number`
- * win when a notification has them. Falls back to the tickets list.
- */
-function maintenanceTicketHref(locale: string, notification: Notification): string {
-  const data = notification.data ?? ({} as Notification["data"]);
-  let ticketId = Number(data.ticket_id);
-  let store = typeof data.store_number === "string" ? data.store_number : "";
-
-  if (!Number.isFinite(ticketId) || ticketId <= 0) {
-    try {
-      const url = new URL(notification.action_url ?? "", "http://x");
-      const match = url.pathname.match(/\/maintenance-tickets\/(\d+)/);
-      ticketId = match ? Number(match[1]) : NaN;
-      store = store || url.searchParams.get("store") || "";
-    } catch {
-      ticketId = NaN;
-    }
-  }
-
-  if (!Number.isFinite(ticketId) || ticketId <= 0) {
-    return `/${locale}/dashboard/maintenance-tickets`;
-  }
-
-  return `/${locale}/dashboard/maintenance-tickets/${ticketId}${store ? `?store=${encodeURIComponent(store)}` : ""}`;
-}
-
-/**
- * Derive icon & color from the API notification type string.
- * Common types: "announcement.created", "announcement.updated", etc.
- */
-function getTypeVisuals(type: string) {
-  if (type === "report_failed" || type === "report_delivery_failed") {
-    return { Icon: FileBarChart, bg: "bg-destructive/10 text-destructive" };
-  }
-  if (type.startsWith("report_")) {
-    return { Icon: FileBarChart, bg: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" };
-  }
-  if (type.startsWith("maintenance_")) {
-    return { Icon: Wrench, bg: "bg-sky-500/10 text-sky-600 dark:text-sky-400" };
-  }
-  if (type.startsWith("break_")) {
-    return { Icon: Coffee, bg: "bg-amber-500/10 text-amber-600 dark:text-amber-400" };
-  }
-  if (type.startsWith("ticket_")) {
-    return { Icon: MessageSquareWarning, bg: "bg-rose-500/10 text-rose-600 dark:text-rose-400" };
-  }
-  if (type.startsWith("data_entry_key")) {
-    return { Icon: KeyRound, bg: "bg-orange-500/10 text-orange-600 dark:text-orange-400" };
-  }
-  if (type.startsWith("announcement")) {
-    return { Icon: Megaphone, bg: "bg-purple-500/10 text-purple-600 dark:text-purple-400" };
-  }
-  // Something given to you in the Calendar ("Chosen people": a task or an event).
-  if (type === "calendar_assigned") {
-    return { Icon: CalendarPlus, bg: "bg-violet-500/10 text-violet-600 dark:text-violet-400" };
-  }
-  if (type.startsWith("calendar_")) {
-    return { Icon: CalendarClock, bg: "bg-violet-500/10 text-violet-600 dark:text-violet-400" };
-  }
-  if (type.startsWith("hiring_request")) {
-    return { Icon: Briefcase, bg: "bg-blue-500/10 text-blue-600 dark:text-blue-400" };
-  }
-  if (type.startsWith("shirt_milestone")) {
-    return { Icon: Shirt, bg: "bg-pink-500/10 text-pink-600 dark:text-pink-400" };
-  }
-  if (type.startsWith("employee_promoted")) {
-    return { Icon: TrendingUp, bg: "bg-green-500/10 text-green-600 dark:text-green-400" };
-  }
-  if (type.startsWith("separation_request")) {
-    return { Icon: UserMinus, bg: "bg-amber-500/10 text-amber-600 dark:text-amber-400" };
-  }
-  if (type.includes("warning") || type.includes("alert")) {
-    return { Icon: AlertTriangle, bg: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400" };
-  }
-  if (type.includes("success") || type.includes("completed")) {
-    return { Icon: CheckCircle, bg: "bg-green-500/10 text-green-600 dark:text-green-400" };
-  }
-  if (type.includes("error") || type.includes("fail")) {
-    return { Icon: AlertTriangle, bg: "bg-destructive/10 text-destructive" };
-  }
-  if (type.includes("info")) {
-    return { Icon: Info, bg: "bg-blue-500/10 text-blue-600 dark:text-blue-400" };
-  }
-  if (type.startsWith("cleaning_")) {
-    return { Icon: SprayCan, bg: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400" };
-  }
-  return { Icon: Bell, bg: "bg-blue-500/10 text-blue-600 dark:text-blue-400" };
-}
-
-// Helper: relative time string (simple, no deps)
-function getRelativeTime(timestamp: string): string {
-  const now = Date.now();
-  const then = new Date(timestamp).getTime();
-  const diff = now - then;
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-/** Strip HTML tags to render a plain-text preview */
-function stripHtml(html: string): string {
-  if (typeof document !== "undefined") {
-    const el = document.createElement("div");
-    el.innerHTML = html;
-    return el.textContent || el.innerText || "";
-  }
-  return html.replace(/<[^>]*>/g, "");
-}
+  enterClass,
+  enterDelay,
+  type EnterMode,
+} from "@/components/notifications/enter-animation";
 
 interface NotificationItemProps {
   notification: Notification;
   onMarkAsRead: (id: number) => void;
   onNavigate?: () => void;
   /** Clamp the body preview to 2 lines (default). Set false to let the full
-   * description wrap — used by the mobile bottom-sheet notification panel. */
+   * description wrap. */
   compact?: boolean;
-  /** Position in the rendered list — staggers the entrance animation so rows
-   * cascade in when the panel opens or a filter changes. Omit for no stagger. */
+  /** Position in the panel — staggers the entrance. Omit for no entrance. */
   index?: number;
+  /** How it comes in. Read once, when the card mounts. */
+  enter?: EnterMode;
+  /** Arrived while the drawer was open: flash a tint of its colour once. */
+  highlight?: boolean;
+}
+
+/** A short wash of the notification's own colour that fades out after mount. */
+function ArrivalFlash({ color }: { color: string }) {
+  const [faded, setFaded] = useState(false);
+  useEffect(() => {
+    const id = window.setTimeout(() => setFaded(true), 60);
+    return () => window.clearTimeout(id);
+  }, []);
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute inset-0 transition-opacity duration-[1800ms] ease-out motion-reduce:transition-none"
+      style={{
+        background: `color-mix(in oklab, ${color} 16%, transparent)`,
+        opacity: faded ? 0 : 1,
+      }}
+    />
+  );
 }
 
 export function NotificationItem({
@@ -284,222 +60,135 @@ export function NotificationItem({
   onNavigate,
   compact = true,
   index,
+  enter = "fade",
+  highlight = false,
 }: NotificationItemProps) {
-  const router = useRouter();
-  const params = useParams();
-  const locale = (params?.locale as string) || "en";
-  const openDebriefKey = useDebriefActionStore((s) => s.openDebriefKey);
-  const openHiringRequest = useHiringActionStore((s) => s.openHiringRequest);
-  const openCleaningEvaluation = useCleaningActionStore((s) => s.openCleaningEvaluation);
-
-  const { Icon, bg } = getTypeVisuals(notification.type);
+  const t = useTranslations("notifications");
+  const { open } = useOpenNotification();
+  const { Icon, chip, accent } = getNotificationVisuals(notification.type);
   const isUnread = notification.read_at === null;
-  const isDebriefType = notification.type.startsWith("data_entry_key");
-  const isAnnouncementType = notification.type.startsWith("announcement");
-  const isHiringType =
-    notification.type.startsWith("hiring_request") ||
-    notification.type.startsWith("shirt_milestone") ||
-    notification.type.startsWith("separation_request");
-  const isEmployeeType = notification.type.startsWith("employee_promoted");
-  const isCleaningType = notification.type.startsWith("cleaning_");
-  const isBreakType = notification.type.startsWith("break_");
-  const isTicketType = notification.type.startsWith("ticket_");
-  const isMaintenanceType = notification.type.startsWith("maintenance_");
-  const isCalendarType = notification.type.startsWith("calendar_");
-  const calendarHref = isCalendarType ? getCalendarNotificationHref(locale, notification) : null;
-  const isReportType = isReportNotification(notification);
-  // Only these explicitly-coded type families are clickable — an uncoded
-  // type must never guess a navigation target, it just displays safely.
-  const isClickable =
-    isDebriefType ||
-    calendarHref !== null ||
-    isAnnouncementType ||
-    isHiringType ||
-    isEmployeeType ||
-    isCleaningType ||
-    isBreakType ||
-    isTicketType ||
-    isMaintenanceType ||
-    isReportType;
+  const family = getNotificationFamily(notification);
+  const isClickable = family !== null;
+
+  // The entrance is decided when the card first appears; a later change of
+  // the prop must not restart it.
+  const [mode] = useState(enter);
 
   function handleClick() {
     if (!isClickable) return;
-    if (isUnread) onMarkAsRead(notification.id);
     onNavigate?.();
-
-    if (isAnnouncementType) {
-      router.push(getAnnouncementNotificationHref(locale, notification));
-      return;
-    }
-
-    if (calendarHref) {
-      router.push(calendarHref);
-      return;
-    }
-
-    if (isDebriefType) {
-      const parsed = parseDebriefActionUrl(notification.action_url ?? "");
-      if (parsed) {
-        openDebriefKey(parsed.keyId, parsed.date, parsed.storeId);
-      }
-      return;
-    }
-
-    if (isHiringType) {
-      const parsed = parseHiringActionUrl(notification.action_url ?? "");
-      if (parsed) {
-        openHiringRequest(parsed.tab, parsed.requestId, parsed.storeNumber);
-      }
-      router.push(`/${locale}/dashboard/hiring-request`);
-      return;
-    }
-
-    if (isEmployeeType) {
-      router.push(`/${locale}/dashboard/employees`);
-      return;
-    }
-
-    if (isCleaningType) {
-      const parsed = parseCleaningActionUrl(notification);
-      if (parsed) {
-        openCleaningEvaluation(parsed.periodType, parsed.periodKey, parsed.store);
-      }
-      router.push(`/${locale}/dashboard/cleaning-chart`);
-      return;
-    }
-
-    if (isReportType) {
-      router.push(getReportNotificationHref(notification.action_url, locale));
-      return;
-    }
-
-    if (isMaintenanceType) {
-      router.push(maintenanceTicketHref(locale, notification));
-      return;
-    }
-
-    if (isBreakType) {
-      // action_url is `/toolbox/breaks?date={work_date}` — only the WORK date
-      // is carried over; the path itself belongs to another app.
-      const date = parseBreakActionDate(notification.action_url);
-      router.push(
-        `/${locale}/dashboard/break-logger${date ? `?date=${encodeURIComponent(date)}` : ""}`
-      );
-      return;
-    }
-
-    if (isTicketType) {
-      const parsed = parseTicketActionUrl(notification.action_url);
-      router.push(
-        parsed
-          ? `/${locale}/dashboard/tickets/${parsed.ticketId}${parsed.hash}`
-          : `/${locale}/dashboard/tickets`
-      );
-      return;
-    }
+    open(notification);
   }
 
-  return (
-    <div
-      role={isClickable ? "button" : "listitem"}
-      tabIndex={isClickable ? 0 : undefined}
-      className={cn(
-        "group flex items-start gap-3 border-s-2 p-3 transition-colors",
-        // Rows cascade in on mount; fill-mode-backwards holds the first frame
-        // through the stagger delay so they don't flash before animating.
-        index !== undefined &&
-          "animate-in fade-in-0 slide-in-from-bottom-1 duration-200 fill-mode-backwards motion-reduce:animate-none",
-        isClickable
-          ? "cursor-pointer hover:bg-muted/80"
-          : "cursor-default",
-        isUnread ? "border-s-primary bg-muted/50" : "border-s-transparent"
-      )}
-      style={
-        index !== undefined
-          ? { animationDelay: `${Math.min(index, 8) * 25}ms` }
-          : undefined
-      }
-      onClick={handleClick}
-      onKeyDown={(e) => {
-        if (isClickable && (e.key === "Enter" || e.key === " ")) handleClick();
-      }}
-    >
-      {/* Icon */}
-      <div className={cn("mt-0.5 shrink-0 rounded-full p-1.5", bg)}>
-        <Icon className="h-4 w-4" />
-      </div>
+  const content = (
+    <>
+      {/* Type icon — the only colour on the card, as a soft tile. */}
+      <span
+        aria-hidden
+        className={cn(
+          "relative flex size-9 shrink-0 items-center justify-center rounded-lg",
+          chip,
+          !isUnread && "opacity-60"
+        )}
+      >
+        <Icon className="size-[18px]" />
+      </span>
 
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <p
-            className={cn(
-              "min-w-0 text-[13px] leading-snug",
-              isUnread ? "font-semibold text-foreground" : "font-medium text-foreground/80"
-            )}
-          >
-            {notification.title}
-          </p>
-          {isUnread && (
-            <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-destructive" />
-          )}
-        </div>
-        <p
+      <span className="relative block min-w-0 flex-1">
+        <span
           className={cn(
-            "mt-0.5 text-[13px] leading-snug",
-            isUnread ? "text-foreground/80" : "text-foreground/65",
+            "flex min-w-0 items-center gap-1.5 font-heading text-sm leading-snug",
+            isUnread ? "pe-6 font-semibold text-foreground" : "font-medium text-foreground/60"
+          )}
+        >
+          <span className="min-w-0 truncate">{notification.title}</span>
+          {isUnread && (
+            <>
+              <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-destructive" />
+              <span className="sr-only">{t("unread")}</span>
+            </>
+          )}
+        </span>
+
+        <span
+          className={cn(
+            "mt-0.5 block text-[13px] leading-snug",
+            isUnread ? "text-muted-foreground" : "text-muted-foreground/70",
             compact && "line-clamp-2"
           )}
         >
           {stripHtml(notification.body)}
-        </p>
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <p className="text-xs text-muted-foreground">
-            {getRelativeTime(notification.created_at)}
-          </p>
-          {isClickable && (
-            <>
-              <span className="text-xs text-muted-foreground/50">·</span>
-              <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-foreground/70">
-                <ExternalLink className="h-2.5 w-2.5" />
-                {isAnnouncementType
-                  ? "Announcements"
-                  : isDebriefType
-                  ? "Open Debrief"
-                  : isHiringType
-                  ? "Hiring Requests"
-                  : isEmployeeType
-                  ? "Employees"
-                  : isBreakType
-                  ? "Breaks"
-                  : isTicketType
-                  ? "Tickets"
-                  : isMaintenanceType
-                  ? "Maintenance ticket"
-                  : isReportType
-                  ? "Report Builder"
-                  : isCalendarType
-                  ? "Calendar"
-                  : "Cleaning Chart"}
-              </span>
-            </>
-          )}
-        </div>
-      </div>
+        </span>
 
-      {/* Mark as read button — visible on hover for unread only */}
+        {/* Where it goes (left) and when it came (right) */}
+        <span className="mt-2 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+          {family ? (
+            <span className="inline-flex min-w-0 items-center gap-1 font-medium transition-colors group-hover:text-foreground">
+              <ExternalLink className="size-3 shrink-0" aria-hidden />
+              <span className="truncate">{NOTIFICATION_FAMILY_LABEL[family]}</span>
+            </span>
+          ) : (
+            <span />
+          )}
+          <span className="shrink-0 tabular-nums">{getRelativeTime(notification.created_at)}</span>
+        </span>
+      </span>
+    </>
+  );
+
+  const bodyClass = "relative flex w-full min-w-0 items-start gap-3 p-3 text-start";
+
+  // The card is a list item; what opens the notification is ONE button inside
+  // it, and "mark as read" is its sibling: never a button inside a button.
+  return (
+    <div
+      role="listitem"
+      data-slot="notification-card"
+      data-unread={isUnread ? "" : undefined}
+      className={cn(
+        // One quiet grey card per notification, like the announcements page but
+        // with a plain border: unread = a stronger grey, read = a lighter one.
+        "group relative overflow-hidden rounded-xl border transition-colors",
+        index !== undefined && enterClass(mode),
+        isUnread ? "border-border/60 bg-muted" : "border-transparent bg-muted/50",
+        isClickable &&
+          cn("hover:border-foreground/20", isUnread ? "hover:bg-muted/70" : "hover:bg-muted/75")
+      )}
+      style={index !== undefined ? { animationDelay: enterDelay(mode, index) } : undefined}
+    >
+      {highlight && accent.start && <ArrivalFlash color={accent.start} />}
+
+      {isClickable ? (
+        <button
+          type="button"
+          onClick={handleClick}
+          className={cn(
+            bodyClass,
+            "cursor-pointer rounded-xl outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/60"
+          )}
+        >
+          {content}
+        </button>
+      ) : (
+        <div className={bodyClass}>{content}</div>
+      )}
+
+      {/* Mark as read: top corner. Revealed on hover/focus where there is a
+          real hover (a mouse), always shown on touch, with a larger hit area. */}
       {isUnread && (
         <Button
+          type="button"
           variant="ghost"
           size="icon"
-          className="h-7 w-7 shrink-0 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
-          onClick={(e) => {
-            e.stopPropagation();
-            onMarkAsRead(notification.id);
-          }}
-          aria-label="Mark as read"
+          className={cn(
+            "absolute end-1.5 top-1.5 size-7 text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground",
+            "after:absolute after:-inset-1 after:content-['']",
+            "pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100 pointer-fine:focus-visible:opacity-100"
+          )}
+          onClick={() => onMarkAsRead(notification.id)}
+          aria-label={t("markRead")}
         >
-          <Check className="h-3.5 w-3.5" />
+          <Check className="size-3.5" />
         </Button>
       )}
     </div>

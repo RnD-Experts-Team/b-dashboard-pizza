@@ -8718,5 +8718,27 @@
         "discard": "Discard"
       }
     }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "newNotifications": "New notifications",
+    "moreCount": "+{count} more {count, plural, one {notification} other {notifications}}",
+    "viewAll": "View all",
+    "dismiss": "Dismiss",
+    "dismissTop": "Dismiss the top notification",
+    "close": "Close",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "earlier": "Earlier",
+    "all": "All",
+    "unread": "Unread",
+    "hasUnread": "(has unread)",
+    "filterLabel": "Filter notifications",
+    "markAllRead": "Mark all as read",
+    "markRead": "Mark as read",
+    "emptyAll": "No notifications",
+    "emptyUnread": "All caught up!",
+    "emptyGroup": "No {group} notifications",
+    "retry": "Retry"
   }
 }
