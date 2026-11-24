@@ -105,8 +105,8 @@ export const DASHBOARD_V1_GUIDE_STEPS: GuideStep[] = [
     description:
       "Everything that changes what you're looking at, plus the export menu.",
     bullets: [
-      "Store badge shows which store the report belongs to — switch stores from the sidebar",
-      "Date picker opens any day up to yesterday; the week badge shows the ISO week that day falls in",
+      "Store button shows which store the report belongs to — click it to switch stores (same list as the sidebar)",
+      "Date picker opens any day up to yesterday; the week button picks a whole week (its last day up to yesterday)",
       "A “Stale” badge or the last-updated time tells you how fresh the data is — click either to refresh",
       "The ⋮ menu exports three ways: Ultra HD screenshot of this page, Report screenshot (PNG), and DSPR Report (PNG)",
       "The ? button reopens this guide anytime",

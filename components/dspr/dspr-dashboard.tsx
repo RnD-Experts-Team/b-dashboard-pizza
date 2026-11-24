@@ -91,6 +91,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageGuide } from "@/components/shared/page-guide";
+import { StoreSelect, WithStoreSelect } from "@/components/shared/store-select";
 import { DSPR_GUIDE_STEPS } from "./dspr-guide-config";
 import { buildDsprReportHtml } from "./dspr-report-template";
 import { buildStorePerformanceReportHtml } from "./dspr-store-performance-report-template";
@@ -738,64 +739,74 @@ export function DsprDashboard({
   // ── No store selected ─────────────────────────────────────────────────
   if (!selectedStore) {
     return (
-      <Card className="border-2 border-dashed border-muted-foreground/25">
-        <CardContent className="flex flex-col items-center justify-center py-8 text-center gap-2">
-          <div className="rounded-full bg-muted p-2.5">
-            <Store className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <div className="space-y-1">
-            <h3 className="text-xs font-semibold">No Store Selected</h3>
-            <p className="text-[11px] text-muted-foreground max-w-sm">
-              Select a store from the sidebar to view its Daily Store
-              Performance Report.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <WithStoreSelect>
+        <Card className="border-2 border-dashed border-muted-foreground/25">
+          <CardContent className="flex flex-col items-center justify-center py-8 text-center gap-2">
+            <div className="rounded-full bg-muted p-2.5">
+              <Store className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-xs font-semibold">No Store Selected</h3>
+              <p className="text-[11px] text-muted-foreground max-w-sm">
+                Pick a store above or from the sidebar to view its Daily Store
+                Performance Report.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </WithStoreSelect>
     );
   }
 
   // ── Error state (no data) ──────────────────────────────────────────────
   if (error && !data) {
     if (error.code === "FORBIDDEN") {
-      return <ForbiddenWelcomeScreen locale={locale} />;
+      return (
+        <WithStoreSelect>
+          <ForbiddenWelcomeScreen locale={locale} />
+        </WithStoreSelect>
+      );
     }
 
     return (
-      <ErrorDisplay
-        error={error}
-        onRetry={() => refetch(toApiDate(selectedDate))}
-        onClear={clearError}
-        locale={locale}
-      />
+      <WithStoreSelect>
+        <ErrorDisplay
+          error={error}
+          onRetry={() => refetch(toApiDate(selectedDate))}
+          onClear={clearError}
+          locale={locale}
+        />
+      </WithStoreSelect>
     );
   }
 
   // ── No data & no error ─────────────────────────────────────────────────
   if (!data) {
     return (
-      <Card className="border-2 border-dashed border-muted-foreground/25">
-        <CardContent className="flex flex-col items-center justify-center py-8 text-center gap-2">
-          <div className="rounded-full bg-muted p-2.5">
-            <CalendarIcon className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <div className="space-y-1">
-            <h3 className="text-xs font-semibold">No Report Data</h3>
-            <p className="text-[11px] text-muted-foreground max-w-sm">
-              No data is available for this store. Select a date to load the
-              report.
-            </p>
-          </div>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => refetch(toApiDate(selectedDate))}
-          >
-            <RefreshCw className="h-4 w-4 me-1.5" />
-            Load Report
-          </Button>
-        </CardContent>
-      </Card>
+      <WithStoreSelect>
+        <Card className="border-2 border-dashed border-muted-foreground/25">
+          <CardContent className="flex flex-col items-center justify-center py-8 text-center gap-2">
+            <div className="rounded-full bg-muted p-2.5">
+              <CalendarIcon className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-xs font-semibold">No Report Data</h3>
+              <p className="text-[11px] text-muted-foreground max-w-sm">
+                No data is available for this store. Select a date to load the
+                report.
+              </p>
+            </div>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => refetch(toApiDate(selectedDate))}
+            >
+              <RefreshCw className="h-4 w-4 me-1.5" />
+              Load Report
+            </Button>
+          </CardContent>
+        </Card>
+      </WithStoreSelect>
     );
   }
 
@@ -828,14 +839,8 @@ export function DsprDashboard({
         className="flex flex-wrap items-center gap-1"
         data-guide-id="dspr-header"
       >
-        {/* Store badge */}
-        <Badge
-          variant="secondary"
-          className="text-xs gap-1.5 px-3 py-1 font-medium"
-        >
-          <Store className="h-3.5 w-3.5" />
-          Store {selectedStore.storeId}
-        </Badge>
+        {/* Store picker — same list and global selection as the sidebar */}
+        <StoreSelect />
 
         {/* Date picker */}
         <Popover open={dateOpen} onOpenChange={setDateOpen}>

@@ -34,18 +34,23 @@ export default function RolesPage() {
   const params = useParams();
   const locale = params?.locale as string || "en";
   
-  const { roles, isLoading, handleSearch, refetch } = useRoles();
+  const { roles, pagination, filters, isLoading, handleSearch, handlePageChange, refetch } =
+    useRoles();
   const { deleteRole, isDeleting } = useDeleteRole();
-  
+
   const [roleToDelete, setRoleToDelete] = useState<RoleWithStats | null>(null);
 
   const handleDeleteRole = async () => {
     if (!roleToDelete) return;
-    
+
     try {
       await deleteRole(roleToDelete.id);
       setRoleToDelete(null);
-      refetch();
+      // Stay on the current page (and search); step back one page when the
+      // deleted role was the only row left on it.
+      const current = pagination?.page ?? 1;
+      const page = roles.length <= 1 && current > 1 ? current - 1 : current;
+      refetch({ page, search: filters.search || undefined });
     } catch (error) {
       console.error("Failed to delete role:", error);
     }
@@ -150,6 +155,8 @@ export default function RolesPage() {
         searchPlaceholder={t("searchPlaceholder")}
         onSearchChange={handleSearch}
         emptyMessage={t("noRoles")}
+        pagination={pagination}
+        onPageChange={handlePageChange}
       />
 
       <AlertDialog open={!!roleToDelete} onOpenChange={() => setRoleToDelete(null)}>

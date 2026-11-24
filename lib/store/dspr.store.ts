@@ -84,14 +84,23 @@ export const useDsprStore = create<DsprState>()((set, get) => ({
     // console.log("[DsprStore] fetchReport called with:", { storeId, date });
     const state = get();
 
-    // Cancel any in-flight request
+    // Cancel any in-flight request. This call keeps its OWN controller: the
+    // module variable moves on to the next call's controller, and reading it
+    // later (after an await) would let a superseded request — e.g. the old
+    // store's retry after a store switch — run on the new call's signal and
+    // land the old store's numbers under the new store's name.
     if (_abortController) {
       _abortController.abort();
     }
-    _abortController = new AbortController();
+    const controller = new AbortController();
+    _abortController = controller;
+    const { signal } = controller;
 
     // If we already have data, show "refreshing" instead of full loading
     const hasExistingData = state.data !== null;
+    // The data on screen belongs to the store being fetched (a refresh or a
+    // date change), as opposed to a store switch.
+    const sameStore = storeId === undefined || state.lastStoreId === storeId;
     set({
       isLoading: !hasExistingData,
       isRefreshing: hasExistingData,
@@ -102,11 +111,10 @@ export const useDsprStore = create<DsprState>()((set, get) => ({
 
     const performFetch = async (): Promise<void> => {
       try {
-        const result = await dsprService.getReport(
-          storeId,
-          date,
-          _abortController?.signal
-        );
+        const result = await dsprService.getReport(storeId, date, signal);
+
+        // Superseded while in flight — a newer call owns the state now.
+        if (signal.aborted) return;
 
         // console.log("[DsprStore] Data received:", { store: result.dspr.filtering?.store, date: result.dspr.filtering?.date, cashSales: result.dspr.day?.total_cash_sales, customers: result.dspr.day?.customer_count });
 
@@ -122,10 +130,11 @@ export const useDsprStore = create<DsprState>()((set, get) => ({
           fetchCount: get().fetchCount + 1,
         });
       } catch (err: unknown) {
-        // Cancelled — ignore silently
+        // Cancelled or superseded — ignore silently
         if (
-          err instanceof Error &&
-          (err.name === "CanceledError" || err.name === "AbortError")
+          signal.aborted ||
+          (err instanceof Error &&
+            (err.name === "CanceledError" || err.name === "AbortError"))
         ) {
           return;
         }
@@ -148,18 +157,17 @@ export const useDsprStore = create<DsprState>()((set, get) => ({
           //   `🔄 DSPR: Auto-retry ${_retryCount}/${MAX_AUTO_RETRIES} in ${RETRY_DELAY_MS}ms`
           // );
           await new Promise<void>((resolve) => {
-            _retryTimer = setTimeout(resolve, RETRY_DELAY_MS);
+            const timer = setTimeout(resolve, RETRY_DELAY_MS);
+            _retryTimer = timer;
             // Cancel the retry if the request was aborted while waiting
-            _abortController?.signal.addEventListener("abort", () => {
-              if (_retryTimer) {
-                clearTimeout(_retryTimer);
-                _retryTimer = null;
-              }
+            signal.addEventListener("abort", () => {
+              clearTimeout(timer);
+              if (_retryTimer === timer) _retryTimer = null;
               resolve();
             }, { once: true });
           });
           // If aborted during the wait, bail out
-          if (_abortController?.signal.aborted) return;
+          if (signal.aborted) return;
           _retryTimer = null;
           return performFetch();
         }
@@ -175,8 +183,15 @@ export const useDsprStore = create<DsprState>()((set, get) => ({
             retryable: dsprErr.retryable,
             retryAfter: dsprErr.retryAfter,
           },
-          // Keep stale data on refresh failures
-          ...(hasExistingData ? {} : { data: null }),
+          // Keep stale data on a refresh failure of the SAME store; after a
+          // failed store switch, drop it so the previous store's numbers never
+          // sit under the newly picked store's name.
+          ...(hasExistingData && sameStore ? {} : { data: null, wbrData: null }),
+          // Remember what was ASKED for, so a later refreshReport (tab refocus,
+          // auto-refresh) retries the picked store/date — not the previous
+          // store, whose data would then reappear under the new store's name.
+          lastStoreId: storeId ?? get().lastStoreId,
+          lastDate: date ?? get().lastDate,
         });
       }
     };

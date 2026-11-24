@@ -49,6 +49,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WeekSelect } from "@/components/shared/week-select";
+import { StoreSelect, WithStoreSelect } from "@/components/shared/store-select";
 import {
   businessWeekOptions,
   businessWeekStart,
@@ -438,57 +439,67 @@ export function DashboardV1({
 
   if (!selectedStore) {
     return (
-      <Card className="border-2 border-dashed border-muted-foreground/25">
-        <CardContent className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-          <div className="rounded-full bg-muted p-2.5">
-            <Store className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <div className="space-y-1">
-            <h3 className="text-xs font-semibold">No Store Selected</h3>
-            <p className="max-w-sm text-[11px] text-muted-foreground">
-              Select a store from the sidebar to view its dashboard.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <WithStoreSelect>
+        <Card className="border-2 border-dashed border-muted-foreground/25">
+          <CardContent className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+            <div className="rounded-full bg-muted p-2.5">
+              <Store className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-xs font-semibold">No Store Selected</h3>
+              <p className="max-w-sm text-[11px] text-muted-foreground">
+                Pick a store above or from the sidebar to view its dashboard.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </WithStoreSelect>
     );
   }
 
   if (error && !data) {
     if (error.code === "FORBIDDEN") {
-      return <ForbiddenWelcomeScreen />;
+      return (
+        <WithStoreSelect>
+          <ForbiddenWelcomeScreen />
+        </WithStoreSelect>
+      );
     }
     return (
-      <Card className="border-2 border-destructive/30 bg-destructive/5">
-        <CardContent className="flex flex-col items-center justify-center gap-3 py-8 text-center">
-          <ShieldAlert className="h-7 w-7 text-destructive" />
-          <div className="space-y-1">
-            <h3 className="text-sm font-semibold">Couldn’t load the report</h3>
-            <p className="max-w-md text-xs text-muted-foreground">{error.message}</p>
-          </div>
-          <Button size="sm" onClick={handleRefreshAll}>
-            <RefreshCw className="me-1.5 h-4 w-4" />
-            Try Again
-          </Button>
-        </CardContent>
-      </Card>
+      <WithStoreSelect>
+        <Card className="border-2 border-destructive/30 bg-destructive/5">
+          <CardContent className="flex flex-col items-center justify-center gap-3 py-8 text-center">
+            <ShieldAlert className="h-7 w-7 text-destructive" />
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold">Couldn’t load the report</h3>
+              <p className="max-w-md text-xs text-muted-foreground">{error.message}</p>
+            </div>
+            <Button size="sm" onClick={handleRefreshAll}>
+              <RefreshCw className="me-1.5 h-4 w-4" />
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      </WithStoreSelect>
     );
   }
 
   if (!data) {
     return (
-      <Card className="border-2 border-dashed border-muted-foreground/25">
-        <CardContent className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-          <CalendarIcon className="h-6 w-6 text-muted-foreground" />
-          <p className="max-w-sm text-[11px] text-muted-foreground">
-            No data available for this store. Select a date to load the report.
-          </p>
-          <Button size="sm" onClick={() => refetch(toApiDate(selectedDate))}>
-            <RefreshCw className="me-1.5 h-4 w-4" />
-            Load Report
-          </Button>
-        </CardContent>
-      </Card>
+      <WithStoreSelect>
+        <Card className="border-2 border-dashed border-muted-foreground/25">
+          <CardContent className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+            <CalendarIcon className="h-6 w-6 text-muted-foreground" />
+            <p className="max-w-sm text-[11px] text-muted-foreground">
+              No data available for this store. Select a date to load the report.
+            </p>
+            <Button size="sm" onClick={() => refetch(toApiDate(selectedDate))}>
+              <RefreshCw className="me-1.5 h-4 w-4" />
+              Load Report
+            </Button>
+          </CardContent>
+        </Card>
+      </WithStoreSelect>
     );
   }
 
@@ -509,10 +520,7 @@ export function DashboardV1({
 
       {/* ── Header bar ──────────────────────────────────────────────────── */}
       <div data-guide-id="v1-header" data-report-target="header" className="flex flex-wrap items-center gap-1">
-        <Badge variant="secondary" className="gap-1.5 px-3 py-1 text-xs font-medium">
-          <Store className="h-3.5 w-3.5" />
-          Store {selectedStore.storeId}
-        </Badge>
+        <StoreSelect />
 
         <Popover open={dateOpen} onOpenChange={setDateOpen}>
           <PopoverTrigger asChild>

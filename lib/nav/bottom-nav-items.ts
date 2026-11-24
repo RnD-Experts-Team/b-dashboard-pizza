@@ -482,13 +482,15 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
   },
   // Mirrors the sidebar's Calendar item 1:1 (no gate: each feed layer is decided upstream).
   // To hide Calendar again, comment out this entry, the sidebar item and the topbar button together.
-  {
-    id: "calendar",
-    href: (locale) => `/${locale}/dashboard/calendar`,
-    icon: CalendarDays,
-    titleKey: "calendar",
-    groupKey: "toolbox",
-  },
+  // HIDDEN FOR NOW (2026-11-24) — uncomment together with the sidebar item,
+  // the topbar button and the calendar page render to restore.
+  // {
+  //   id: "calendar",
+  //   href: (locale) => `/${locale}/dashboard/calendar`,
+  //   icon: CalendarDays,
+  //   titleKey: "calendar",
+  //   groupKey: "toolbox",
+  // },
   {
     id: "tickets",
     href: (locale) => `/${locale}/dashboard/tickets`,

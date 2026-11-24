@@ -117,7 +117,12 @@ export function CommentThread({
 
       <div
         ref={listRef}
-        className={cn("min-h-0 overflow-y-auto overscroll-contain", listClassName)}
+        // The fixed height is for a list with comments in it. With none (or while
+        // loading, or after an error) the box is only as tall as its message.
+        className={cn(
+          "min-h-0 overflow-y-auto overscroll-contain",
+          items.length > 0 && listClassName,
+        )}
       >
         {(status === "idle" || status === "loading") && <CommentSkeletons />}
 

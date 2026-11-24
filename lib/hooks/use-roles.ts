@@ -41,11 +41,13 @@ export function useRoles(initialParams?: GetRolesParams) {
     [fetchRoles, setFilters, initialParams]
   );
 
+  // Keep the current search while paging, otherwise page 2 of a search
+  // would show page 2 of the unfiltered list.
   const handlePageChange = useCallback(
     (page: number) => {
-      fetchRoles({ ...initialParams, page });
+      fetchRoles({ ...initialParams, search: filters.search || undefined, page });
     },
-    [fetchRoles, initialParams]
+    [fetchRoles, initialParams, filters.search]
   );
 
   return {

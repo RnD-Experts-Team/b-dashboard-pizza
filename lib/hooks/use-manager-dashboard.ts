@@ -36,6 +36,8 @@ export function useManagerDashboard(
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // Which store the data on screen belongs to (null = none loaded).
+  const loadedForRef = useRef<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!storeId || !date) return;
@@ -58,9 +60,20 @@ export function useManagerDashboard(
         setHighHoursEmployees(response["high-hours-employees"] ?? null);
         setAverageHourlyPay(response["average-hourly-pay"] ?? null);
         setWeeklyLabor(response["weekly-labor"] ?? null);
+        loadedForRef.current = storeId;
       }
     } catch (err) {
       if (controller.signal.aborted) return;
+      // A failed refresh of the same store keeps what's shown; a failed store
+      // SWITCH drops it, so the previous store's employees never sit under the
+      // newly picked store (same rule as lib/store/dspr.store.ts).
+      if (loadedForRef.current !== storeId) {
+        setData(null);
+        setHighHoursEmployees(null);
+        setAverageHourlyPay(null);
+        setWeeklyLabor(null);
+        loadedForRef.current = null;
+      }
       setError(
         err instanceof Error ? err.message : "Failed to load employee data.",
       );
