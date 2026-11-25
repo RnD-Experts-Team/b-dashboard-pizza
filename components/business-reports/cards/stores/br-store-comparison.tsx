@@ -30,6 +30,7 @@ import type { OperationsMetrics, SalesMetrics, SalesSection } from "@/types/busi
 const CARD_HEIGHT = 460;
 const PENDING = "…";
 const PERCENT = 100;
+const DAYS_PER_WEEK = 7;
 
 interface Row {
   store: string;
@@ -140,6 +141,14 @@ export function BrStoreComparison({ data }: { data: SalesSection }) {
         numeric: true,
         render: (r) => show(salesValue(r, (m) => perStoreDay(m.sales, m.store_days)), fmt$),
         sortValue: (r) => salesValue(r, (m) => perStoreDay(m.sales, m.store_days)),
+      },
+      {
+        // A full week at the store's daily average, so stores open part of the range compare fairly.
+        key: "per_week",
+        header: "Sales / Week",
+        numeric: true,
+        render: (r) => show(salesValue(r, (m) => perStoreDay(m.sales, m.store_days) * DAYS_PER_WEEK), fmt$),
+        sortValue: (r) => salesValue(r, (m) => perStoreDay(m.sales, m.store_days) * DAYS_PER_WEEK),
       },
       {
         key: "labor",
