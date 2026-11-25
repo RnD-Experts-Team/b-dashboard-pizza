@@ -408,13 +408,11 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   // 403 and is hidden). Mirrored 1:1 by the "calendar" entry in
   // lib/nav/bottom-nav-items.ts, and paired with the topbar's CalendarTopbarButton.
   // To hide Calendar again, comment out all three together (the page stays routable).
-  // HIDDEN FOR NOW (2026-11-24): commented out together with the bottom-nav
-  // entry, the topbar button and the calendar page render. Uncomment all four to restore.
-  // const calendarItem: NavItem = {
-  //   title: t("calendar"),
-  //   href: `/${locale}/dashboard/calendar`,
-  //   icon: CalendarDays,
-  // };
+  const calendarItem: NavItem = {
+    title: t("calendar"),
+    href: `/${locale}/dashboard/calendar`,
+    icon: CalendarDays,
+  };
 
   /* ---- Collapsible groups ---- */
   // Dashboards — the DSPR dashboard keeps its existing `/dashboard` URL, so its
@@ -837,7 +835,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const toolboxGroup: NavGroup = {
     label: t("toolbox"),
     icon: Boxes,
-    items: [workbooksItem, breaksItem, /* calendarItem, */ ticketsItem],
+    items: [workbooksItem, breaksItem, calendarItem, ticketsItem],
   };
   // Dev tools navigation (controlled by feature flags)
   const devToolsItems: NavItem[] = [];

@@ -51,29 +51,10 @@ function buildRegex(raw: string): RegExp | null {
 // Core logic
 // ---------------------------------------------------------------------------
 
-/**
- * Pure authorization check — no React, no Zustand.
- *
- * @param params        What resource the user wants to access
- * @param globalPerms   Set of global permission names for the current user
- * @param storePerms    Map of storeId → Set of permission names
- * @param authRules     The active auth rules from /auth/general-overview
- * @param globalRoles   Names of the user's GLOBAL roles (for rules' roles_any)
- * @returns             `true` if the user is authorized, `false` otherwise
- */
-export function canAccess(
-  params: CanAccessParams,
-  globalPerms: Set<string>,
-  storePerms: Record<string, Set<string>>,
-  authRules: AuthRule[],
-  globalRoles: string[] = []
-): boolean {
-  const { service, method, path, storeId } = params;
-
-  // ------------------------------------------------------------------
-  // Step 1 — Find the highest-priority matching active rule
-  // ------------------------------------------------------------------
-  const candidates = authRules
+/** The active rules that match this route, highest priority (lowest number) first. */
+function matchingRules(params: CanAccessParams, authRules: AuthRule[]): AuthRule[] {
+  const { service, method, path } = params;
+  return authRules
     .filter((r) => {
       if (!r.isActive && !r.is_active) return false;
       const rService = r.service;
@@ -91,6 +72,40 @@ export function canAccess(
     })
     // lower priority number = higher priority (sort ascending)
     .sort((a, b) => a.priority - b.priority);
+}
+
+/**
+ * Is there ANY active rule for this route? `canAccess` answers false both when a rule says no and
+ * when there is none (default deny); this tells the two apart, for callers that must leave a route
+ * with no rule (not seeded yet, rules not loaded) to the server instead of hiding it.
+ */
+export function hasMatchingRule(params: CanAccessParams, authRules: AuthRule[]): boolean {
+  return matchingRules(params, authRules).length > 0;
+}
+
+/**
+ * Pure authorization check — no React, no Zustand.
+ *
+ * @param params        What resource the user wants to access
+ * @param globalPerms   Set of global permission names for the current user
+ * @param storePerms    Map of storeId → Set of permission names
+ * @param authRules     The active auth rules from /auth/general-overview
+ * @param globalRoles   Names of the user's GLOBAL roles (for rules' roles_any)
+ * @returns             `true` if the user is authorized, `false` otherwise
+ */
+export function canAccess(
+  params: CanAccessParams,
+  globalPerms: Set<string>,
+  storePerms: Record<string, Set<string>>,
+  authRules: AuthRule[],
+  globalRoles: string[] = []
+): boolean {
+  const { storeId } = params;
+
+  // ------------------------------------------------------------------
+  // Step 1 — Find the highest-priority matching active rule
+  // ------------------------------------------------------------------
+  const candidates = matchingRules(params, authRules);
 
   if (candidates.length === 0) {
     // Default deny — no matching rule found

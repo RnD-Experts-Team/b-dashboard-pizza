@@ -118,9 +118,13 @@ async function post(path: string, body: unknown, params?: Record<string, string>
 }
 
 export const calendarToolboxService = {
-  /** Create an event, a task (per store) or a reminder (mine). */
+  /**
+   * Create an event, a task (per store) or a reminder (mine). A task has its own route
+   * (`POST /calendar/tasks`, only for the `Calendar Tasks` role and super admins; the server
+   * refuses a task sent to `/events` with 422); event and reminder go to `/events`.
+   */
   createItem(input: CreateItemInput): Promise<void> {
-    return post("/events", toCreatePayload(input));
+    return post(input.type === "task" ? "/tasks" : "/events", toCreatePayload(input));
   },
 
   /**

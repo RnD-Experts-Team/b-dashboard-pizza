@@ -104,6 +104,15 @@ interface CalendarEventsResult {
 const EMPTY_PAGE: CalendarEventsPage = { events: [], failed: [], truncated: false };
 
 /**
+ * Changes when the signed-in user does, or when the auth rules arrive (they load after the page does):
+ * each feed is asked only the stores that user may see (`feed-access.ts`), so the request is made
+ * again once the rules are known instead of keeping an answer asked without them.
+ */
+function useAccessKey(): string {
+  return useAuthStore((s) => `${s.user?.id ?? ""}|${s.authRules.length}`);
+}
+
+/**
  * Events overlapping a range, for the stores the Calendar shows
  * (`useCalendarStores`) — or, with `source: "dashboard"`, only the dashboard's
  * selected store (the topbar's Today panel: it must stay cheap on every page,
@@ -129,13 +138,14 @@ export function useCalendarEvents(
   /** Retry must skip the 60 s feed cache; ordinary refetches use it. */
   const forceNext = useRef(false);
   const revision = useCalendarStore((s) => s.revision);
+  const accessKey = useAccessKey();
 
   const fromMs = +range.from;
   const toMs = +range.to;
   const storesKey = stores.map((s) => s.code).join(",");
   // `baseKey` is the request without `revision`: a write bumps only the revision,
   // and the view keeps showing what it has while that one feed reloads.
-  const baseKey = `${fromMs}|${toMs}|${storesKey}|${attempt}`;
+  const baseKey = `${fromMs}|${toMs}|${storesKey}|${attempt}|${accessKey}`;
   const key = `${baseKey}|${revision}`;
 
   useEffect(() => {
@@ -209,11 +219,12 @@ export function useCalendarYear(range: DateRange, { enabled = true }: { enabled?
   const [attempt, setAttempt] = useState(0);
   const forceNext = useRef(false);
   const revision = useCalendarStore((s) => s.revision);
+  const accessKey = useAccessKey();
 
   const fromMs = +range.from;
   const toMs = +range.to;
   const storesKey = stores.map((s) => s.code).join(",");
-  const key = `${fromMs}|${toMs}|${storesKey}|${attempt}|${revision}`;
+  const key = `${fromMs}|${toMs}|${storesKey}|${attempt}|${accessKey}|${revision}`;
 
   useEffect(() => {
     if (!enabled) return;

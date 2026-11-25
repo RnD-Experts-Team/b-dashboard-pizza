@@ -141,8 +141,13 @@ export function EventActions({
       setBusy(false);
     } catch (err) {
       const e = err instanceof CalendarWriteError ? err : null;
-      // Toolbox's own 422 text says what is wrong; anything else gets a plain sentence.
-      toast.error(e?.kind === "invalid" && e.message ? e.message : t(`errors.${e?.kind === "forbidden" ? forbidden : (e?.kind ?? "other")}`));
+      // Toolbox's own words come first (FRONTEND_CALENDAR_ROLES_PERMISSIONS.md §5): a 422 says what is wrong
+      // ("Nothing to cancel there"), a 403 says why not ("This task is not assigned to you"). The service
+      // fills in "Not allowed." when Toolbox sent none; then our own sentence says it.
+      const said = e?.kind === "forbidden" && e.message && e.message !== "Not allowed." ? e.message : null;
+      toast.error(
+        e?.kind === "invalid" && e.message ? e.message : (said ?? t(`errors.${e?.kind === "forbidden" ? forbidden : (e?.kind ?? "other")}`)),
+      );
       if (e?.kind === "forbidden") onForbidden?.();
       setBusy(false);
     }

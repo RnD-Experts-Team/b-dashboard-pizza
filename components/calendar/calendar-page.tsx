@@ -40,7 +40,6 @@ import { ReminderTargetsProvider } from "./event-signs";
 import { ShowStoreProvider } from "./store-label";
 import { StorePicker } from "./store-picker";
 import { useCalendarFormat } from "./use-calendar-format";
-import { useNewItemLabel } from "./use-new-item-label";
 import { useIsCompact } from "./use-compact";
 import { useFitHeight } from "./use-fit-height";
 import { DayView } from "./views/day-view";
@@ -131,7 +130,6 @@ export function CalendarPage() {
 
 function CalendarPageInner({ now }: { now: number }) {
   const t = useTranslations("calendar");
-  const newLabel = useNewItemLabel();
   const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();
@@ -475,9 +473,9 @@ function CalendarPageInner({ now }: { now: number }) {
           never scrolls, only the calendar body does. Phones flow naturally. */}
       <div ref={pageRef} className="cal-scroll @container/calpage flex flex-col gap-5 pb-4 sm:pb-0">
         <PageHeader title={t("title")} description={t("description")}>
-          <Button size="sm" onClick={() => openCreate()} title={`${newLabel} (N)`}>
+          <Button size="sm" onClick={() => openCreate()} title={`${t("newEvent")} (N)`}>
             <Plus className="size-4" />
-            {newLabel}
+            {t("newEvent")}
           </Button>
         </PageHeader>
 
