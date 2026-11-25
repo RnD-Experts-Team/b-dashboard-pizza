@@ -21,6 +21,7 @@ import { CalendarWriteError } from "@/lib/api/services/calendar-toolbox.service"
 import { useCalendarStoreOptions, useCalendarStores, useCalendarToolbox } from "@/lib/hooks/use-calendar-events";
 import { PEOPLE_MAX, PeopleMultiSelect, runsAnyOf } from "./people-multi-select";
 import { StoreMultiSelect } from "./store-multi-select";
+import { useCanCreateTasks } from "./use-calendar-permissions";
 import { useCalendarFormat } from "./use-calendar-format";
 
 type Kind = "event" | "task" | "reminder";
@@ -183,17 +184,16 @@ export function NewItemForm({
   const shown = useCalendarStores();
   const { create } = useCalendarToolbox();
 
-  // Events and tasks are for a super admin only (user-requested 2026-11-23); everyone else can set
-  // a reminder for themselves, so that is all their form offers (and where it starts).
+  // Event and Reminder are for everyone; a TASK only for users the pizzasys rule for
+  // `POST /calendar/tasks` lets through (the `Calendar Tasks` role, or super admin) — store managers
+  // never see the Task tab (FRONTEND_UPDATE_2026-11-24). A super admin also picks who an event is for.
+  const canTask = useCanCreateTasks();
   const isAdmin = useAuthStore((s) => s.isSuperAdmin());
-  const kinds = isAdmin ? KINDS : KINDS.filter((k) => k.key === "reminder");
+  const kinds = canTask ? KINDS : KINDS.filter((k) => k.key !== "task");
 
   // Starts with ONE store (the first the calendar shows), never every shown store:
   // an event or task for 39 stores is a deliberate choice, not a default.
-  const [form, setForm] = useState<FormState>(() => ({
-    ...initialState(start, allDay, shown[0] ? [shown[0].code] : []),
-    kind: isAdmin ? "event" : "reminder",
-  }));
+  const [form, setForm] = useState<FormState>(() => initialState(start, allDay, shown[0] ? [shown[0].code] : []));
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -310,7 +310,13 @@ export function NewItemForm({
       if (e?.kind === "invalid") setServerFields({ people: e.fields.people?.[0], stores: e.fields.stores?.[0] });
       // Toolbox's own 422 text says what is wrong ("Unknown store: …"); the rest get a plain sentence.
       // A 403 on "all stores" / "only me" / "chosen people" means the right to make those is missing.
-      const kind = e?.kind === "forbidden" && form.scope !== "custom" ? "forbiddenScope" : (e?.kind ?? "other");
+      // On a task, a 403 first means the permission to create tasks is missing.
+      const kind =
+        e?.kind === "forbidden" && form.kind === "task"
+          ? "forbiddenTask"
+          : e?.kind === "forbidden" && form.scope !== "custom"
+            ? "forbiddenScope"
+            : (e?.kind ?? "other");
       // On a 403 also show Toolbox's own words (the service falls back to "Not allowed." when it sent none),
       // so the exact missing permission is visible instead of only our summary.
       const said = e?.kind === "forbidden" && e.message && e.message !== "Not allowed." ? e.message : null;
@@ -342,7 +348,6 @@ export function NewItemForm({
           <DialogTitle className="font-heading">{t("heading")}</DialogTitle>
           <DialogDescription>{t(`hint.${form.kind}`)}</DialogDescription>
         </div>
-        {kinds.length > 1 && (
         <div role="radiogroup" aria-label={t("kindLabel")} className="inline-flex w-fit shrink-0 gap-0.5 rounded-lg bg-muted/60 p-0.5">
           {kinds.map(({ key, icon: Icon }) => {
             const on = form.kind === key;
@@ -353,8 +358,13 @@ export function NewItemForm({
                 role="radio"
                 aria-checked={on}
                 onClick={() => {
-                  // "Chosen people" is for tasks only (user-requested 2026-11-23): leaving tasks drops it.
-                  setForm((s) => ({ ...s, kind: key, scope: key !== "task" && s.scope === "people" ? "custom" : s.scope }));
+                  // "Chosen people" is for tasks only, and an event's scope choices are a super admin's: switching
+                  // to an event drops what it may not use (a task creator's "All stores" / "Only me" / people).
+                  setForm((s) => ({
+                    ...s,
+                    kind: key,
+                    scope: key === "event" && !isAdmin ? "custom" : key !== "task" && s.scope === "people" ? "custom" : s.scope,
+                  }));
                   setServerError(null);
                 }}
                 className={cn(
@@ -368,7 +378,6 @@ export function NewItemForm({
             );
           })}
         </div>
-        )}
       </DialogHeader>
 
       {/* Two columns from lg: what it is and who gets it on the left, when and how it moves on the right —
@@ -392,8 +401,9 @@ export function NewItemForm({
             {fieldError(errors.title)}
           </div>
 
-          {/* "All stores", "Only me" and "Chosen people" exist for super admins only (Toolbox answers 403 to anyone else). */}
-          {withStores && isAdmin && (
+          {/* "All stores", "Only me" and "Chosen people": for a task, whoever may create tasks; for an event, super
+              admins only (Toolbox answers 403 to anyone else). */}
+          {withStores && (form.kind === "task" ? canTask : isAdmin) && (
             <Segmented
               label={t("fields.scope")}
               value={form.scope}

@@ -21,6 +21,16 @@ export type Scope = (typeof SCOPES)[number];
 export const isScope = (value: unknown): value is Scope => (SCOPES as readonly unknown[]).includes(value);
 
 /**
+ * The pizzasys rule behind creating a TASK (FRONTEND_UPDATE_2026-11-24): a task has its own
+ * route, `POST /calendar/tasks`, so a permission can be required for tasks alone — the
+ * `Calendar Tasks` role (and super admins); store managers never create one. Event and
+ * reminder stay on `POST /calendar/events` for everyone. Used with `canAccessRoute`, with no
+ * store (the path carries none). The Task tab and the "Chosen people" picker
+ * (`GET /calendar/people`, same permission) show only when it allows.
+ */
+export const TASK_CREATE_RULE = { service: "Toolbox", method: "POST", path: "/v1/calendar/tasks" } as const;
+
+/**
  * Store tasks move start → submit → approve/return (§8.3). A private task is
  * only done or not done (`done` / `reopen`, §8.3.1).
  */
@@ -80,7 +90,10 @@ export type CreateItemInput = CreateEventInput | CreateTaskInput | CreateReminde
 
 const put = (key: string, value: unknown) => (value === undefined || value === "" ? {} : { [key]: value });
 
-/** The `POST /calendar/events` body. Empty optional fields are left out, never sent as "". */
+/**
+ * The body of `POST /calendar/events` (event, reminder) or `POST /calendar/tasks` (task, which
+ * leaves `type` out: "it is always a task"). Empty optional fields are left out, never sent as "".
+ */
 export function toCreatePayload(input: CreateItemInput): Record<string, unknown> {
   if (input.type === "reminder") {
     const when = "inMinutes" in input.when ? { in_minutes: input.when.inMinutes } : { remind_at: input.when.at.toISOString() };
@@ -96,7 +109,8 @@ export function toCreatePayload(input: CreateItemInput): Record<string, unknown>
     };
   }
   const base = {
-    type: input.type,
+    // A task goes to its own route, which needs no `type` (and refuses one on `/events`).
+    ...(input.type === "event" ? { type: input.type } : {}),
     title: input.title,
     scope: input.scope,
     // Stores only with `custom`, people only with `people`: sent with any other scope either is a 422.
@@ -180,6 +194,8 @@ const isViewer = (p: { id: string; name: string }, viewer: Viewer): boolean =>
  * cancel an event/task and approve or return a task (guide §8.2–8.3; anyone else gets
  * a 403) but the feed has no "can do" flag, so it is read from who the item names:
  * - a private item is only ever visible to its creator → yes;
+ * - the feed names the creator (`created_by`, FRONTEND_CALENDAR_ROLES_PERMISSIONS.md §4.3) → exactly
+ *   that: yes only when it is the viewer;
  * - when the people carry roles (a "Chosen people" item also names its assignee),
  *   only the ones with role "creator" count; without roles every `user` named is the
  *   creator (the store create body names no other people) → yes only if the viewer
@@ -189,6 +205,7 @@ const isViewer = (p: { id: string; name: string }, viewer: Viewer): boolean =>
  */
 export function mayBeCreator(ev: CalendarEvent, viewer: Viewer | null): boolean {
   if (isPrivate(ev)) return true;
+  if (ev.createdBy && viewer) return ev.createdBy === String(viewer.id);
   if (!ev.users?.length || !viewer) return true;
   const withRoles = ev.users.some((u) => u.role);
   const creators = withRoles ? ev.users.filter((u) => u.role === "creator") : ev.users;

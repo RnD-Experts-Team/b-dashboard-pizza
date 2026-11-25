@@ -84,6 +84,11 @@ export interface FeedEvent {
   counts?: FeedCounts | null;
   /** Type-specific details. May be missing. */
   extra?: Record<string, unknown> | null;
+  /**
+   * The user id of whoever created the item, when the feed sends it (FRONTEND_CALENDAR_ROLES_PERMISSIONS.md
+   * §4.3 keys Cancel / Approve / Return on it). Today's feed does not: the creator is named in `people`.
+   */
+  created_by?: number | string | null;
 }
 
 /** `group=day`: what one store had on one day. Statuses at 0 are left out; `total` is always there. */

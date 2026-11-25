@@ -1,4 +1,6 @@
 import axios, { isAxiosError } from "axios";
+import { useAuthStore } from "@/lib/auth/auth.store";
+import { feedAccessContext, storesForFeed } from "@/lib/calendar/feed-access";
 import { chunkStores } from "@/lib/calendar/feed-plan";
 import {
   FEED_SOURCES,
@@ -21,7 +23,9 @@ import {
  *
  * Every source is asked in parallel and judged on its own (guide §2):
  * - 200      → its events
- * - 403      → the user doesn't have that layer: hidden, no message
+ * - 403      → the user doesn't have that layer: hidden, no message, never retried
+ *   (and each layer is only asked the stores the user may see — `feed-access.ts` — so one
+ *   store that isn't theirs doesn't make the whole layer 403)
  * - 401      → failed, UNLESS every source said 401: then the session is over
  * - a 422 naming unknown store numbers → asked again once without them
  * - anything else (422, 5xx, 503 CONFIG_MISSING, timeout, network) → failed,
@@ -304,8 +308,18 @@ async function askAll(
     endSession();
     return null;
   }
+  // Every store sent to a layer is checked by pizzasys, and ONE that fails makes the whole request 403
+  // (FRONTEND_CALENDAR_ROLES_PERMISSIONS.md §3): ask each layer only for the stores the user may see,
+  // and not at all when there are none (the answer is the same "not this layer", without the request).
+  const access = feedAccessContext(useAuthStore.getState());
   const outcomes = await untilAborted(
-    Promise.all(sources.map((s) => load(s, q, token, !!opts.force, !!opts.reuse))),
+    Promise.all(
+      sources.map((s): Promise<Outcome> => {
+        const stores = storesForFeed(s, q.stores, access);
+        if (!stores.length) return Promise.resolve({ state: "forbidden" });
+        return load(s, { ...q, stores }, token, !!opts.force, !!opts.reuse);
+      }),
+    ),
     opts.signal,
   );
   if (outcomes.every((o) => o.state === "unauthorized")) {

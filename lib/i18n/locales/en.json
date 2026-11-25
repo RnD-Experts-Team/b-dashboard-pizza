@@ -4030,7 +4030,8 @@
         "network": "Couldn't reach the server. Try again.",
         "other": "Couldn't save. Try again.",
         "forbiddenScope": "You need the calendar administrator permission to add something for all stores, only for yourself or for chosen people.",
-        "serverSaid": "Server says: {message}"
+        "serverSaid": "Server says: {message}",
+        "forbiddenTask": "You don't have permission to create tasks."
       },
       "submit": {
         "event": "Create event",
@@ -4108,7 +4109,7 @@
         "forbidden": "You're not allowed to do this.",
         "forbiddenReview": "Only the person who created this task can approve or return it.",
         "forbiddenCancel": "Only the person who created this can cancel it.",
-        "notFound": "This no longer exists.",
+        "notFound": "Not found. It may have been removed, or it isn't yours to open.",
         "invalid": "Check the details and try again.",
         "network": "Couldn't reach the server. Try again.",
         "other": "Something went wrong. Try again."
@@ -4164,8 +4165,7 @@
       "removeAll": "Remove all",
       "noManagers": "No store manager at the stores picked.",
       "apply": "Apply"
-    },
-    "newReminder": "New reminder"
+    }
   },
   "bottomNav": {
     "editTrigger": "Customize quick links",

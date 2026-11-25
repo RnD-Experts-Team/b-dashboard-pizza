@@ -133,6 +133,8 @@ export interface CalendarEvent {
    * (`toolbox:task:19:user:900002`); its creator sees every copy, the person only theirs.
    */
   assignee?: { id: string; name: string };
+  /** The creator's user id, when the feed sends `created_by` (else the creator is read from `users`). */
+  createdBy?: string;
   notes?: string;
   meta?: { age?: number; years?: number; role?: string };
   /**

@@ -92,6 +92,12 @@ function times(ev: FeedEvent, now: number) {
   return { start, end: new Date(stand), allDay: false, openEnded: !ev.end };
 }
 
+/** `created_by` when the feed sends it (top level, or in `extra`): a user id, as a string. */
+function createdByOf(ev: FeedEvent, extra: Record<string, unknown> | undefined): string | undefined {
+  const v = ev.created_by ?? extra?.created_by;
+  return typeof v === "number" || (typeof v === "string" && v.trim()) ? String(v) : undefined;
+}
+
 export function toCalendarEvent(ev: FeedEvent, origin: FeedSource, ctx: FeedMapContext): CalendarEvent | null {
   const category = CATEGORY_BY_TYPE[ev.type];
   if (!category || typeof ev.id !== "string") return null;
@@ -136,6 +142,7 @@ export function toCalendarEvent(ev: FeedEvent, origin: FeedSource, ctx: FeedMapC
     scope,
     users: users.length ? users : undefined,
     assignee: scope === "people" ? assigneeOf(ev.id, users) : undefined,
+    createdBy: createdByOf(ev, extra),
     source: "system",
     origin,
     feedType: ev.type,
